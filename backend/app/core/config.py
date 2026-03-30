@@ -70,17 +70,17 @@ class Settings(BaseSettings):
 
     # ── Azure Communication Services ─────────────────────────────
     AZURE_COMMUNICATION_CONNECTION_STRING: Optional[str] = None
-    AZURE_COMMUNICATION_SENDER_EMAIL: str
+    AZURE_COMMUNICATION_SENDER_EMAIL: Optional[str] = None
     AZURE_COMMUNICATION_SENDER_PHONE: Optional[str] = None
 
     # ── Celery ──────────────────────────────────────────────────
-    CELERY_BROKER_URL: str
-    CELERY_RESULT_BACKEND: str
+    CELERY_BROKER_URL: Optional[str] = None
+    CELERY_RESULT_BACKEND: Optional[str] = None
 
     # ── Email ───────────────────────────────────────────────────
     SENDGRID_API_KEY: Optional[str] = None
-    EMAIL_SENDER_ADDRESS: str
-    EMAIL_SENDER_NAME: str
+    EMAIL_SENDER_ADDRESS: Optional[str] = None
+    EMAIL_SENDER_NAME: Optional[str] = None
 
     # ── SMS ─────────────────────────────────────────────────────
     TWILIO_ACCOUNT_SID: Optional[str] = None
@@ -97,7 +97,7 @@ class Settings(BaseSettings):
     STRIPE_PUBLISHABLE_KEY: Optional[str] = None
 
     # ── Drug API ─────────────────────────────────────────────────
-    DRUG_API_URL: str
+    DRUG_API_URL: Optional[str] = None
     DRUG_API_KEY: Optional[str] = None
 
     # ── Rate Limiting ────────────────────────────────────────────
