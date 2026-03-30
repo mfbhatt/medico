@@ -1,14 +1,23 @@
 """Application configuration via Pydantic BaseSettings."""
 from functools import lru_cache
+from pathlib import Path
 from typing import List, Optional
 
-from pydantic import AnyHttpUrl, field_validator
+from pydantic import field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
+# Support running from either backend/ or the repo root
+_HERE = Path(__file__).resolve().parent  # backend/app/core/
+_ENV_PATHS = (
+    str(_HERE.parents[2] / ".env"),  # repo root .env
+    str(_HERE.parents[1] / ".env"),  # backend/.env
+    ".env",                           # cwd fallback
+)
 
 
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(
-        env_file=".env",
+        env_file=_ENV_PATHS,
         env_file_encoding="utf-8",
         case_sensitive=True,
         extra="ignore",
@@ -19,8 +28,8 @@ class Settings(BaseSettings):
     APP_VERSION: str = "1.0.0"
     APP_ENV: str = "development"
     APP_DEBUG: bool = True
-    APP_SECRET_KEY: str = "change-me-in-production"
-    ALLOWED_ORIGINS: List[str] = ["http://localhost:5173", "http://localhost:19006"]
+    APP_SECRET_KEY: str
+    ALLOWED_ORIGINS: List[str]
 
     @field_validator("ALLOWED_ORIGINS", mode="before")
     @classmethod
@@ -30,18 +39,18 @@ class Settings(BaseSettings):
         return v
 
     # ── Database ────────────────────────────────────────────────
-    DATABASE_URL: str = "postgresql+asyncpg://postgres:postgres@localhost:5432/postgres"
+    DATABASE_URL: str
     DATABASE_POOL_SIZE: int = 20
     DATABASE_MAX_OVERFLOW: int = 0
     DATABASE_POOL_TIMEOUT: int = 30
     DATABASE_ECHO: bool = False
 
     # ── Redis ───────────────────────────────────────────────────
-    REDIS_URL: str = "redis://localhost:6379/0"
+    REDIS_URL: str
     REDIS_CACHE_TTL: int = 300
 
     # ── JWT ─────────────────────────────────────────────────────
-    JWT_SECRET_KEY: str = "change-me"
+    JWT_SECRET_KEY: str
     JWT_ALGORITHM: str = "HS256"
     JWT_PRIVATE_KEY_PATH: Optional[str] = None
     JWT_PUBLIC_KEY_PATH: Optional[str] = None
@@ -61,17 +70,17 @@ class Settings(BaseSettings):
 
     # ── Azure Communication Services ─────────────────────────────
     AZURE_COMMUNICATION_CONNECTION_STRING: Optional[str] = None
-    AZURE_COMMUNICATION_SENDER_EMAIL: str = "noreply@clinicapp.com"
+    AZURE_COMMUNICATION_SENDER_EMAIL: str
     AZURE_COMMUNICATION_SENDER_PHONE: Optional[str] = None
 
     # ── Celery ──────────────────────────────────────────────────
-    CELERY_BROKER_URL: str = "redis://localhost:6379/1"
-    CELERY_RESULT_BACKEND: str = "redis://localhost:6379/2"
+    CELERY_BROKER_URL: str
+    CELERY_RESULT_BACKEND: str
 
     # ── Email ───────────────────────────────────────────────────
     SENDGRID_API_KEY: Optional[str] = None
-    EMAIL_SENDER_ADDRESS: str = "noreply@clinicapp.com"
-    EMAIL_SENDER_NAME: str = "ClinicManagement"
+    EMAIL_SENDER_ADDRESS: str
+    EMAIL_SENDER_NAME: str
 
     # ── SMS ─────────────────────────────────────────────────────
     TWILIO_ACCOUNT_SID: Optional[str] = None
@@ -88,7 +97,7 @@ class Settings(BaseSettings):
     STRIPE_PUBLISHABLE_KEY: Optional[str] = None
 
     # ── Drug API ─────────────────────────────────────────────────
-    DRUG_API_URL: str = "https://api.drugbank.com/v1"
+    DRUG_API_URL: str
     DRUG_API_KEY: Optional[str] = None
 
     # ── Rate Limiting ────────────────────────────────────────────
