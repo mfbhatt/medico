@@ -1,0 +1,153 @@
+name: CD — Azure Deployment
+
+on:
+  push:
+    branches: [main, staging]
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: 'Target environment'
+        required: true
+        type: choice
+        options: [staging, production]
+
+env:
+  REGISTRY: ${{ secrets.ACR_LOGIN_SERVER }}
+  BACKEND_IMAGE: clinic-backend
+  FRONTEND_IMAGE: clinic-frontend
+
+jobs:
+  determine-environment:
+    name: Determine Environment
+    runs-on: ubuntu-latest
+    outputs:
+      environment: ${{ steps.env.outputs.environment }}
+    steps:
+      - id: env
+        run: |
+          if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
+            echo "environment=${{ github.event.inputs.environment }}" >> $GITHUB_OUTPUT
+          elif [[ "${{ github.ref }}" == "refs/heads/main" ]]; then
+            echo "environment=production" >> $GITHUB_OUTPUT
+          else
+            echo "environment=staging" >> $GITHUB_OUTPUT
+          fi
+
+  build-and-push:
+    name: Build & Push Docker Images
+    runs-on: ubuntu-latest
+    needs: determine-environment
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Log in to Azure Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ secrets.ACR_LOGIN_SERVER }}
+          username: ${{ secrets.ACR_USERNAME }}
+          password: ${{ secrets.ACR_PASSWORD }}
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build and push backend image
+        uses: docker/build-push-action@v5
+        with:
+          context: ./backend
+          push: true
+          tags: |
+            ${{ env.REGISTRY }}/${{ env.BACKEND_IMAGE }}:${{ github.sha }}
+            ${{ env.REGISTRY }}/${{ env.BACKEND_IMAGE }}:latest
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          target: production
+
+      - name: Build and push frontend image
+        uses: docker/build-push-action@v5
+        with:
+          context: ./frontend
+          push: true
+          tags: |
+            ${{ env.REGISTRY }}/${{ env.FRONTEND_IMAGE }}:${{ github.sha }}
+            ${{ env.REGISTRY }}/${{ env.FRONTEND_IMAGE }}:latest
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          build-args: |
+            VITE_API_URL=${{ secrets.API_URL }}
+
+  deploy:
+    name: Deploy to AKS
+    runs-on: ubuntu-latest
+    needs: [determine-environment, build-and-push]
+    environment: ${{ needs.determine-environment.outputs.environment }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Azure login
+        uses: azure/login@v2
+        with:
+          creds: ${{ secrets.AZURE_CREDENTIALS }}
+
+      - name: Set AKS context
+        uses: azure/aks-set-context@v4
+        with:
+          resource-group: ${{ secrets.AKS_RESOURCE_GROUP }}
+          cluster-name: ${{ secrets.AKS_CLUSTER_NAME }}
+
+      - name: Run database migrations
+        run: |
+          kubectl run alembic-migrate \
+            --image=${{ env.REGISTRY }}/${{ env.BACKEND_IMAGE }}:${{ github.sha }} \
+            --restart=Never \
+            --rm \
+            --attach \
+            --env="DATABASE_URL=${{ secrets.DATABASE_URL }}" \
+            -- alembic upgrade head
+
+      - name: Deploy with Kustomize
+        run: |
+          ENV=${{ needs.determine-environment.outputs.environment }}
+          cd infrastructure/kubernetes/overlays/$ENV
+          kustomize edit set image \
+            clinic-backend=${{ env.REGISTRY }}/${{ env.BACKEND_IMAGE }}:${{ github.sha }} \
+            clinic-frontend=${{ env.REGISTRY }}/${{ env.FRONTEND_IMAGE }}:${{ github.sha }}
+          kubectl apply -k .
+
+      - name: Wait for rollout
+        run: |
+          kubectl rollout status deployment/clinic-backend --timeout=5m
+          kubectl rollout status deployment/clinic-frontend --timeout=5m
+
+      - name: Smoke test
+        run: |
+          sleep 15
+          kubectl run smoke-test \
+            --image=curlimages/curl:latest \
+            --restart=Never \
+            --rm \
+            --attach \
+            -- curl -sf http://clinic-backend-svc:8000/health || exit 1
+
+      - name: Notify Slack on success
+        if: success()
+        uses: slackapi/slack-github-action@v1
+        with:
+          payload: |
+            {
+              "text": ":white_check_mark: Deployed `${{ github.sha }}` to *${{ needs.determine-environment.outputs.environment }}* successfully.",
+              "channel": "#deployments"
+            }
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+
+      - name: Notify Slack on failure
+        if: failure()
+        uses: slackapi/slack-github-action@v1
+        with:
+          payload: |
+            {
+              "text": ":x: Deployment of `${{ github.sha }}` to *${{ needs.determine-environment.outputs.environment }}* FAILED. <${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}|View run>",
+              "channel": "#deployments"
+            }
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}

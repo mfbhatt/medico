@@ -1,0 +1,178 @@
+import { Navigate, Routes, Route } from "react-router-dom";
+import { useSelector } from "react-redux";
+import { RootState } from "./store";
+
+import ProtectedRoute from "./components/auth/ProtectedRoute";
+import AuthLayout from "./components/layouts/AuthLayout";
+import DashboardLayout from "./components/layouts/DashboardLayout";
+import PublicLayout from "./components/layouts/PublicLayout";
+
+// ─── Auth pages ──────────────────────────────────────────────────────────────
+import LoginPage from "./pages/LoginPage";
+import ForgotPasswordPage from "./pages/ForgotPasswordPage";
+import ResetPasswordPage from "./pages/auth/ResetPasswordPage";
+
+// ─── Public pages ────────────────────────────────────────────────────────────
+import LandingPage from "./pages/public/LandingPage";
+import PublicClinicsPage from "./pages/public/PublicClinicsPage";
+
+// ─── Dashboard pages ─────────────────────────────────────────────────────────
+import DashboardPage from "./pages/dashboard/DashboardPage";
+
+// ─── Appointment pages ───────────────────────────────────────────────────────
+import AppointmentsPage from "./pages/appointments/AppointmentsPage";
+import NewAppointmentPage from "./pages/appointments/NewAppointmentPage";
+import AppointmentDetailPage from "./pages/appointments/AppointmentDetailPage";
+import CalendarPage from "./pages/appointments/CalendarPage";
+
+// ─── Patient pages ───────────────────────────────────────────────────────────
+import PatientsPage from "./pages/patients/PatientsPage";
+import PatientDetailPage from "./pages/patients/PatientDetailPage";
+import NewPatientPage from "./pages/patients/NewPatientPage";
+
+// ─── Doctor pages ────────────────────────────────────────────────────────────
+import DoctorsPage from "./pages/doctors/DoctorsPage";
+import DoctorDetailPage from "./pages/doctors/DoctorDetailPage";
+import DoctorSchedulePage from "./pages/doctors/DoctorSchedulePage";
+import DoctorClinicsPage from "./pages/doctors/DoctorClinicsPage";
+import DoctorStatsPage from "./pages/doctors/DoctorStatsPage";
+
+// ─── Medical Records ─────────────────────────────────────────────────────────
+import MedicalRecordPage from "./pages/medical-records/MedicalRecordPage";
+
+// ─── Prescriptions ───────────────────────────────────────────────────────────
+import PrescriptionsPage from "./pages/prescriptions/PrescriptionsPage";
+
+// ─── Lab ─────────────────────────────────────────────────────────────────────
+import LabOrdersPage from "./pages/lab/LabOrdersPage";
+import LabReportPage from "./pages/lab/LabReportPage";
+
+// ─── Billing ─────────────────────────────────────────────────────────────────
+import BillingPage from "./pages/billing/BillingPage";
+import InvoiceDetailPage from "./pages/billing/InvoiceDetailPage";
+
+// ─── Pharmacy ────────────────────────────────────────────────────────────────
+import PharmacyPage from "./pages/pharmacy/PharmacyPage";
+
+// ─── Analytics ───────────────────────────────────────────────────────────────
+import AnalyticsPage from "./pages/analytics/AnalyticsPage";
+
+// ─── Admin pages ─────────────────────────────────────────────────────────────
+import SuperAdminDashboard from "./pages/admin/SuperAdminDashboard";
+import TenantsPage from "./pages/admin/TenantsPage";
+import ClinicsPage from "./pages/admin/ClinicsPage";
+import UsersPage from "./pages/admin/UsersPage";
+import SettingsPage from "./pages/admin/SettingsPage";
+import SpecializationsPage from "./pages/admin/SpecializationsPage";
+
+// ─── Telemedicine ────────────────────────────────────────────────────────────
+import TelemedicinePage from "./pages/telemedicine/TelemedicinePage";
+
+/**
+ * After login, redirect to role-appropriate home.
+ * super_admin → /admin/dashboard
+ * everyone else → /dashboard
+ */
+function RoleBasedHome() {
+  const { user } = useSelector((s: RootState) => s.auth);
+  return (
+    <Navigate
+      to={user?.role === "super_admin" ? "/admin/dashboard" : "/dashboard"}
+      replace
+    />
+  );
+}
+
+export default function App() {
+  return (
+    <Routes>
+      {/* ── Public routes (no auth required) ────────────────────────────── */}
+      <Route element={<PublicLayout />}>
+        <Route path="/" element={<LandingPage />} />
+        <Route path="/clinics" element={<PublicClinicsPage />} />
+      </Route>
+
+      {/* ── Auth routes ──────────────────────────────────────────────────── */}
+      <Route element={<AuthLayout />}>
+        <Route path="/login" element={<LoginPage />} />
+        <Route path="/forgot-password" element={<ForgotPasswordPage />} />
+        <Route path="/reset-password" element={<ResetPasswordPage />} />
+      </Route>
+
+      {/* ── Protected routes (any authenticated user) ────────────────────── */}
+      <Route element={<ProtectedRoute />}>
+        <Route element={<DashboardLayout />}>
+          {/* Role-aware default redirect */}
+          <Route path="/home" element={<RoleBasedHome />} />
+          <Route path="/dashboard" element={<DashboardPage />} />
+
+          {/* Appointments */}
+          <Route path="/appointments" element={<AppointmentsPage />} />
+          <Route path="/appointments/new" element={<NewAppointmentPage />} />
+          <Route path="/appointments/calendar" element={<CalendarPage />} />
+          <Route path="/appointments/:id" element={<AppointmentDetailPage />} />
+
+          {/* Patients */}
+          <Route path="/patients" element={<PatientsPage />} />
+          <Route path="/patients/new" element={<NewPatientPage />} />
+          <Route path="/patients/:id" element={<PatientDetailPage />} />
+
+          {/* Doctors */}
+          <Route path="/doctors" element={<DoctorsPage />} />
+          <Route path="/doctors/:id" element={<DoctorDetailPage />} />
+          <Route path="/doctors/:id/schedule" element={<DoctorSchedulePage />} />
+          <Route path="/doctors/:id/clinics" element={<DoctorClinicsPage />} />
+          <Route path="/doctors/:id/stats" element={<DoctorStatsPage />} />
+
+          {/* Medical Records */}
+          <Route path="/medical-records/:id" element={<MedicalRecordPage />} />
+
+          {/* Prescriptions */}
+          <Route path="/prescriptions" element={<PrescriptionsPage />} />
+
+          {/* Lab */}
+          <Route path="/lab" element={<LabOrdersPage />} />
+          <Route path="/lab/reports/:id" element={<LabReportPage />} />
+
+          {/* Billing */}
+          <Route path="/billing" element={<BillingPage />} />
+          <Route path="/billing/invoices/:id" element={<InvoiceDetailPage />} />
+
+          {/* Pharmacy */}
+          <Route path="/pharmacy" element={<PharmacyPage />} />
+
+          {/* Telemedicine */}
+          <Route path="/telemedicine/:appointmentId" element={<TelemedicinePage />} />
+
+          {/* Analytics (tenant_admin, clinic_admin, super_admin) */}
+          <Route
+            element={<ProtectedRoute allowedRoles={["super_admin", "tenant_admin", "clinic_admin"]} />}
+          >
+            <Route path="/analytics" element={<AnalyticsPage />} />
+          </Route>
+
+          {/* ── Super-admin only ─────────────────────────────────────────── */}
+          <Route element={<ProtectedRoute allowedRoles={["super_admin"]} />}>
+            <Route path="/admin/dashboard" element={<SuperAdminDashboard />} />
+            <Route path="/admin/tenants" element={<TenantsPage />} />
+            <Route path="/admin/specializations" element={<SpecializationsPage />} />
+          </Route>
+
+          {/* ── Admin shared (super_admin + tenant_admin + clinic_admin) ─── */}
+          <Route
+            element={
+              <ProtectedRoute allowedRoles={["super_admin", "tenant_admin", "clinic_admin"]} />
+            }
+          >
+            <Route path="/admin/clinics" element={<ClinicsPage />} />
+            <Route path="/admin/users" element={<UsersPage />} />
+            <Route path="/settings" element={<SettingsPage />} />
+          </Route>
+        </Route>
+      </Route>
+
+      {/* ── Fallback ─────────────────────────────────────────────────────── */}
+      <Route path="*" element={<Navigate to="/" replace />} />
+    </Routes>
+  );
+}
