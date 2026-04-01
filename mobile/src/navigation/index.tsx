@@ -1,5 +1,4 @@
 import { useEffect } from 'react';
-import { NavigationContainer } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { ActivityIndicator, View } from 'react-native';
@@ -67,9 +66,9 @@ function TabNavigator() {
           const icons: Record<string, string> = {
             Home: focused ? 'home' : 'home-outline',
             Appointments: focused ? 'calendar' : 'calendar-outline',
-            Prescriptions: focused ? 'medical' : 'medical-outline',
+            Prescriptions: focused ? 'medkit' : 'medkit-outline',
             LabReports: focused ? 'flask' : 'flask-outline',
-            Profile: focused ? 'person' : 'person-outline',
+            Profile: focused ? 'person-circle' : 'person-circle-outline',
           };
           return <Ionicons name={(icons[route.name] ?? 'ellipse') as never} size={size} color={color} />;
         },
@@ -132,14 +131,12 @@ export default function Navigation() {
   }
 
   return (
-    <NavigationContainer>
-      <Root.Navigator screenOptions={{ headerShown: false }}>
-        {isAuthenticated ? (
-          <Root.Screen name="Main" component={AppNavigator} />
-        ) : (
-          <Root.Screen name="Auth" component={AuthNavigator} />
-        )}
-      </Root.Navigator>
-    </NavigationContainer>
+    <Root.Navigator screenOptions={{ headerShown: false }}>
+      {isAuthenticated ? (
+        <Root.Screen name="Main" component={AppNavigator} />
+      ) : (
+        <Root.Screen name="Auth" component={AuthNavigator} />
+      )}
+    </Root.Navigator>
   );
 }

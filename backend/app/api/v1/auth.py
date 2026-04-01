@@ -248,6 +248,7 @@ async def verify_otp(
 
     # Find or create the UserTenant record for this tenant
     ut = None
+    from app.models.user import UserRole
     if tenant_id:
         ut = (await db.execute(
             select(UserTenant).where(
@@ -258,7 +259,6 @@ async def verify_otp(
         )).scalar_one_or_none()
 
         if not ut:
-            from app.models.user import UserRole
             ut = UserTenant(
                 user_id=user.id,
                 tenant_id=tenant_id,
@@ -269,6 +269,38 @@ async def verify_otp(
             await db.flush()
         else:
             ut.status = UserStatus.ACTIVE
+    else:
+        # No tenant_id provided — auto-select from existing memberships
+        existing_uts = (await db.execute(
+            select(UserTenant).where(
+                UserTenant.user_id == user.id,
+                UserTenant.is_deleted.isnot(True),
+            )
+        )).scalars().all()
+
+        if existing_uts:
+            ut = next((m for m in existing_uts if m.status == UserStatus.ACTIVE), existing_uts[0])
+            ut.status = UserStatus.ACTIVE
+        else:
+            # Brand-new user — auto-assign to first active non-system tenant
+            from app.models.tenant import Tenant
+            first_tenant = (await db.execute(
+                select(Tenant).where(
+                    Tenant.id != SYSTEM_TENANT_ID,
+                    Tenant.is_active == True,
+                    Tenant.is_deleted.isnot(True),
+                ).order_by(Tenant.created_at).limit(1)
+            )).scalar_one_or_none()
+
+            if first_tenant:
+                ut = UserTenant(
+                    user_id=user.id,
+                    tenant_id=first_tenant.id,
+                    role=UserRole.PATIENT,
+                    status=UserStatus.ACTIVE,
+                )
+                db.add(ut)
+                await db.flush()
 
     await db.commit()
 
@@ -543,6 +575,178 @@ async def switch_tenant(
         },
         message="Switched tenant successfully",
     )
+
+
+# ── Social Login ─────────────────────────────────────────────────
+@router.post("/social")
+async def social_login(
+    body: dict,
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    Verify a social provider token and issue JWT tokens.
+    Body: { provider: "google"|"facebook", token: str, tenant_id?: str }
+    """
+    import httpx
+
+    provider = (body.get("provider") or "").lower()
+    token = body.get("token", "").strip()
+    tenant_id = body.get("tenant_id")
+
+    if not provider or not token:
+        raise BadRequestException(detail="provider and token are required")
+    if provider not in ("google", "facebook"):
+        raise BadRequestException(detail="Unsupported provider. Use 'google' or 'facebook'")
+
+    # ── Verify token with the provider and extract profile ─────────
+    email: Optional[str] = None
+    first_name = ""
+    last_name = ""
+    provider_user_id = ""
+
+    async with httpx.AsyncClient(timeout=10) as client:
+        if provider == "google":
+            if not settings.GOOGLE_CLIENT_ID:
+                raise BadRequestException(detail="Google login is not configured")
+            # Supports both access_token (implicit flow) and id_token flows
+            token_type = body.get("token_type", "access_token")
+            if token_type == "id_token":
+                resp = await client.get(
+                    "https://oauth2.googleapis.com/tokeninfo",
+                    params={"id_token": token},
+                )
+                if resp.status_code != 200:
+                    raise UnauthorizedException(detail="Invalid Google ID token")
+                info = resp.json()
+                if info.get("aud") != settings.GOOGLE_CLIENT_ID:
+                    raise UnauthorizedException(detail="Google token audience mismatch")
+            else:
+                # Access token — fetch user info from Google
+                resp = await client.get(
+                    "https://www.googleapis.com/oauth2/v3/userinfo",
+                    headers={"Authorization": f"Bearer {token}"},
+                )
+                if resp.status_code != 200:
+                    raise UnauthorizedException(detail="Invalid Google access token")
+                info = resp.json()
+            email = (info.get("email") or "").lower().strip() or None
+            first_name = info.get("given_name", "")
+            last_name = info.get("family_name", "")
+            provider_user_id = info.get("sub", "")
+
+        elif provider == "facebook":
+            if not settings.FACEBOOK_APP_ID or not settings.FACEBOOK_APP_SECRET:
+                raise BadRequestException(detail="Facebook login is not configured")
+            # Verify the access token is genuine
+            app_token = f"{settings.FACEBOOK_APP_ID}|{settings.FACEBOOK_APP_SECRET}"
+            debug_resp = await client.get(
+                "https://graph.facebook.com/debug_token",
+                params={"input_token": token, "access_token": app_token},
+            )
+            if debug_resp.status_code != 200:
+                raise UnauthorizedException(detail="Invalid Facebook token")
+            debug_data = debug_resp.json().get("data", {})
+            if not debug_data.get("is_valid") or debug_data.get("app_id") != settings.FACEBOOK_APP_ID:
+                raise UnauthorizedException(detail="Facebook token validation failed")
+            # Fetch user profile
+            profile_resp = await client.get(
+                "https://graph.facebook.com/me",
+                params={"fields": "id,email,first_name,last_name", "access_token": token},
+            )
+            if profile_resp.status_code != 200:
+                raise UnauthorizedException(detail="Failed to fetch Facebook profile")
+            profile = profile_resp.json()
+            email = (profile.get("email") or "").lower().strip() or None
+            first_name = profile.get("first_name", "")
+            last_name = profile.get("last_name", "")
+            provider_user_id = profile.get("id", "")
+
+    if not email:
+        raise BadRequestException(
+            detail="Your social account does not have a verified email address. Please use email/password login."
+        )
+
+    # ── Find or create the global User record ─────────────────────
+    user = (await db.execute(
+        select(User).where(User.email == email, User.is_deleted.isnot(True))
+    )).scalar_one_or_none()
+
+    if not user:
+        user = User(
+            email=email,
+            first_name=first_name or "User",
+            last_name=last_name,
+            is_email_verified=True,
+        )
+        db.add(user)
+        await db.flush()
+    else:
+        # Update name from provider if not already set
+        if not user.first_name and first_name:
+            user.first_name = first_name
+        if not user.last_name and last_name:
+            user.last_name = last_name
+
+    user.last_login_at = datetime.now(timezone.utc)
+
+    # ── Super admin: no tenant membership needed ───────────────────
+    if user.is_super_admin:
+        access_token, refresh_token = _issue_super_admin_tokens(user)
+        user.refresh_token_hash = hash_password(refresh_token)
+        await db.commit()
+        return _success({
+            "access_token": access_token,
+            "refresh_token": refresh_token,
+            "token_type": "bearer",
+            "is_new_user": False,
+            "user": {
+                "id": user.id, "email": user.email,
+                "full_name": user.full_name, "role": "super_admin",
+                "tenant_id": SYSTEM_TENANT_ID,
+            },
+        }, message="Login successful")
+
+    # ── Tenant user: find the right membership ─────────────────────
+    memberships = (await db.execute(
+        select(UserTenant).where(
+            UserTenant.user_id == user.id,
+            UserTenant.is_deleted.isnot(True),
+        )
+    )).scalars().all()
+
+    if not memberships:
+        await db.commit()
+        return _success({
+            "access_token": None, "refresh_token": None,
+            "is_new_user": True,
+            "user": {"id": user.id, "email": user.email, "full_name": user.full_name},
+        }, message="Account created. Please contact your administrator to activate access.")
+
+    if tenant_id:
+        ut = next((m for m in memberships if m.tenant_id == tenant_id), None)
+        if not ut:
+            raise ForbiddenException(detail="You do not have access to this tenant")
+    else:
+        ut = next((m for m in memberships if m.status == UserStatus.ACTIVE), memberships[0])
+
+    if ut.status not in (UserStatus.ACTIVE,):
+        raise UnauthorizedException(detail=f"Account status: {ut.status}. Contact your administrator.")
+
+    access_token, refresh_token = _issue_tokens(user, ut)
+    ut.refresh_token_hash = hash_password(refresh_token)
+    await db.commit()
+
+    return _success({
+        "access_token": access_token,
+        "refresh_token": refresh_token,
+        "token_type": "bearer",
+        "is_new_user": False,
+        "user": {
+            "id": user.id, "email": user.email,
+            "full_name": user.full_name, "role": ut.role,
+            "tenant_id": ut.tenant_id,
+        },
+    }, message="Login successful")
 
 
 # ── Internal helpers ─────────────────────────────────────────────

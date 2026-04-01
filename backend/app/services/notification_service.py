@@ -17,6 +17,7 @@ async def send_sms(phone: str, message: str) -> bool:
         )
         return True
     except Exception:
+        print(f"Failed to send SMS to {phone}: {message}")
         return False
 
 

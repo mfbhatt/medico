@@ -1,5 +1,5 @@
 import { createSlice, PayloadAction } from "@reduxjs/toolkit";
-import type { Doctor } from "../types";
+import type { Doctor } from "../../types";
 
 interface DoctorsState {
   list: Doctor[];

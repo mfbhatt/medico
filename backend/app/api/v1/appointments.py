@@ -168,6 +168,80 @@ def _generate_time_slots(
     return slots
 
 
+# ── My Appointments (patient shortcut) ──────────────────────────
+@router.get("/my")
+async def get_my_appointments(
+    status: Optional[str] = None,
+    limit: int = Query(default=20, ge=1, le=100),
+    db: AsyncSession = Depends(get_db),
+    current_user: CurrentUser = Depends(get_current_user),
+):
+    """Return appointments for the currently authenticated patient. Supports comma-separated status filter."""
+    from app.models.patient import Patient
+    from app.models.clinic import Clinic
+
+    patient_result = await db.execute(
+        select(Patient).where(Patient.user_id == current_user.user_id)
+    )
+    patient = patient_result.scalar_one_or_none()
+    if not patient:
+        return _success([])
+
+    query = select(Appointment).where(
+        Appointment.patient_id == patient.id,
+        Appointment.tenant_id == current_user.tenant_id,
+        Appointment.is_deleted == False,
+    )
+
+    if status:
+        statuses = [s.strip() for s in status.split(",")]
+        query = query.where(Appointment.status.in_(statuses))
+
+    query = query.order_by(Appointment.appointment_date, Appointment.start_time).limit(limit)
+    result = await db.execute(query)
+    appointments = result.scalars().all()
+
+    doctor_ids = list({a.doctor_id for a in appointments if a.doctor_id})
+    clinic_ids = list({a.clinic_id for a in appointments if a.clinic_id})
+
+    from app.models.user import User as UserModel
+    doctor_name_map: dict = {}
+    if doctor_ids:
+        d_rows = (await db.execute(
+            select(Doctor.id, UserModel.first_name, UserModel.last_name)
+            .join(UserModel, UserModel.id == Doctor.user_id)
+            .where(Doctor.id.in_(doctor_ids))
+        )).all()
+        doctor_name_map = {r[0]: f"Dr. {r[1]} {r[2]}" for r in d_rows}
+
+    clinic_name_map: dict = {}
+    if clinic_ids:
+        from app.models.clinic import Clinic
+        c_rows = (await db.execute(
+            select(Clinic.id, Clinic.name).where(Clinic.id.in_(clinic_ids))
+        )).all()
+        clinic_name_map = {r[0]: r[1] for r in c_rows}
+
+    return _success([
+        {
+            "id": a.id,
+            "doctor_id": a.doctor_id,
+            "doctor_name": doctor_name_map.get(a.doctor_id),
+            "clinic_id": a.clinic_id,
+            "clinic_name": clinic_name_map.get(a.clinic_id),
+            "scheduled_date": a.appointment_date,
+            "scheduled_time": a.start_time,
+            "appointment_date": a.appointment_date,
+            "start_time": a.start_time,
+            "end_time": a.end_time,
+            "status": a.status,
+            "appointment_type": a.appointment_type,
+            "chief_complaint": a.chief_complaint,
+        }
+        for a in appointments
+    ])
+
+
 # ── Book Appointment ─────────────────────────────────────────────
 @router.post("/")
 async def book_appointment(
@@ -185,6 +259,24 @@ async def book_appointment(
     - Past date booking
     - Overlapping appointments
     """
+    # Accept field name aliases from mobile clients
+    if not body.get("appointment_date") and body.get("scheduled_date"):
+        body = {**body, "appointment_date": body["scheduled_date"]}
+    if not body.get("start_time") and body.get("scheduled_time"):
+        body = {**body, "start_time": body["scheduled_time"]}
+
+    # Auto-resolve patient_id for patient role
+    if current_user.role == "patient" and not body.get("patient_id"):
+        from app.models.patient import Patient
+        patient_result = await db.execute(
+            select(Patient).where(Patient.user_id == current_user.user_id)
+        )
+        existing_patient = patient_result.scalar_one_or_none()
+        if existing_patient:
+            body = {**body, "patient_id": existing_patient.id}
+        else:
+            raise BadRequestException(detail="Patient profile not found. Please complete registration.")
+
     # Validate required fields
     required = ["patient_id", "doctor_id", "clinic_id", "appointment_date", "start_time"]
     for field in required:

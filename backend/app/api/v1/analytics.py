@@ -39,7 +39,7 @@ async def get_dashboard_stats(
         select(PlatformConfig).where(PlatformConfig.id == "default")
     )).scalar_one_or_none()
     platform_currency = (platform.settings or {}).get("currency", "USD") if platform else "USD"
-    currency = (tenant.settings or {}).get("currency") or platform_currency
+    currency = ((tenant.settings or {}).get("currency") if tenant else None) or platform_currency
 
     base_filters = [
         Appointment.tenant_id == tenant_id,

@@ -1,0 +1,114 @@
+diff --git a/node_modules/@react-navigation/elements/lib/commonjs/ResourceSavingView.js b/node_modules/@react-navigation/elements/lib/commonjs/ResourceSavingView.js
+index 024cb54..6edf364 100644
+--- a/node_modules/@react-navigation/elements/lib/commonjs/ResourceSavingView.js
++++ b/node_modules/@react-navigation/elements/lib/commonjs/ResourceSavingView.js
+@@ -24,24 +24,24 @@ function ResourceSavingScene(_ref) {
+     , _extends({
+       hidden: !visible,
+       style: [{
+-        display: visible ? 'flex' : 'none'
+-      }, styles.container, style],
+-      pointerEvents: visible ? 'auto' : 'none'
++        display: visible ? 'flex' : 'none',
++        pointerEvents: visible ? 'auto' : 'none'
++      }, styles.container, style]
+     }, rest), children);
+   }
+   return /*#__PURE__*/React.createElement(_reactNative.View, {
+-    style: [styles.container, style]
+-    // box-none doesn't seem to work properly on Android
+-    ,
+-    pointerEvents: visible ? 'auto' : 'none'
++    style: [styles.container, style, {
++      pointerEvents: visible ? 'auto' : 'none'
++    }]
+   }, /*#__PURE__*/React.createElement(_reactNative.View, {
+     collapsable: false,
+     removeClippedSubviews:
+     // On iOS & macOS, set removeClippedSubviews to true only when not focused
+     // This is an workaround for a bug where the clipped view never re-appears
+     _reactNative.Platform.OS === 'ios' || _reactNative.Platform.OS === 'macos' ? !visible : true,
+-    pointerEvents: visible ? 'auto' : 'none',
+-    style: visible ? styles.attached : styles.detached
++    style: [visible ? styles.attached : styles.detached, {
++      pointerEvents: visible ? 'auto' : 'none'
++    }]
+   }, children));
+ }
+ const styles = _reactNative.StyleSheet.create({
+diff --git a/node_modules/@react-navigation/elements/lib/module/ResourceSavingView.js b/node_modules/@react-navigation/elements/lib/module/ResourceSavingView.js
+index e2d58c1..634cfb0 100644
+--- a/node_modules/@react-navigation/elements/lib/module/ResourceSavingView.js
++++ b/node_modules/@react-navigation/elements/lib/module/ResourceSavingView.js
+@@ -16,24 +16,24 @@ export default function ResourceSavingScene(_ref) {
+     , _extends({
+       hidden: !visible,
+       style: [{
+-        display: visible ? 'flex' : 'none'
+-      }, styles.container, style],
+-      pointerEvents: visible ? 'auto' : 'none'
++        display: visible ? 'flex' : 'none',
++        pointerEvents: visible ? 'auto' : 'none'
++      }, styles.container, style]
+     }, rest), children);
+   }
+   return /*#__PURE__*/React.createElement(View, {
+-    style: [styles.container, style]
+-    // box-none doesn't seem to work properly on Android
+-    ,
+-    pointerEvents: visible ? 'auto' : 'none'
++    style: [styles.container, style, {
++      pointerEvents: visible ? 'auto' : 'none'
++    }]
+   }, /*#__PURE__*/React.createElement(View, {
+     collapsable: false,
+     removeClippedSubviews:
+     // On iOS & macOS, set removeClippedSubviews to true only when not focused
+     // This is an workaround for a bug where the clipped view never re-appears
+     Platform.OS === 'ios' || Platform.OS === 'macos' ? !visible : true,
+-    pointerEvents: visible ? 'auto' : 'none',
+-    style: visible ? styles.attached : styles.detached
++    style: [visible ? styles.attached : styles.detached, {
++      pointerEvents: visible ? 'auto' : 'none'
++    }]
+   }, children));
+ }
+ const styles = StyleSheet.create({
+diff --git a/node_modules/@react-navigation/elements/src/ResourceSavingView.tsx b/node_modules/@react-navigation/elements/src/ResourceSavingView.tsx
+index 1d45386..b40238f 100644
+--- a/node_modules/@react-navigation/elements/src/ResourceSavingView.tsx
++++ b/node_modules/@react-navigation/elements/src/ResourceSavingView.tsx
+@@ -21,11 +21,10 @@ export default function ResourceSavingScene({
+         // @ts-expect-error: hidden exists on web, but not in React Native
+         hidden={!visible}
+         style={[
+-          { display: visible ? 'flex' : 'none' },
++          { display: visible ? 'flex' : 'none', pointerEvents: visible ? 'auto' : 'none' },
+           styles.container,
+           style,
+         ]}
+-        pointerEvents={visible ? 'auto' : 'none'}
+         {...rest}
+       >
+         {children}
+@@ -35,9 +34,7 @@ export default function ResourceSavingScene({
+ 
+   return (
+     <View
+-      style={[styles.container, style]}
+-      // box-none doesn't seem to work properly on Android
+-      pointerEvents={visible ? 'auto' : 'none'}
++      style={[styles.container, style, { pointerEvents: visible ? 'auto' : 'none' }]}
+     >
+       <View
+         collapsable={false}
+@@ -46,8 +43,7 @@ export default function ResourceSavingScene({
+           // This is an workaround for a bug where the clipped view never re-appears
+           Platform.OS === 'ios' || Platform.OS === 'macos' ? !visible : true
+         }
+-        pointerEvents={visible ? 'auto' : 'none'}
+-        style={visible ? styles.attached : styles.detached}
++        style={[visible ? styles.attached : styles.detached, { pointerEvents: visible ? 'auto' : 'none' }]}
+       >
+         {children}
+       </View>

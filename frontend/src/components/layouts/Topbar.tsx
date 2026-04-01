@@ -1,4 +1,4 @@
-import { Menu, LogOut, Settings, User as UserIcon, Bell } from "lucide-react";
+import { LogOut, Settings, Bell } from "lucide-react";
 import { useState } from "react";
 
 interface TopbarProps {

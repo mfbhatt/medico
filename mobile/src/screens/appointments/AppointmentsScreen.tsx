@@ -3,8 +3,9 @@ import { View, Text, FlatList, TouchableOpacity, StyleSheet, RefreshControl } fr
 import { useQuery } from '@tanstack/react-query';
 import { useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import appointmentApi, { Appointment } from '@/services/appointmentApi';
-import { spacing, typography, theme } from '@/utils/theme';
+import { spacing, typography, theme, shadows } from '@/utils/theme';
 import type { AppStackParamList } from '@/navigation';
 
 type NavProp = NativeStackNavigationProp<AppStackParamList>;
@@ -23,9 +24,9 @@ function AppointmentCard({ appointment, onPress }: { appointment: Appointment; o
   return (
     <TouchableOpacity style={styles.card} onPress={onPress} activeOpacity={0.7}>
       <View style={styles.cardHeader}>
-        <View>
-          <Text style={styles.doctorName}>{appointment.doctor_name}</Text>
-          <Text style={styles.clinicName}>{appointment.clinic_name}</Text>
+        <View style={{ flex: 1, minWidth: 0, marginRight: 8 }}>
+          <Text style={styles.doctorName} numberOfLines={1}>{appointment.doctor_name}</Text>
+          <Text style={styles.clinicName} numberOfLines={1}>{appointment.clinic_name}</Text>
         </View>
         <View style={[styles.badge, { backgroundColor: `${statusColor}20` }]}>
           <Text style={[styles.badgeText, { color: statusColor }]}>
@@ -45,6 +46,7 @@ function AppointmentCard({ appointment, onPress }: { appointment: Appointment; o
 
 export default function AppointmentsScreen() {
   const navigation = useNavigation<NavProp>();
+  const insets = useSafeAreaInsets();
   const [filter, setFilter] = useState<'upcoming' | 'past'>('upcoming');
 
   const { data, isLoading, refetch, isRefetching } = useQuery({
@@ -58,7 +60,7 @@ export default function AppointmentsScreen() {
   return (
     <View style={styles.container}>
       {/* Header */}
-      <View style={styles.header}>
+      <View style={[styles.header, { paddingTop: insets.top + 12 }]}>
         <Text style={styles.title}>My Appointments</Text>
         <TouchableOpacity
           style={styles.bookBtn}
@@ -87,6 +89,7 @@ export default function AppointmentsScreen() {
         data={data ?? []}
         keyExtractor={(item) => item.id}
         contentContainerStyle={styles.list}
+        showsVerticalScrollIndicator={false}
         refreshControl={<RefreshControl refreshing={isRefetching} onRefresh={refetch} />}
         ListEmptyComponent={
           !isLoading ? (
@@ -115,7 +118,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: spacing.md,
-    paddingTop: 60,
+    paddingTop: 12,
     paddingBottom: spacing.md,
     backgroundColor: '#fff',
     borderBottomWidth: 1,
@@ -145,11 +148,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#fff',
     borderRadius: 12,
     padding: spacing.md,
-    shadowColor: '#000',
-    shadowOpacity: 0.04,
-    shadowRadius: 4,
-    shadowOffset: { width: 0, height: 2 },
-    elevation: 2,
+    ...shadows.md,
   },
   cardHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 10 },
   doctorName: { ...typography.body, fontWeight: '600', color: '#0f172a' },

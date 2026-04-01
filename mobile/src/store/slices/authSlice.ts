@@ -1,6 +1,7 @@
 import { createSlice, createAsyncThunk, PayloadAction } from '@reduxjs/toolkit';
-import * as SecureStore from 'expo-secure-store';
-import authApi, { LoginResponse } from '@/services/authApi';
+import { storage } from '../../utils/storage';
+import authApi from '@/services/authApi';
+import api from '@/services/api';
 
 interface User {
   id: string;
@@ -23,7 +24,7 @@ const initialState: AuthState = {
   accessToken: null,
   refreshToken: null,
   isAuthenticated: false,
-  isLoading: false,
+  isLoading: true, // true until restoreSessionThunk completes on app start
 };
 
 export const loginThunk = createAsyncThunk(
@@ -31,8 +32,8 @@ export const loginThunk = createAsyncThunk(
   async (credentials: { phone: string; otp: string }, { rejectWithValue }) => {
     try {
       const data = await authApi.verifyOtp(credentials.phone, credentials.otp);
-      await SecureStore.setItemAsync('access_token', data.access_token);
-      await SecureStore.setItemAsync('refresh_token', data.refresh_token);
+      await storage.setItemAsync('access_token', data.access_token);
+      await storage.setItemAsync('refresh_token', data.refresh_token);
       return data;
     } catch (err) {
       return rejectWithValue('Invalid OTP');
@@ -41,15 +42,43 @@ export const loginThunk = createAsyncThunk(
 );
 
 export const logoutThunk = createAsyncThunk('auth/logout', async () => {
-  await SecureStore.deleteItemAsync('access_token');
-  await SecureStore.deleteItemAsync('refresh_token');
+  try {
+    await storage.deleteItemAsync('access_token');
+    await storage.deleteItemAsync('refresh_token');
+    await storage.deleteItemAsync('user_data');
+    await storage.deleteItemAsync('tenant_id');
+  } catch { /* ignore if SecureStore unavailable */ }
 });
 
 export const restoreSessionThunk = createAsyncThunk('auth/restore', async () => {
-  const token = await SecureStore.getItemAsync('access_token');
-  const refresh = await SecureStore.getItemAsync('refresh_token');
-  if (!token) return null;
-  return { accessToken: token, refreshToken: refresh };
+  try {
+    const storedToken = await storage.getItemAsync('access_token');
+    if (!storedToken) return null;
+
+    // Validate token against backend; interceptor auto-refreshes if expired
+    const validatedUser: User | null = await api
+      .get('/auth/me')
+      .then((r) => r.data.data as User)
+      .catch(() => null);
+
+    if (!validatedUser) {
+      // Both access and refresh tokens invalid — clear persisted session
+      await storage.deleteItemAsync('access_token');
+      await storage.deleteItemAsync('refresh_token');
+      await storage.deleteItemAsync('user_data');
+      return null;
+    }
+
+    // Re-read token (may have been silently refreshed by the interceptor)
+    const [token, refresh] = await Promise.all([
+      storage.getItemAsync('access_token'),
+      storage.getItemAsync('refresh_token'),
+    ]);
+
+    return { accessToken: token!, refreshToken: refresh ?? null, user: validatedUser };
+  } catch {
+    return null;
+  }
 });
 
 const authSlice = createSlice({
@@ -70,6 +99,12 @@ const authSlice = createSlice({
       state.refreshToken = null;
       state.isAuthenticated = false;
     },
+    setCredentials(state, action: PayloadAction<{ access_token: string; refresh_token: string; user: User }>) {
+      state.accessToken = action.payload.access_token;
+      state.refreshToken = action.payload.refresh_token;
+      state.user = action.payload.user;
+      state.isAuthenticated = true;
+    },
   },
   extraReducers: (builder) => {
     builder
@@ -88,15 +123,19 @@ const authSlice = createSlice({
         state.refreshToken = null;
         state.isAuthenticated = false;
       })
+      .addCase(restoreSessionThunk.pending, (state) => { state.isLoading = true; })
       .addCase(restoreSessionThunk.fulfilled, (state, action) => {
+        state.isLoading = false;
         if (action.payload) {
           state.accessToken = action.payload.accessToken;
-          state.refreshToken = action.payload.refreshToken;
+          state.refreshToken = action.payload.refreshToken ?? null;
+          state.user = action.payload.user;
           state.isAuthenticated = true;
         }
-      });
+      })
+      .addCase(restoreSessionThunk.rejected, (state) => { state.isLoading = false; });
   },
 });
 
-export const { setTokens, setUser, clearAuth } = authSlice.actions;
+export const { setTokens, setUser, clearAuth, setCredentials } = authSlice.actions;
 export default authSlice.reducer;

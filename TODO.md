@@ -10,10 +10,27 @@ cd frontend
 npm install
 npm run dev     # http://localhost:5173
 
-##
+## Mobile
+
+# Install Node.js 20+ if not already installed
+# Install Expo CLI
+npm install -g expo-cli@latest
+
+# Install dependencies
+cd mobile
+npm install
+
+npm run ios        # Opens iOS Simulator (Mac only, requires Xcode)
+npm run android    # Opens Android Emulator (requires Android Studio)
+npm run web        # Opens in browser
 
 
- Email:    admin@demo.com
-  Password: Admin1234!
+
+
+
+
+
+Email:    admin@demo.com
+Password: Admin1234!
 
   

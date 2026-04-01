@@ -10,7 +10,7 @@ interface DoctorCardProps {
   onClick?: () => void;
 }
 
-export default function DoctorCard({ doctorId, name, specialization, rating, availableDates, onClick }: DoctorCardProps) {
+export default function DoctorCard({ name, specialization, rating, availableDates, onClick }: DoctorCardProps) {
   return (
     <div onClick={onClick} className="bg-white rounded-lg shadow-md p-4 hover:shadow-lg transition cursor-pointer border border-gray-200">
       <div className="mb-3">

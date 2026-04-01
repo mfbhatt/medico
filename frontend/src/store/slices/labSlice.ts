@@ -1,5 +1,5 @@
 import { createSlice, PayloadAction } from "@reduxjs/toolkit";
-import type { LabOrder, LabReport } from "../types";
+import type { LabOrder, LabReport } from "../../types";
 
 interface LabState {
   orders: LabOrder[];

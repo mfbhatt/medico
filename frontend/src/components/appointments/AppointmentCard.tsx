@@ -1,4 +1,4 @@
-import { Calendar, Clock, User, MapPin } from "lucide-react";
+import { Calendar, Clock, MapPin } from "lucide-react";
 
 interface AppointmentCardProps {
   patientName: string;

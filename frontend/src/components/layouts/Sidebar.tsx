@@ -4,7 +4,7 @@ import { useState } from "react";
 
 interface NavItem {
   label: string;
-  icon: React.ReactNode;
+  icon?: React.ReactNode;
   path?: string;
   submenu?: NavItem[];
 }

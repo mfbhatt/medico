@@ -130,6 +130,105 @@ async def create_prescription(
     )
 
 
+@router.get("/my")
+async def get_my_prescriptions(
+    status: Optional[str] = None,
+    page: int = 1,
+    page_size: int = 20,
+    db: AsyncSession = Depends(get_db),
+    current_user: CurrentUser = Depends(get_current_user),
+):
+    """Return prescriptions for the currently authenticated patient."""
+    from app.models.patient import Patient
+    from app.models.doctor import Doctor
+    from app.models.user import User
+
+    # Resolve patient record from the authenticated user
+    patient_res = await db.execute(
+        select(Patient).where(
+            Patient.user_id == current_user.user_id,
+            Patient.tenant_id == current_user.tenant_id,
+            Patient.is_deleted.isnot(True),
+        )
+    )
+    patient = patient_res.scalar_one_or_none()
+    if not patient:
+        return _success([], meta={"total": 0, "page": page, "page_size": page_size})
+
+    query = select(Prescription).where(
+        Prescription.patient_id == patient.id,
+        Prescription.tenant_id == current_user.tenant_id,
+        Prescription.is_deleted == False,
+    )
+    if status:
+        query = query.where(Prescription.status == status)
+
+    query = query.order_by(Prescription.prescribed_date.desc())
+    total = (await db.execute(select(func.count()).select_from(query.subquery()))).scalar()
+    result = await db.execute(query.offset((page - 1) * page_size).limit(page_size))
+
+    prescriptions = []
+    for p in result.scalars():
+        items_res = await db.execute(
+            select(PrescriptionItem).where(PrescriptionItem.prescription_id == p.id)
+        )
+        # Resolve doctor name
+        doctor_name = "Unknown Doctor"
+        if p.doctor_id:
+            doc_res = await db.execute(
+                select(Doctor).where(Doctor.id == p.doctor_id)
+            )
+            doc = doc_res.scalar_one_or_none()
+            if doc:
+                user_res = await db.execute(
+                    select(User).where(User.id == doc.user_id)
+                )
+                u = user_res.scalar_one_or_none()
+                if u:
+                    doctor_name = u.full_name or f"Dr. {u.first_name} {u.last_name}".strip()
+
+        prescriptions.append({
+            "id": p.id,
+            "prescription_number": p.prescription_number,
+            "created_at": p.prescribed_date,
+            "expires_at": p.expiry_date,
+            "status": p.status,
+            "doctor_name": doctor_name,
+            "refills_remaining": p.refills_remaining,
+            "allergy_warnings": [
+                w.get("message") for w in (p.interaction_warnings or [])
+                if w.get("type") == "allergy"
+            ] or None,
+            "items": [
+                {
+                    "drug_name": i.drug_name,
+                    "dosage": f"{i.strength} {i.dose}".strip(),
+                    "frequency": i.frequency,
+                    "duration_days": _parse_duration_days(i.duration),
+                    "instructions": i.instructions,
+                }
+                for i in items_res.scalars()
+            ],
+        })
+
+    return _success(prescriptions, meta={"total": total, "page": page, "page_size": page_size})
+
+
+def _parse_duration_days(duration: Optional[str]) -> int:
+    """Parse '7 days', '2 weeks' etc. into an integer number of days."""
+    if not duration:
+        return 0
+    duration = duration.lower().strip()
+    try:
+        if "week" in duration:
+            return int(duration.split()[0]) * 7
+        if "month" in duration:
+            return int(duration.split()[0]) * 30
+        return int(duration.split()[0])
+    except (ValueError, IndexError):
+        return 0
+
+
 @router.get("/patient/{patient_id}")
 async def get_patient_prescriptions(
     patient_id: str,

@@ -185,3 +185,64 @@ async def update_clinic(
     clinic.updated_by = current_user.user_id
     await db.commit()
     return _success(_clinic_response(clinic), message="Clinic updated")
+
+
+@router.get("/{clinic_id}/doctors")
+async def list_clinic_doctors(
+    clinic_id: str,
+    specialization: Optional[str] = None,
+    search: Optional[str] = None,
+    db: AsyncSession = Depends(get_db),
+    current_user: CurrentUser = Depends(get_current_user),
+):
+    """List all active doctors assigned to a clinic, shaped for the booking UI."""
+    from sqlalchemy import or_
+    from sqlalchemy.orm import selectinload
+    from app.models.doctor import Doctor, DoctorClinicAssignment
+    from app.models.user import User
+
+    # Verify clinic belongs to tenant
+    filters = [Clinic.id == clinic_id, Clinic.is_deleted == False]
+    if current_user.role != "super_admin":
+        filters.append(Clinic.tenant_id == current_user.tenant_id)
+    clinic = (await db.execute(select(Clinic).where(*filters))).scalar_one_or_none()
+    if not clinic:
+        raise NotFoundException(detail="Clinic not found")
+
+    query = (
+        select(Doctor, DoctorClinicAssignment)
+        .options(selectinload(Doctor.user))
+        .join(User, User.id == Doctor.user_id)
+        .join(DoctorClinicAssignment, DoctorClinicAssignment.doctor_id == Doctor.id)
+        .where(
+            DoctorClinicAssignment.clinic_id == clinic_id,
+            DoctorClinicAssignment.is_active == True,
+            DoctorClinicAssignment.is_deleted == False,
+            Doctor.is_deleted == False,
+        )
+    )
+
+    if specialization:
+        query = query.where(Doctor.primary_specialization.ilike(f"%{specialization}%"))
+
+    if search:
+        term = f"%{search}%"
+        query = query.where(
+            or_(User.first_name.ilike(term), User.last_name.ilike(term))
+        )
+
+    result = await db.execute(query)
+    rows = result.all()
+
+    return _success([
+        {
+            "id": doc.id,
+            "name": doc.user.full_name if doc.user else "",
+            "specialization": doc.primary_specialization,
+            "consultation_fee": assignment.consultation_fee_override or doc.consultation_fee or 0,
+            "average_rating": doc.average_rating,
+            "clinic_id": clinic_id,
+            "clinic_name": clinic.name,
+        }
+        for doc, assignment in rows
+    ])

@@ -57,6 +57,11 @@ class Settings(BaseSettings):
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 30
     REFRESH_TOKEN_EXPIRE_DAYS: int = 30
 
+    # ── Social Auth ──────────────────────────────────────────────
+    GOOGLE_CLIENT_ID: Optional[str] = None
+    FACEBOOK_APP_ID: Optional[str] = None
+    FACEBOOK_APP_SECRET: Optional[str] = None
+
     # ── Azure AD B2C ─────────────────────────────────────────────
     AZURE_AD_B2C_TENANT_NAME: Optional[str] = None
     AZURE_AD_B2C_CLIENT_ID: Optional[str] = None

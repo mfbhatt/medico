@@ -1,3 +1,4 @@
+import { Platform } from 'react-native';
 import { DefaultTheme } from 'react-native-paper';
 
 export const theme = {
@@ -27,6 +28,22 @@ export const spacing = {
   lg: 24,
   xl: 32,
   xxl: 48,
+};
+
+// Cross-platform shadow: uses boxShadow on web (new RNW API), shadow* on native.
+export const shadows = {
+  sm: Platform.select({
+    web: { boxShadow: '0px 1px 4px rgba(0,0,0,0.06)' },
+    default: { shadowColor: '#000', shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.06, shadowRadius: 3, elevation: 1 },
+  }) as object,
+  md: Platform.select({
+    web: { boxShadow: '0px 2px 6px rgba(0,0,0,0.07)' },
+    default: { shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.06, shadowRadius: 4, elevation: 2 },
+  }) as object,
+  lg: Platform.select({
+    web: { boxShadow: '0px 4px 12px rgba(0,0,0,0.08)' },
+    default: { shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.08, shadowRadius: 8, elevation: 4 },
+  }) as object,
 };
 
 export const typography = {

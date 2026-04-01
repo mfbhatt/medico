@@ -1,5 +1,5 @@
 import { createSlice, PayloadAction } from "@reduxjs/toolkit";
-import type { Invoice } from "../types";
+import type { Invoice } from "../../types";
 
 interface BillingState {
   invoices: Invoice[];

@@ -13,15 +13,41 @@ export interface LoginResponse {
 }
 
 const authApi = {
+  // ── Phone OTP ────────────────────────────────────────────────────────────
   requestOtp: (phone: string) =>
-    api.post('/auth/patient/request-otp', { phone }).then((r) => r.data),
+    api.post('/auth/otp/send', { phone }).then((r) => r.data),
 
-  verifyOtp: (phone: string, otp: string): Promise<LoginResponse> =>
-    api.post<{ data: LoginResponse }>('/auth/patient/verify-otp', { phone, otp }).then((r) => r.data.data),
+  verifyOtp: (phone: string, otp: string, tenantId?: string): Promise<LoginResponse> =>
+    api
+      .post<{ data: LoginResponse }>('/auth/otp/verify', {
+        phone,
+        otp,
+        ...(tenantId && { tenant_id: tenantId }),
+      })
+      .then((r) => r.data.data),
 
+  // ── Email / Password ──────────────────────────────────────────────────────
+  login: (email: string, password: string): Promise<LoginResponse> =>
+    api
+      .post<{ data: LoginResponse }>('/auth/login', { email, password })
+      .then((r) => r.data.data),
+
+  // ── Social ────────────────────────────────────────────────────────────────
+  socialLogin: (
+    provider: 'google' | 'facebook',
+    token: string,
+    tokenType: 'access_token' | 'id_token' = 'access_token'
+  ): Promise<LoginResponse> =>
+    api
+      .post<{ data: LoginResponse }>('/auth/social', { provider, token, token_type: tokenType })
+      .then((r) => r.data.data),
+
+  // ── Session ───────────────────────────────────────────────────────────────
   refresh: (refreshToken: string): Promise<{ access_token: string; refresh_token: string }> =>
     api
-      .post<{ data: { access_token: string; refresh_token: string } }>('/auth/refresh', { refresh_token: refreshToken })
+      .post<{ data: { access_token: string; refresh_token: string } }>('/auth/refresh', {
+        refresh_token: refreshToken,
+      })
       .then((r) => r.data.data),
 
   me: () => api.get('/auth/me').then((r) => r.data.data),

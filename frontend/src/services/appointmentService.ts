@@ -1,5 +1,5 @@
 import api from "./api";
-import type { Appointment, PaginatedResponse, ApiResponse } from "../types";
+import type { Appointment, PaginatedResponse } from "../types";
 
 export const appointmentService = {
   // Get all appointments

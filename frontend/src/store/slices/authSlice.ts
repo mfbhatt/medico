@@ -78,6 +78,12 @@ export const loginThunk = createAsyncThunk<LoginResponse, LoginPayload, { reject
         email: payload.email,
         password: payload.password,
       });
+      localStorage.setItem(STORAGE_KEYS.AUTH_TOKEN, response.access_token);
+      localStorage.setItem(STORAGE_KEYS.REFRESH_TOKEN, response.refresh_token);
+      localStorage.setItem(STORAGE_KEYS.USER, JSON.stringify(response.user));
+      if (response.user?.tenant_id) {
+        localStorage.setItem(STORAGE_KEYS.TENANT_ID, response.user.tenant_id);
+      }
       return {
         access_token: response.access_token,
         refresh_token: response.refresh_token,

@@ -5,7 +5,6 @@ import {
   Globe,
   Users,
   Activity,
-  TrendingUp,
   CheckCircle,
   XCircle,
   Clock,
@@ -14,18 +13,11 @@ import {
 } from "lucide-react";
 import api from "@/services/api";
 
-interface SystemStats {
-  tenants: { total: number; active: number; inactive: number; suspended: number };
-  clinics: { total: number; active: number };
-  users: { total: number };
-  appointments: { today: number; this_month: number };
-  revenue: { this_month: number };
-}
-
 interface TenantRow {
   id: string;
   name: string;
   plan: string;
+  subscription_plan?: string;
   status: string;
   clinics_count: number;
   users_count: number;
@@ -162,7 +154,7 @@ export default function SuperAdminDashboard() {
                 <tr key={t.id} className="hover:bg-slate-50">
                   <td className="px-5 py-3.5 font-medium text-slate-900">{t.name}</td>
                   <td className="px-5 py-3.5">
-                    <span className={`text-xs px-2 py-0.5 rounded-full font-medium capitalize ${PLAN_COLORS[t.subscription_plan] ?? "bg-gray-100 text-gray-600"}`}>
+                    <span className={`text-xs px-2 py-0.5 rounded-full font-medium capitalize ${PLAN_COLORS[t.subscription_plan ?? ''] ?? "bg-gray-100 text-gray-600"}`}>
                       {t.subscription_plan}
                     </span>
                   </td>

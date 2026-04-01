@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { ChevronLeft, ChevronRight, Link } from "lucide-react";
+import { ChevronLeft, ChevronRight } from "lucide-react";
 import { Link as RouterLink } from "react-router-dom";
 import api from "@/services/api";
 

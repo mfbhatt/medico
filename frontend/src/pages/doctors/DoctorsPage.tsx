@@ -62,8 +62,8 @@ export default function DoctorsPage() {
     keepPreviousData: true,
   } as any);
 
-  const doctors: any[] = Array.isArray(doctorsRaw?.data) ? doctorsRaw.data : [];
-  const total: number = doctorsRaw?.meta?.total ?? 0;
+  const doctors: any[] = Array.isArray((doctorsRaw as any)?.data) ? (doctorsRaw as any).data : [];
+  const total: number = (doctorsRaw as any)?.meta?.total ?? 0;
 
   const createMutation = useMutation({
     mutationFn: (form: AddDoctorForm) =>

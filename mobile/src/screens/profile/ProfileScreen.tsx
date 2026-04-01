@@ -6,12 +6,15 @@ import {
   TouchableOpacity,
   Alert,
 } from 'react-native';
+import { toast } from '@/utils/toast';
+import { Ionicons } from '@expo/vector-icons';
 import { useQuery, useMutation } from '@tanstack/react-query';
 import * as LocalAuthentication from 'expo-local-authentication';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import api from '@/services/api';
 import { useAppDispatch, useAppSelector } from '@/store/hooks';
 import { logoutThunk } from '@/store/slices/authSlice';
-import { spacing, typography, theme } from '@/utils/theme';
+import { spacing, typography, theme, shadows } from '@/utils/theme';
 
 interface MenuItem {
   label: string;
@@ -21,21 +24,25 @@ interface MenuItem {
 }
 
 function MenuRow({ item }: { item: MenuItem }) {
+  const iconColor = item.danger ? '#ef4444' : '#64748b';
   return (
     <TouchableOpacity
       style={[styles.menuRow, item.danger && styles.menuRowDanger]}
       onPress={item.onPress}
       activeOpacity={0.7}
     >
-      <Text style={styles.menuIcon}>{item.icon}</Text>
+      <View style={[styles.menuIconContainer, item.danger && styles.menuIconContainerDanger]}>
+        <Ionicons name={item.icon as never} size={18} color={iconColor} />
+      </View>
       <Text style={[styles.menuLabel, item.danger && styles.menuLabelDanger]}>{item.label}</Text>
-      <Text style={styles.chevron}>›</Text>
+      {!item.danger && <Ionicons name="chevron-forward" size={17} color="#cbd5e1" />}
     </TouchableOpacity>
   );
 }
 
 export default function ProfileScreen() {
   const dispatch = useAppDispatch();
+  const insets = useSafeAreaInsets();
   const { user } = useAppSelector((s) => s.auth);
 
   const { data: profile } = useQuery({
@@ -57,26 +64,26 @@ export default function ProfileScreen() {
   const handleBiometric = async () => {
     const compatible = await LocalAuthentication.hasHardwareAsync();
     if (!compatible) {
-      Alert.alert('Not supported', 'Biometric authentication is not available on this device.');
+      toast.info('Biometric authentication is not available on this device.');
       return;
     }
     const enrolled = await LocalAuthentication.isEnrolledAsync();
     if (!enrolled) {
-      Alert.alert('Not enrolled', 'Please set up biometrics in your device settings first.');
+      toast.warning('Please set up biometrics in your device settings first.');
       return;
     }
-    Alert.alert('Success', 'Biometric login is enabled.');
+    toast.success('Biometric login is enabled.');
   };
 
   const menuItems: MenuItem[] = [
-    { label: 'Personal Information', icon: '👤', onPress: () => {} },
-    { label: 'Insurance Policies', icon: '🛡️', onPress: () => {} },
-    { label: 'Emergency Contacts', icon: '🚨', onPress: () => {} },
-    { label: 'Notification Preferences', icon: '🔔', onPress: () => {} },
-    { label: 'Biometric Login', icon: '🔐', onPress: handleBiometric },
-    { label: 'Privacy & Data', icon: '🔒', onPress: () => {} },
-    { label: 'Help & Support', icon: '❓', onPress: () => {} },
-    { label: 'Sign Out', icon: '🚪', onPress: handleLogout, danger: true },
+    { label: 'Personal Information', icon: 'person-outline', onPress: () => {} },
+    { label: 'Insurance Policies', icon: 'shield-checkmark-outline', onPress: () => {} },
+    { label: 'Emergency Contacts', icon: 'alert-circle-outline', onPress: () => {} },
+    { label: 'Notification Preferences', icon: 'notifications-outline', onPress: () => {} },
+    { label: 'Biometric Login', icon: 'finger-print-outline', onPress: handleBiometric },
+    { label: 'Privacy & Data', icon: 'lock-closed-outline', onPress: () => {} },
+    { label: 'Help & Support', icon: 'help-circle-outline', onPress: () => {} },
+    { label: 'Sign Out', icon: 'log-out-outline', onPress: handleLogout, danger: true },
   ];
 
   const initials = user?.full_name
@@ -84,9 +91,9 @@ export default function ProfileScreen() {
     : '?';
 
   return (
-    <ScrollView style={styles.container} contentContainerStyle={styles.content}>
+    <ScrollView style={styles.container} contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
       {/* Avatar */}
-      <View style={styles.avatarSection}>
+      <View style={[styles.avatarSection, { paddingTop: insets.top + 24 }]}>
         <View style={styles.avatar}>
           <Text style={styles.avatarText}>{initials}</Text>
         </View>
@@ -132,7 +139,7 @@ export default function ProfileScreen() {
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#f8fafc' },
   content: { paddingBottom: 40 },
-  avatarSection: { alignItems: 'center', paddingTop: 70, paddingBottom: spacing.xl, backgroundColor: '#fff' },
+  avatarSection: { alignItems: 'center', paddingTop: 24, paddingBottom: spacing.xl, backgroundColor: '#fff' },
   avatar: {
     width: 72,
     height: 72,
@@ -158,11 +165,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#fff',
     borderRadius: 16,
     padding: spacing.md,
-    shadowColor: '#000',
-    shadowOpacity: 0.04,
-    shadowRadius: 4,
-    shadowOffset: { width: 0, height: 2 },
-    elevation: 2,
+    ...shadows.md,
   },
   sectionTitle: { ...typography.label, marginBottom: spacing.sm, color: '#64748b' },
   healthGrid: { flexDirection: 'row', gap: spacing.sm },
@@ -180,11 +183,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#fff',
     borderRadius: 16,
     overflow: 'hidden',
-    shadowColor: '#000',
-    shadowOpacity: 0.04,
-    shadowRadius: 4,
-    shadowOffset: { width: 0, height: 2 },
-    elevation: 2,
+    ...shadows.md,
   },
   menuRow: {
     flexDirection: 'row',
@@ -195,8 +194,16 @@ const styles = StyleSheet.create({
     borderBottomColor: '#f1f5f9',
   },
   menuRowDanger: { borderBottomWidth: 0 },
-  menuIcon: { fontSize: 20, marginRight: spacing.sm },
+  menuIconContainer: {
+    width: 34,
+    height: 34,
+    borderRadius: 8,
+    backgroundColor: '#f1f5f9',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: spacing.sm,
+  },
+  menuIconContainerDanger: { backgroundColor: '#fee2e2' },
   menuLabel: { flex: 1, ...typography.body, color: '#1e293b' },
   menuLabelDanger: { color: '#ef4444' },
-  chevron: { fontSize: 20, color: '#94a3b8' },
 });

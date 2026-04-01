@@ -102,8 +102,8 @@ export default function UsersPage() {
     keepPreviousData: true,
   } as any);
 
-  const users: any[] = Array.isArray(data?.data) ? data.data : [];
-  const total: number = data?.meta?.total ?? 0;
+  const users: any[] = Array.isArray((data as any)?.data) ? (data as any).data : [];
+  const total: number = (data as any)?.meta?.total ?? 0;
 
   const handleSort = useCallback((field: SortField) => {
     if (sortBy === field) {

@@ -1,14 +1,16 @@
 """Public-facing endpoints — no authentication required."""
-from typing import Optional
+from datetime import datetime, timedelta
+from typing import List, Optional
 
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
-from app.core.exceptions import NotFoundException
+from app.core.exceptions import BadRequestException, NotFoundException
+from app.models.appointment import Appointment, AppointmentStatus
 from app.models.clinic import Clinic, ClinicStatus
-from app.models.doctor import Doctor, DoctorClinicAssignment
+from app.models.doctor import Doctor, DoctorClinicAssignment, DoctorSchedule, DoctorScheduleException
 from app.models.tenant import Tenant
 from app.models.user import User
 
@@ -60,6 +62,7 @@ async def list_public_clinics(
         "clinics": [
             {
                 "id": c.id,
+                "tenant_id": c.tenant_id,
                 "name": c.name,
                 "city": c.city,
                 "state": c.state,
@@ -116,6 +119,7 @@ async def get_public_clinic(
     return _success({
         "clinic": {
             "id": clinic.id,
+            "tenant_id": clinic.tenant_id,
             "name": clinic.name,
             "city": clinic.city,
             "state": clinic.state,
@@ -149,3 +153,105 @@ async def get_public_clinic(
             for doc in docs
         ],
     })
+
+
+@router.get("/slots")
+async def get_public_slots(
+    doctor_id: str = Query(...),
+    clinic_id: str = Query(...),
+    date: str = Query(..., description="YYYY-MM-DD"),
+    db: AsyncSession = Depends(get_db),
+):
+    """Get available appointment slots — no authentication required (used by public booking page)."""
+    try:
+        target_date = datetime.strptime(date, "%Y-%m-%d").date()
+    except ValueError:
+        raise BadRequestException(detail="Invalid date format. Use YYYY-MM-DD")
+
+    if target_date < datetime.now().date():
+        raise BadRequestException(detail="Cannot book appointments in the past")
+
+    day_name = target_date.strftime("%A").lower()
+
+    exception_result = await db.execute(
+        select(DoctorScheduleException).where(
+            DoctorScheduleException.doctor_id == doctor_id,
+            DoctorScheduleException.clinic_id == clinic_id,
+            DoctorScheduleException.exception_date == date,
+            DoctorScheduleException.is_deleted == False,
+        )
+    )
+    exception = exception_result.scalar_one_or_none()
+
+    if exception and exception.exception_type in ("day_off", "leave", "emergency_leave"):
+        return _success({"date": date, "available_slots": [], "booked_slots": [], "total_slots": 0})
+
+    schedule_result = await db.execute(
+        select(DoctorSchedule).where(
+            DoctorSchedule.doctor_id == doctor_id,
+            DoctorSchedule.clinic_id == clinic_id,
+            DoctorSchedule.day_of_week == day_name,
+            DoctorSchedule.is_active == True,
+            DoctorSchedule.is_deleted == False,
+        )
+    )
+    schedule = schedule_result.scalar_one_or_none()
+
+    if not schedule:
+        return _success({"date": date, "available_slots": [], "booked_slots": [], "total_slots": 0})
+
+    start_str = schedule.start_time
+    end_str = schedule.end_time
+    if exception and exception.exception_type == "modified_hours":
+        start_str = exception.start_time or start_str
+        end_str = exception.end_time or end_str
+
+    all_slots = _generate_time_slots(start_str, end_str, schedule.slot_duration, schedule.break_start, schedule.break_end)
+
+    booked_result = await db.execute(
+        select(Appointment.start_time).where(
+            Appointment.doctor_id == doctor_id,
+            Appointment.clinic_id == clinic_id,
+            Appointment.appointment_date == date,
+            Appointment.status.notin_([AppointmentStatus.CANCELLED, AppointmentStatus.NO_SHOW]),
+            Appointment.is_deleted == False,
+        )
+    )
+    booked_starts = {row[0] for row in booked_result}
+
+    available = [s for s in all_slots if s["start_time"] not in booked_starts]
+
+    return _success({
+        "date": date,
+        "doctor_id": doctor_id,
+        "clinic_id": clinic_id,
+        "slot_duration": schedule.slot_duration,
+        "available_slots": available,
+        "booked_slots": [s for s in all_slots if s["start_time"] in booked_starts],
+        "total_slots": len(all_slots),
+        "available_count": len(available),
+    })
+
+
+def _generate_time_slots(
+    start: str, end: str, duration: int,
+    break_start: Optional[str] = None, break_end: Optional[str] = None
+) -> List[dict]:
+    slots = []
+    current = datetime.strptime(start, "%H:%M")
+    end_dt = datetime.strptime(end, "%H:%M")
+    break_start_dt = datetime.strptime(break_start, "%H:%M") if break_start else None
+    break_end_dt = datetime.strptime(break_end, "%H:%M") if break_end else None
+
+    while current < end_dt:
+        slot_end = current + timedelta(minutes=duration)
+        if slot_end > end_dt:
+            break
+        if break_start_dt and break_end_dt:
+            if break_start_dt <= current < break_end_dt:
+                current = break_end_dt
+                continue
+        slots.append({"start_time": current.strftime("%H:%M"), "end_time": slot_end.strftime("%H:%M")})
+        current = slot_end
+
+    return slots

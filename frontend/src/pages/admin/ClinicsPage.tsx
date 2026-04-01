@@ -18,13 +18,6 @@ const STATUS_COLORS: Record<string, string> = {
 
 const SLOT_OPTIONS = [10, 15, 20, 25, 30];
 
-const UPDATABLE_FIELDS = [
-  "name", "phone", "email", "address_line1", "address_line2",
-  "city", "state", "postal_code", "operating_hours",
-  "appointment_slot_duration", "max_advance_booking_days",
-  "cancellation_notice_hours", "no_show_charge_enabled",
-  "no_show_charge_amount", "status", "holidays",
-];
 
 export default function ClinicsPage() {
   const qc = useQueryClient();
@@ -60,8 +53,8 @@ export default function ClinicsPage() {
     keepPreviousData: true,
   } as any);
 
-  const filtered: any[] = Array.isArray(clinicsRaw?.data) ? clinicsRaw.data : [];
-  const total: number = clinicsRaw?.meta?.total ?? 0;
+  const filtered: any[] = Array.isArray((clinicsRaw as any)?.data) ? (clinicsRaw as any).data : [];
+  const total: number = (clinicsRaw as any)?.meta?.total ?? 0;
 
   const handleSearch = () => { setSearch(searchInput); setPage(1); };
 

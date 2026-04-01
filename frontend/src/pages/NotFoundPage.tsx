@@ -1,6 +1,6 @@
 import React from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Button } from '../components/form/Button';
+import Button from '../components/form/Button';
 
 export const NotFoundPage: React.FC = () => {
   const navigate = useNavigate();

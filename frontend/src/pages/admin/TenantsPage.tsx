@@ -35,8 +35,8 @@ export default function TenantsPage() {
     keepPreviousData: true,
   } as any);
 
-  const allTenants: any[] = Array.isArray(tenantsData?.data) ? tenantsData.data : [];
-  const total: number = tenantsData?.meta?.total ?? 0;
+  const allTenants: any[] = Array.isArray((tenantsData as any)?.data) ? (tenantsData as any).data : [];
+  const total: number = (tenantsData as any)?.meta?.total ?? 0;
 
   const handleSearch = () => { setSearch(searchInput); setPage(1); };
 

@@ -31,7 +31,7 @@ export default function NotificationsPage() {
     mutationFn: () => api.post('/notifications/mark-all-read'),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['notifications'] });
-      dispatch(addToast({ message: 'All notifications marked as read', variant: 'success' }));
+      dispatch(addToast({ id: `t-${Date.now()}`, type: 'success', message: 'All notifications marked as read' }));
     },
   });
 

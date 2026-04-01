@@ -3,13 +3,23 @@
 export interface User {
   id: string;
   email: string;
-  firstName: string;
-  lastName: string;
-  role: "super_admin" | "tenant_admin" | "clinic_admin" | "doctor" | "nurse" | "receptionist" | "patient";
-  tenantId: string;
+  // camelCase (legacy / frontend-only)
+  firstName?: string;
+  lastName?: string;
+  tenantId?: string;
   clinicId?: string;
+  // snake_case (from backend API)
+  first_name?: string;
+  last_name?: string;
+  full_name?: string;
+  tenant_id?: string;
+  clinic_id?: string;
+  patient_id?: string;
+  role: "super_admin" | "tenant_admin" | "clinic_admin" | "doctor" | "nurse" | "receptionist" | "patient";
   avatar?: string;
   lastLogin?: string;
+  is_active?: boolean;
+  status?: string;
 }
 
 export interface Appointment {

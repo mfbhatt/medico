@@ -2,7 +2,6 @@ import { useCallback } from "react";
 import { useAppDispatch, useAppSelector } from "./useRedux";
 import { setUser, setToken, logout, setLoading, setError } from "../store/slices/authSlice";
 import { authService } from "../services/authService";
-import { STORAGE_KEYS } from "../utils/constants";
 
 interface LoginCredentials {
   email: string;
@@ -20,7 +19,7 @@ export const useAuth = () => {
       try {
         const response = await authService.login(credentials);
         dispatch(setUser(response.user));
-        dispatch(setToken(response.token));
+        dispatch(setToken({ token: response.access_token, refreshToken: response.refresh_token }));
         return response;
       } catch (err) {
         const message = err instanceof Error ? err.message : "Login failed";

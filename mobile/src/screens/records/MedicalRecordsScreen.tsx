@@ -1,8 +1,10 @@
 import { View, Text, FlatList, StyleSheet, RefreshControl, TouchableOpacity } from 'react-native';
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
+import { Ionicons } from '@expo/vector-icons';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import api from '@/services/api';
-import { spacing, typography } from '@/utils/theme';
+import { spacing, typography, shadows } from '@/utils/theme';
 
 interface MedicalRecord {
   id: string;
@@ -77,6 +79,7 @@ function RecordCard({ record }: { record: MedicalRecord }) {
 }
 
 export default function MedicalRecordsScreen() {
+  const insets = useSafeAreaInsets();
   const { data, isLoading, refetch, isRefetching } = useQuery({
     queryKey: ['my-records'],
     queryFn: () => api.get('/medical-records/my').then((r) => r.data.data),
@@ -84,7 +87,7 @@ export default function MedicalRecordsScreen() {
 
   return (
     <View style={styles.container}>
-      <View style={styles.header}>
+      <View style={[styles.header, { paddingTop: insets.top + 12 }]}>
         <Text style={styles.title}>Medical Records</Text>
       </View>
 
@@ -92,11 +95,12 @@ export default function MedicalRecordsScreen() {
         data={data ?? []}
         keyExtractor={(item: MedicalRecord) => item.id}
         contentContainerStyle={styles.list}
+        showsVerticalScrollIndicator={false}
         refreshControl={<RefreshControl refreshing={isRefetching} onRefresh={refetch} />}
         ListEmptyComponent={
           !isLoading ? (
             <View style={styles.empty}>
-              <Text style={styles.emptyIcon}>📋</Text>
+              <Ionicons name="document-text-outline" size={56} color="#cbd5e1" style={styles.emptyIcon} />
               <Text style={styles.emptyText}>No medical records yet</Text>
             </View>
           ) : null
@@ -111,7 +115,7 @@ const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#f8fafc' },
   header: {
     paddingHorizontal: spacing.md,
-    paddingTop: 60,
+    paddingTop: 12,
     paddingBottom: spacing.md,
     backgroundColor: '#fff',
     borderBottomWidth: 1,
@@ -123,11 +127,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#fff',
     borderRadius: 12,
     overflow: 'hidden',
-    shadowColor: '#000',
-    shadowOpacity: 0.04,
-    shadowRadius: 4,
-    shadowOffset: { width: 0, height: 2 },
-    elevation: 2,
+    ...shadows.md,
   },
   cardHeader: {
     flexDirection: 'row',
@@ -151,6 +151,6 @@ const styles = StyleSheet.create({
   expandBtn: { padding: spacing.sm, alignItems: 'center', borderTopWidth: 1, borderTopColor: '#f1f5f9' },
   expandText: { ...typography.caption, color: '#0ea5e9', fontWeight: '600' },
   empty: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingTop: 80 },
-  emptyIcon: { fontSize: 48, marginBottom: spacing.md },
+  emptyIcon: { marginBottom: spacing.md },
   emptyText: { ...typography.body, color: '#94a3b8' },
 });

@@ -20,25 +20,6 @@ interface PaymentRequest {
   transactionId?: string;
 }
 
-interface Invoice {
-  id: string;
-  patientId: string;
-  invoiceDate: string;
-  dueDate: string;
-  status: "draft" | "sent" | "paid" | "overdue";
-  subtotal: number;
-  tax: number;
-  total: number;
-  lineItems: Array<{
-    id: string;
-    description: string;
-    quantity: number;
-    unitPrice: number;
-    total: number;
-  }>;
-  notes?: string;
-  createdAt: string;
-}
 
 export const billingService = {
   getInvoices: async (

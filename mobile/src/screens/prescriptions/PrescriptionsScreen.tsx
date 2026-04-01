@@ -1,7 +1,9 @@
 import { View, Text, FlatList, TouchableOpacity, StyleSheet, RefreshControl } from 'react-native';
 import { useQuery } from '@tanstack/react-query';
+import { Ionicons } from '@expo/vector-icons';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import api from '@/services/api';
-import { spacing, typography, theme } from '@/utils/theme';
+import { spacing, typography, theme, shadows } from '@/utils/theme';
 
 interface PrescriptionItem {
   drug_name: string;
@@ -43,7 +45,8 @@ function PrescriptionCard({ rx }: { rx: Prescription }) {
       {/* Allergy warnings */}
       {rx.allergy_warnings && rx.allergy_warnings.length > 0 && (
         <View style={styles.warningBanner}>
-          <Text style={styles.warningText}>⚠️ {rx.allergy_warnings.join(', ')}</Text>
+          <Ionicons name="warning-outline" size={14} color="#92400e" style={{ marginRight: 4 }} />
+          <Text style={styles.warningText}>{rx.allergy_warnings.join(', ')}</Text>
         </View>
       )}
 
@@ -70,6 +73,7 @@ function PrescriptionCard({ rx }: { rx: Prescription }) {
 }
 
 export default function PrescriptionsScreen() {
+  const insets = useSafeAreaInsets();
   const { data, isLoading, refetch, isRefetching } = useQuery({
     queryKey: ['my-prescriptions'],
     queryFn: () => api.get('/prescriptions/my').then((r) => r.data.data),
@@ -77,7 +81,7 @@ export default function PrescriptionsScreen() {
 
   return (
     <View style={styles.container}>
-      <View style={styles.header}>
+      <View style={[styles.header, { paddingTop: insets.top + 12 }]}>
         <Text style={styles.title}>Prescriptions</Text>
       </View>
 
@@ -85,11 +89,12 @@ export default function PrescriptionsScreen() {
         data={data ?? []}
         keyExtractor={(item: Prescription) => item.id}
         contentContainerStyle={styles.list}
+        showsVerticalScrollIndicator={false}
         refreshControl={<RefreshControl refreshing={isRefetching} onRefresh={refetch} />}
         ListEmptyComponent={
           !isLoading ? (
             <View style={styles.empty}>
-              <Text style={styles.emptyIcon}>💊</Text>
+              <Ionicons name="medkit-outline" size={56} color="#cbd5e1" style={styles.emptyIcon} />
               <Text style={styles.emptyText}>No prescriptions yet</Text>
             </View>
           ) : null
@@ -104,7 +109,7 @@ const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#f8fafc' },
   header: {
     paddingHorizontal: spacing.md,
-    paddingTop: 60,
+    paddingTop: 12,
     paddingBottom: spacing.md,
     backgroundColor: '#fff',
     borderBottomWidth: 1,
@@ -116,11 +121,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#fff',
     borderRadius: 12,
     overflow: 'hidden',
-    shadowColor: '#000',
-    shadowOpacity: 0.04,
-    shadowRadius: 4,
-    shadowOffset: { width: 0, height: 2 },
-    elevation: 2,
+    ...shadows.md,
   },
   cardExpired: { opacity: 0.7 },
   cardHeader: {
@@ -134,6 +135,8 @@ const styles = StyleSheet.create({
   badge: { borderRadius: 20, paddingHorizontal: 8, paddingVertical: 3 },
   badgeText: { fontSize: 11, fontWeight: '600', textTransform: 'capitalize' },
   warningBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
     backgroundColor: '#fef3c7',
     paddingHorizontal: spacing.md,
     paddingVertical: spacing.xs,
@@ -147,6 +150,6 @@ const styles = StyleSheet.create({
   instructions: { ...typography.caption, color: '#94a3b8', marginTop: 2, fontStyle: 'italic' },
   expiryNote: { ...typography.caption, color: '#94a3b8', padding: spacing.md, paddingTop: spacing.sm },
   empty: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingTop: 80 },
-  emptyIcon: { fontSize: 48, marginBottom: spacing.md },
+  emptyIcon: { marginBottom: spacing.md },
   emptyText: { ...typography.body, color: '#94a3b8' },
 });

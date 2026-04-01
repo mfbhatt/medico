@@ -1,5 +1,7 @@
 import { View, Text, FlatList, StyleSheet, TouchableOpacity, RefreshControl } from 'react-native';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { Ionicons } from '@expo/vector-icons';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import api from '@/services/api';
 import { spacing, typography, theme } from '@/utils/theme';
 
@@ -12,24 +14,27 @@ interface Notification {
   created_at: string;
 }
 
-const TYPE_ICONS: Record<string, string> = {
-  appointment_reminder: '📅',
-  appointment_cancelled: '❌',
-  lab_result: '🔬',
-  prescription: '💊',
-  billing: '💳',
-  critical_lab: '🚨',
-  system: 'ℹ️',
+const TYPE_ICONS: Record<string, { name: string; color: string }> = {
+  appointment_reminder: { name: 'calendar-outline', color: '#3b82f6' },
+  appointment_cancelled: { name: 'close-circle-outline', color: '#ef4444' },
+  lab_result: { name: 'flask-outline', color: '#7c3aed' },
+  prescription: { name: 'medkit-outline', color: '#059669' },
+  billing: { name: 'card-outline', color: '#0ea5e9' },
+  critical_lab: { name: 'alert-circle', color: '#ef4444' },
+  system: { name: 'information-circle-outline', color: '#64748b' },
 };
 
 function NotificationItem({ item, onPress }: { item: Notification; onPress: () => void }) {
+  const iconDef = TYPE_ICONS[item.notification_type] ?? { name: 'notifications-outline', color: '#64748b' };
   return (
     <TouchableOpacity
       style={[styles.item, !item.is_read && styles.itemUnread]}
       onPress={onPress}
       activeOpacity={0.7}
     >
-      <Text style={styles.icon}>{TYPE_ICONS[item.notification_type] ?? '🔔'}</Text>
+      <View style={[styles.iconContainer, { backgroundColor: `${iconDef.color}15` }]}>
+        <Ionicons name={iconDef.name as never} size={20} color={iconDef.color} />
+      </View>
       <View style={styles.itemContent}>
         <Text style={[styles.itemTitle, !item.is_read && styles.itemTitleUnread]}>
           {item.title}
@@ -45,6 +50,7 @@ function NotificationItem({ item, onPress }: { item: Notification; onPress: () =
 }
 
 export default function NotificationsScreen() {
+  const insets = useSafeAreaInsets();
   const queryClient = useQueryClient();
 
   const { data, isLoading, refetch, isRefetching } = useQuery({
@@ -67,7 +73,7 @@ export default function NotificationsScreen() {
 
   return (
     <View style={styles.container}>
-      <View style={styles.header}>
+      <View style={[styles.header, { paddingTop: insets.top + 12 }]}>
         <View>
           <Text style={styles.title}>Notifications</Text>
           {unreadCount > 0 && <Text style={styles.subtitle}>{unreadCount} unread</Text>}
@@ -86,11 +92,12 @@ export default function NotificationsScreen() {
       <FlatList
         data={notifications}
         keyExtractor={(item) => item.id}
+        showsVerticalScrollIndicator={false}
         refreshControl={<RefreshControl refreshing={isRefetching} onRefresh={refetch} />}
         ListEmptyComponent={
           !isLoading ? (
             <View style={styles.empty}>
-              <Text style={styles.emptyIcon}>🔔</Text>
+              <Ionicons name="notifications-outline" size={56} color="#cbd5e1" style={styles.emptyIcon} />
               <Text style={styles.emptyText}>No notifications yet</Text>
             </View>
           ) : null
@@ -114,7 +121,7 @@ const styles = StyleSheet.create({
     alignItems: 'flex-end',
     justifyContent: 'space-between',
     paddingHorizontal: spacing.md,
-    paddingTop: 60,
+    paddingTop: 12,
     paddingBottom: spacing.md,
     backgroundColor: '#fff',
     borderBottomWidth: 1,
@@ -126,7 +133,7 @@ const styles = StyleSheet.create({
   markAllText: { fontSize: 13, color: '#475569', fontWeight: '500' },
   item: { flexDirection: 'row', alignItems: 'flex-start', padding: spacing.md, backgroundColor: '#fff' },
   itemUnread: { backgroundColor: '#f0f9ff' },
-  icon: { fontSize: 22, marginRight: spacing.sm, marginTop: 2 },
+  iconContainer: { width: 38, height: 38, borderRadius: 10, alignItems: 'center', justifyContent: 'center', marginRight: spacing.sm, marginTop: 1 },
   itemContent: { flex: 1 },
   itemTitle: { ...typography.body, color: '#475569' },
   itemTitleUnread: { color: '#0f172a', fontWeight: '600' },
@@ -135,6 +142,6 @@ const styles = StyleSheet.create({
   unreadDot: { width: 8, height: 8, borderRadius: 4, backgroundColor: theme.colors.primary, marginTop: 6 },
   separator: { height: 1, backgroundColor: '#f1f5f9' },
   empty: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingTop: 80 },
-  emptyIcon: { fontSize: 48, marginBottom: spacing.md },
+  emptyIcon: { marginBottom: spacing.md },
   emptyText: { ...typography.body, color: '#94a3b8' },
 });

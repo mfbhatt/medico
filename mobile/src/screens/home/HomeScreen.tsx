@@ -13,12 +13,16 @@ import {
 } from "react-native";
 import { useNavigation } from "@react-navigation/native";
 import { useQuery } from "@tanstack/react-query";
+import { Ionicons } from "@expo/vector-icons";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 
-import { appointmentApi } from "../../services/appointmentApi";
+import appointmentApi from "../../services/appointmentApi";
 import { useAppSelector } from "../../store/hooks";
+import { shadows } from "../../utils/theme";
 
 export default function HomeScreen() {
   const navigation = useNavigation<any>();
+  const insets = useSafeAreaInsets();
   const { user } = useAppSelector((s) => s.auth);
 
   const {
@@ -29,39 +33,37 @@ export default function HomeScreen() {
   } = useQuery({
     queryKey: ["upcomingAppointments", user?.patient_id],
     queryFn: () =>
-      appointmentApi.listAppointments({
-        patient_id: user?.patient_id,
-        date_from: new Date().toISOString().split("T")[0],
-        status: "scheduled",
-        page_size: 5,
+      appointmentApi.getMyAppointments({
+        status: "scheduled,checked_in",
+        limit: 5,
       }),
-    enabled: !!user?.patient_id,
+    enabled: !!user,
   });
 
-  const appointments = appointmentsRes?.data?.data || [];
+  const appointments = appointmentsRes ?? [];
 
   const quickActions = [
     {
       label: "Book Appointment",
-      icon: "📅",
+      icon: "calendar-outline" as const,
       onPress: () => navigation.navigate("BookAppointment"),
       color: "#1e40af",
     },
     {
       label: "My Prescriptions",
-      icon: "💊",
+      icon: "medkit-outline" as const,
       onPress: () => navigation.navigate("Prescriptions"),
       color: "#059669",
     },
     {
       label: "Lab Reports",
-      icon: "🧪",
+      icon: "flask-outline" as const,
       onPress: () => navigation.navigate("LabReports"),
       color: "#7c3aed",
     },
     {
       label: "Medical Records",
-      icon: "📋",
+      icon: "document-text-outline" as const,
       onPress: () => navigation.navigate("MedicalRecords"),
       color: "#dc2626",
     },
@@ -70,14 +72,15 @@ export default function HomeScreen() {
   return (
     <ScrollView
       style={styles.container}
+      showsVerticalScrollIndicator={false}
       refreshControl={
         <RefreshControl refreshing={isRefetching} onRefresh={refetch} />
       }
     >
       {/* Greeting */}
-      <View style={styles.header}>
-        <View>
-          <Text style={styles.greeting}>
+      <View style={[styles.header, { paddingTop: insets.top + 16 }]}>
+        <View style={{ flex: 1, marginRight: 12 }}>
+          <Text style={styles.greeting} numberOfLines={1}>
             Good {getGreeting()}, {user?.first_name || "Patient"}
           </Text>
           <Text style={styles.subGreeting}>How are you feeling today?</Text>
@@ -101,7 +104,7 @@ export default function HomeScreen() {
             style={[styles.quickAction, { borderTopColor: action.color }]}
             onPress={action.onPress}
           >
-            <Text style={styles.quickActionIcon}>{action.icon}</Text>
+            <Ionicons name={action.icon} size={28} color={action.color} style={styles.quickActionIcon} />
             <Text style={styles.quickActionLabel}>{action.label}</Text>
           </TouchableOpacity>
         ))}
@@ -119,7 +122,7 @@ export default function HomeScreen() {
         <ActivityIndicator color="#1e40af" style={{ marginTop: 20 }} />
       ) : appointments.length === 0 ? (
         <View style={styles.emptyState}>
-          <Text style={styles.emptyIcon}>📅</Text>
+          <Ionicons name="calendar-outline" size={56} color="#cbd5e1" style={styles.emptyIcon} />
           <Text style={styles.emptyTitle}>No upcoming appointments</Text>
           <Text style={styles.emptySubtitle}>
             Book an appointment to get started
@@ -143,20 +146,20 @@ export default function HomeScreen() {
             <View style={styles.apptLeft}>
               <View style={styles.apptDateBox}>
                 <Text style={styles.apptDay}>
-                  {new Date(appt.appointment_date).getDate()}
+                  {new Date(appt.scheduled_date).getDate()}
                 </Text>
                 <Text style={styles.apptMonth}>
-                  {new Date(appt.appointment_date).toLocaleString("en", {
+                  {new Date(appt.scheduled_date).toLocaleString("en", {
                     month: "short",
                   })}
                 </Text>
               </View>
             </View>
             <View style={styles.apptRight}>
-              <Text style={styles.apptDoctor}>
-                Dr. {appt.doctor_id.slice(0, 8)}
+              <Text style={styles.apptDoctor} numberOfLines={1}>
+                {appt.doctor_name || "Doctor"}
               </Text>
-              <Text style={styles.apptTime}>{appt.start_time}</Text>
+              <Text style={styles.apptTime}>{appt.scheduled_time}</Text>
               <View
                 style={[
                   styles.apptStatus,
@@ -174,7 +177,7 @@ export default function HomeScreen() {
                 })
               }
             >
-              <Text style={styles.apptActionText}>›</Text>
+              <Ionicons name="chevron-forward" size={20} color="#cbd5e1" />
             </TouchableOpacity>
           </TouchableOpacity>
         ))
@@ -183,7 +186,7 @@ export default function HomeScreen() {
       {/* Health Tips */}
       <Text style={styles.sectionTitle}>Health Tips</Text>
       <View style={styles.healthTipCard}>
-        <Text style={styles.healthTipIcon}>💡</Text>
+        <Ionicons name="bulb-outline" size={36} color="#f59e0b" style={styles.healthTipIcon} />
         <View style={styles.healthTipContent}>
           <Text style={styles.healthTipTitle}>Stay Hydrated</Text>
           <Text style={styles.healthTipBody}>
@@ -215,7 +218,7 @@ function getStatusColor(status: string): string {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: "#f8fafc" },
-  header: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", padding: 20, paddingTop: 48, backgroundColor: "#1e40af" },
+  header: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", padding: 20, paddingTop: 16, backgroundColor: "#1e40af" },
   greeting: { fontSize: 22, fontWeight: "700", color: "#fff" },
   subGreeting: { fontSize: 14, color: "#bfdbfe", marginTop: 2 },
   avatarBtn: { width: 44, height: 44, borderRadius: 22, backgroundColor: "rgba(255,255,255,0.2)", alignItems: "center", justifyContent: "center" },
@@ -224,16 +227,16 @@ const styles = StyleSheet.create({
   sectionTitle: { fontSize: 17, fontWeight: "700", color: "#1e293b", paddingHorizontal: 20, marginTop: 24, marginBottom: 12 },
   seeAll: { fontSize: 14, color: "#1e40af", fontWeight: "600" },
   quickActionsGrid: { flexDirection: "row", flexWrap: "wrap", paddingHorizontal: 16, gap: 12 },
-  quickAction: { width: "47%", backgroundColor: "#fff", borderRadius: 12, padding: 16, borderTopWidth: 3, shadowColor: "#000", shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.05, shadowRadius: 4, elevation: 2 },
-  quickActionIcon: { fontSize: 28, marginBottom: 8 },
+  quickAction: { flex: 1, flexBasis: '45%', backgroundColor: "#fff", borderRadius: 12, padding: 16, borderTopWidth: 3, ...shadows.sm },
+  quickActionIcon: { marginBottom: 8 },
   quickActionLabel: { fontSize: 13, fontWeight: "600", color: "#374151" },
   emptyState: { alignItems: "center", paddingVertical: 40, marginHorizontal: 20 },
-  emptyIcon: { fontSize: 48, marginBottom: 12 },
+  emptyIcon: { marginBottom: 12 },
   emptyTitle: { fontSize: 17, fontWeight: "700", color: "#1e293b", marginBottom: 6 },
   emptySubtitle: { fontSize: 14, color: "#64748b", textAlign: "center" },
   bookNowBtn: { marginTop: 20, backgroundColor: "#1e40af", paddingVertical: 12, paddingHorizontal: 32, borderRadius: 10 },
   bookNowText: { color: "#fff", fontWeight: "700", fontSize: 15 },
-  appointmentCard: { flexDirection: "row", alignItems: "center", backgroundColor: "#fff", marginHorizontal: 20, marginBottom: 12, borderRadius: 12, padding: 16, shadowColor: "#000", shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.05, shadowRadius: 4, elevation: 2 },
+  appointmentCard: { flexDirection: "row", alignItems: "center", backgroundColor: "#fff", marginHorizontal: 20, marginBottom: 12, borderRadius: 12, padding: 16, ...shadows.sm },
   apptLeft: { marginRight: 14 },
   apptDateBox: { width: 50, height: 56, backgroundColor: "#eff6ff", borderRadius: 10, alignItems: "center", justifyContent: "center" },
   apptDay: { fontSize: 22, fontWeight: "800", color: "#1e40af" },
@@ -244,9 +247,8 @@ const styles = StyleSheet.create({
   apptStatus: { alignSelf: "flex-start", paddingHorizontal: 8, paddingVertical: 2, borderRadius: 6, marginTop: 6 },
   apptStatusText: { fontSize: 11, fontWeight: "600", color: "#374151", textTransform: "capitalize" },
   apptAction: { paddingLeft: 8 },
-  apptActionText: { fontSize: 24, color: "#94a3b8" },
-  healthTipCard: { flexDirection: "row", alignItems: "center", backgroundColor: "#fff", marginHorizontal: 20, marginBottom: 40, borderRadius: 12, padding: 16, shadowColor: "#000", shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.05, shadowRadius: 4, elevation: 2 },
-  healthTipIcon: { fontSize: 36, marginRight: 14 },
+  healthTipCard: { flexDirection: "row", alignItems: "center", backgroundColor: "#fff", marginHorizontal: 20, marginBottom: 40, borderRadius: 12, padding: 16, ...shadows.sm },
+  healthTipIcon: { marginRight: 14 },
   healthTipContent: { flex: 1 },
   healthTipTitle: { fontSize: 15, fontWeight: "700", color: "#1e293b", marginBottom: 4 },
   healthTipBody: { fontSize: 13, color: "#64748b", lineHeight: 18 },

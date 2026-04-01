@@ -27,6 +27,7 @@ class OTPVerifyRequest(BaseSchema):
     phone: Optional[str] = None
     email: Optional[EmailStr] = None
     otp: str
+    tenant_id: Optional[str] = None
 
 
 class TokenResponse(BaseSchema):

@@ -28,7 +28,7 @@ export default function TelemedicinePage() {
   const endMutation = useMutation({
     mutationFn: () => api.post(`/telemedicine/${appointmentId}/end`),
     onSuccess: () => {
-      dispatch(addToast({ message: 'Telemedicine session ended', variant: 'info' }));
+      dispatch(addToast({ id: `t-${Date.now()}`, type: 'info', message: 'Telemedicine session ended' }));
       navigate('/appointments');
     },
   });
@@ -47,7 +47,7 @@ export default function TelemedicinePage() {
         setSessionActive(true);
       })
       .catch(() => {
-        dispatch(addToast({ message: 'Could not access camera/microphone', variant: 'error' }));
+        dispatch(addToast({ id: `t-${Date.now()}`, type: 'error', message: 'Could not access camera/microphone' }));
       });
 
     return () => {

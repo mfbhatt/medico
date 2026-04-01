@@ -5,8 +5,6 @@ import {
   Search,
   MapPin,
   Phone,
-  Globe,
-  Star,
   Building2,
   ChevronRight,
   SlidersHorizontal,
