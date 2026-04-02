@@ -457,7 +457,8 @@ async def book_appointment(
 
     return _success(
         {
-            "appointment_id": appointment.id,
+            "id": appointment.id,
+            "appointment_id": appointment.id,  # keep for backwards compat
             "appointment_date": appt_date,
             "start_time": start_time,
             "end_time": end_time,

@@ -4,9 +4,10 @@ import LoadingSpinner from "../common/LoadingSpinner";
 
 interface ProtectedRouteProps {
   allowedRoles?: string[];
+  redirectTo?: string;
 }
 
-export default function ProtectedRoute({ allowedRoles }: ProtectedRouteProps) {
+export default function ProtectedRoute({ allowedRoles, redirectTo = "/403" }: ProtectedRouteProps) {
   const location = useLocation();
   const { user, token, loading } = useAppSelector((s) => s.auth);
 
@@ -19,7 +20,7 @@ export default function ProtectedRoute({ allowedRoles }: ProtectedRouteProps) {
   }
 
   if (allowedRoles && !allowedRoles.includes(user.role)) {
-    return <Navigate to="/403" replace />;
+    return <Navigate to={redirectTo} replace />;
   }
 
   return <Outlet />;

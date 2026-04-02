@@ -4,6 +4,7 @@ import { useNavigation, useRoute, type RouteProp } from '@react-navigation/nativ
 import { Ionicons } from '@expo/vector-icons';
 import appointmentApi from '@/services/appointmentApi';
 import { spacing, typography, theme, shadows } from '@/utils/theme';
+import { toast } from '@/utils/toast';
 import type { AppStackParamList } from '@/navigation';
 
 type Route = RouteProp<AppStackParamList, 'AppointmentDetail'>;
@@ -43,6 +44,10 @@ export default function AppointmentDetailScreen() {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['appointment', appointmentId] });
       qc.invalidateQueries({ queryKey: ['my-appointments'] });
+      toast.success('Appointment cancelled');
+    },
+    onError: (err: any) => {
+      toast.error(err?.response?.data?.message ?? 'Cancellation failed');
     },
   });
 

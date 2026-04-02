@@ -1,8 +1,9 @@
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { useSelector } from 'react-redux';
-import { RootState } from '@/store';
+import { useSelector, useDispatch } from 'react-redux';
+import { RootState, AppDispatch } from '@/store';
+import { addToast } from '@/store/slices/uiSlice';
 import api from '@/services/api';
 
 const STATUS_COLORS: Record<string, string> = {
@@ -33,6 +34,7 @@ interface ConfirmDialog {
 
 export default function AppointmentsPage() {
   const { user } = useSelector((s: RootState) => s.auth);
+  const dispatch = useDispatch<AppDispatch>();
   const isPatient = user?.role === 'patient';
 
   const [date, setDate] = useState(() => new Date().toISOString().slice(0, 10));
@@ -45,6 +47,11 @@ export default function AppointmentsPage() {
   const [rescheduleTime, setRescheduleTime] = useState('');
   const limit = 20;
   const qc = useQueryClient();
+
+  const toast = {
+    success: (message: string) => dispatch(addToast({ id: Date.now().toString(), type: 'success', message, duration: 3000 })),
+    error: (message: string) => dispatch(addToast({ id: Date.now().toString(), type: 'error', message, duration: 5000 })),
+  };
 
   const { data, isLoading } = useQuery({
     queryKey: ['appointments', date, status, page],
@@ -61,7 +68,14 @@ export default function AppointmentsPage() {
 
   const checkInMutation = useMutation({
     mutationFn: (id: string) => api.patch(`/appointments/${id}/check-in`, {}),
-    onSuccess: () => { qc.invalidateQueries({ queryKey: ['appointments'] }); setConfirm(null); },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['appointments'] });
+      setConfirm(null);
+      toast.success('Patient checked in successfully');
+    },
+    onError: (err: any) => {
+      toast.error(err?.response?.data?.message ?? 'Check-in failed');
+    },
   });
 
   const cancelMutation = useMutation({
@@ -71,6 +85,10 @@ export default function AppointmentsPage() {
       qc.invalidateQueries({ queryKey: ['appointments'] });
       setConfirm(null);
       setCancelNote('');
+      toast.success('Appointment cancelled');
+    },
+    onError: (err: any) => {
+      toast.error(err?.response?.data?.message ?? 'Cancellation failed');
     },
   });
 
@@ -82,6 +100,10 @@ export default function AppointmentsPage() {
       setRescheduleAppt(null);
       setRescheduleDate('');
       setRescheduleTime('');
+      toast.success('Appointment rescheduled');
+    },
+    onError: (err: any) => {
+      toast.error(err?.response?.data?.message ?? 'Reschedule failed');
     },
   });
 
@@ -123,18 +145,6 @@ export default function AppointmentsPage() {
           </select>
         </div>
       </div>
-
-      {/* Error banners */}
-      {cancelMutation.isError && (
-        <div className="mb-4 bg-red-50 border border-red-200 text-red-700 px-4 py-2 rounded-lg text-sm">
-          {(cancelMutation.error as any)?.response?.data?.message ?? 'Cancellation failed'}
-        </div>
-      )}
-      {rescheduleMutation.isError && (
-        <div className="mb-4 bg-red-50 border border-red-200 text-red-700 px-4 py-2 rounded-lg text-sm">
-          {(rescheduleMutation.error as any)?.response?.data?.message ?? 'Reschedule failed'}
-        </div>
-      )}
 
       {/* Table */}
       <div className="card overflow-hidden">
@@ -309,11 +319,6 @@ export default function AppointmentsPage() {
                   />
                 </div>
               </div>
-              {rescheduleMutation.isError && (
-                <p className="mb-3 text-xs text-red-600">
-                  {(rescheduleMutation.error as any)?.response?.data?.message ?? 'Reschedule failed'}
-                </p>
-              )}
               <div className="flex gap-3">
                 <button
                   onClick={() => rescheduleMutation.mutate({ id: rescheduleAppt.id, appointment_date: rescheduleDate, start_time: rescheduleTime })}

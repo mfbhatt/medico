@@ -192,6 +192,7 @@ export default function BookAppointmentScreen() {
         appointment_type: visitType === "new" ? "new_visit" : "follow_up",
         chief_complaint: chiefComplaint || undefined,
       });
+      toast.success("Appointment booked successfully!");
       navigation.navigate("AppointmentDetail", { appointmentId: appt.id });
     } catch (err: any) {
       toast.error(err.response?.data?.message ?? "Booking failed. Please try again.");

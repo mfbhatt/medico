@@ -107,7 +107,18 @@ export default function App() {
         <Route element={<DashboardLayout />}>
           {/* Role-aware default redirect */}
           <Route path="/home" element={<RoleBasedHome />} />
-          <Route path="/dashboard" element={<DashboardPage />} />
+
+          {/* Dashboard — staff only; patients redirected to their appointments */}
+          <Route
+            element={
+              <ProtectedRoute
+                allowedRoles={["super_admin", "tenant_admin", "clinic_admin", "doctor", "nurse", "receptionist", "pharmacist", "lab_technician"]}
+                redirectTo="/appointments"
+              />
+            }
+          >
+            <Route path="/dashboard" element={<DashboardPage />} />
+          </Route>
 
           {/* Appointments */}
           <Route path="/appointments" element={<AppointmentsPage />} />
