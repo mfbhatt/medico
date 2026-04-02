@@ -50,8 +50,12 @@ class Settings(BaseSettings):
     REDIS_CACHE_TTL: int = 300
 
     # ── JWT ─────────────────────────────────────────────────────
-    JWT_SECRET_KEY: str
+    JWT_SECRET_KEY: str = "change-me"
     JWT_ALGORITHM: str = "HS256"
+    # For RS256: provide base64-encoded PEM content (preferred over file paths)
+    JWT_PRIVATE_KEY_B64: Optional[str] = None
+    JWT_PUBLIC_KEY_B64: Optional[str] = None
+    # File-path fallback (used when B64 vars are absent)
     JWT_PRIVATE_KEY_PATH: Optional[str] = None
     JWT_PUBLIC_KEY_PATH: Optional[str] = None
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 30

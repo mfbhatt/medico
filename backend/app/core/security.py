@@ -1,4 +1,5 @@
 """JWT creation/validation, password hashing, RBAC permission checking."""
+import base64
 import uuid
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
@@ -20,24 +21,33 @@ def _is_asymmetric() -> bool:
 def _signing_key() -> str:
     """Key used to sign new tokens."""
     if _is_asymmetric():
-        path = settings.JWT_PRIVATE_KEY_PATH
-        if not path:
-            raise RuntimeError(
-                f"JWT_PRIVATE_KEY_PATH must be set when JWT_ALGORITHM={settings.JWT_ALGORITHM}"
-            )
-        return Path(path).read_text()
+        if settings.JWT_PRIVATE_KEY_B64:
+            return base64.b64decode(settings.JWT_PRIVATE_KEY_B64).decode()
+        if settings.JWT_PRIVATE_KEY_PATH:
+            return Path(settings.JWT_PRIVATE_KEY_PATH).read_text()
+        raise RuntimeError(
+            f"JWT_PRIVATE_KEY_B64 (or JWT_PRIVATE_KEY_PATH) must be set "
+            f"when JWT_ALGORITHM={settings.JWT_ALGORITHM}"
+        )
     return settings.JWT_SECRET_KEY
 
 
 def _verification_key() -> str:
     """Key used to verify incoming tokens."""
     if _is_asymmetric():
-        path = settings.JWT_PUBLIC_KEY_PATH or settings.JWT_PRIVATE_KEY_PATH
-        if not path:
-            raise RuntimeError(
-                f"JWT_PUBLIC_KEY_PATH must be set when JWT_ALGORITHM={settings.JWT_ALGORITHM}"
-            )
-        return Path(path).read_text()
+        if settings.JWT_PUBLIC_KEY_B64:
+            return base64.b64decode(settings.JWT_PUBLIC_KEY_B64).decode()
+        if settings.JWT_PUBLIC_KEY_B64 is None and settings.JWT_PRIVATE_KEY_B64:
+            # Derive public key from private key base64
+            return base64.b64decode(settings.JWT_PRIVATE_KEY_B64).decode()
+        if settings.JWT_PUBLIC_KEY_PATH:
+            return Path(settings.JWT_PUBLIC_KEY_PATH).read_text()
+        if settings.JWT_PRIVATE_KEY_PATH:
+            return Path(settings.JWT_PRIVATE_KEY_PATH).read_text()
+        raise RuntimeError(
+            f"JWT_PUBLIC_KEY_B64 (or JWT_PUBLIC_KEY_PATH) must be set "
+            f"when JWT_ALGORITHM={settings.JWT_ALGORITHM}"
+        )
     return settings.JWT_SECRET_KEY
 
 # ── Password Hashing ─────────────────────────────────────────────
