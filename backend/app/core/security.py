@@ -1,6 +1,7 @@
 """JWT creation/validation, password hashing, RBAC permission checking."""
 import uuid
 from datetime import datetime, timedelta, timezone
+from pathlib import Path
 from typing import Any, Dict, Optional
 
 import jwt
@@ -9,6 +10,35 @@ from passlib.context import CryptContext
 
 from app.core.config import settings
 from app.core.exceptions import UnauthorizedException, ForbiddenException
+
+
+# ── JWT key helpers ───────────────────────────────────────────────
+def _is_asymmetric() -> bool:
+    return settings.JWT_ALGORITHM.startswith(("RS", "PS", "ES"))
+
+
+def _signing_key() -> str:
+    """Key used to sign new tokens."""
+    if _is_asymmetric():
+        path = settings.JWT_PRIVATE_KEY_PATH
+        if not path:
+            raise RuntimeError(
+                f"JWT_PRIVATE_KEY_PATH must be set when JWT_ALGORITHM={settings.JWT_ALGORITHM}"
+            )
+        return Path(path).read_text()
+    return settings.JWT_SECRET_KEY
+
+
+def _verification_key() -> str:
+    """Key used to verify incoming tokens."""
+    if _is_asymmetric():
+        path = settings.JWT_PUBLIC_KEY_PATH or settings.JWT_PRIVATE_KEY_PATH
+        if not path:
+            raise RuntimeError(
+                f"JWT_PUBLIC_KEY_PATH must be set when JWT_ALGORITHM={settings.JWT_ALGORITHM}"
+            )
+        return Path(path).read_text()
+    return settings.JWT_SECRET_KEY
 
 # ── Password Hashing ─────────────────────────────────────────────
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
@@ -42,7 +72,7 @@ def create_access_token(
     }
     if extra_claims:
         payload.update(extra_claims)
-    return jwt.encode(payload, settings.JWT_SECRET_KEY, algorithm=settings.JWT_ALGORITHM)
+    return jwt.encode(payload, _signing_key(), algorithm=settings.JWT_ALGORITHM)
 
 
 def create_refresh_token(subject: str, tenant_id: str) -> str:
@@ -56,14 +86,14 @@ def create_refresh_token(subject: str, tenant_id: str) -> str:
         "exp": expire,
         "type": "refresh",
     }
-    return jwt.encode(payload, settings.JWT_SECRET_KEY, algorithm=settings.JWT_ALGORITHM)
+    return jwt.encode(payload, _signing_key(), algorithm=settings.JWT_ALGORITHM)
 
 
 def decode_token(token: str) -> Dict[str, Any]:
     try:
         payload = jwt.decode(
             token,
-            settings.JWT_SECRET_KEY,
+            _verification_key(),
             algorithms=[settings.JWT_ALGORITHM],
         )
         return payload
@@ -81,7 +111,7 @@ def create_otp_token(phone_or_email: str, otp: str) -> str:
         "exp": expire,
         "type": "otp",
     }
-    return jwt.encode(payload, settings.JWT_SECRET_KEY, algorithm=settings.JWT_ALGORITHM)
+    return jwt.encode(payload, _signing_key(), algorithm=settings.JWT_ALGORITHM)
 
 
 # ── RBAC Permission Matrix ────────────────────────────────────────
