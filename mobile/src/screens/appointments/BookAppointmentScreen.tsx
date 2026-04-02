@@ -187,8 +187,8 @@ export default function BookAppointmentScreen() {
       const appt = await appointmentApi.book({
         doctor_id: selectedDoctor.id,
         clinic_id: selectedDoctor.clinic_id,
-        scheduled_date: selectedDate,
-        scheduled_time: selectedSlot,
+        appointment_date: selectedDate,
+        start_time: selectedSlot,
         appointment_type: visitType === "new" ? "new_visit" : "follow_up",
         chief_complaint: chiefComplaint || undefined,
       });

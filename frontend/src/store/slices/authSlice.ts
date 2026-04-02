@@ -12,12 +12,30 @@ interface AuthState {
   isAuthenticated: boolean;
 }
 
+function isTokenExpired(token: string): boolean {
+  try {
+    const payload = JSON.parse(atob(token.split(".")[1]));
+    return payload.exp * 1000 < Date.now();
+  } catch {
+    return true;
+  }
+}
+
 function loadAuthFromStorage(): Pick<AuthState, "user" | "token" | "refreshToken" | "isAuthenticated"> {
   try {
     const token = localStorage.getItem(STORAGE_KEYS.AUTH_TOKEN);
     const refreshToken = localStorage.getItem(STORAGE_KEYS.REFRESH_TOKEN);
     const userJson = localStorage.getItem(STORAGE_KEYS.USER);
     const user: User | null = userJson ? JSON.parse(userJson) : null;
+
+    if (token && isTokenExpired(token)) {
+      localStorage.removeItem(STORAGE_KEYS.AUTH_TOKEN);
+      localStorage.removeItem(STORAGE_KEYS.REFRESH_TOKEN);
+      localStorage.removeItem(STORAGE_KEYS.USER);
+      localStorage.removeItem(STORAGE_KEYS.TENANT_ID);
+      return { token: null, refreshToken: null, user: null, isAuthenticated: false };
+    }
+
     return {
       token,
       refreshToken,

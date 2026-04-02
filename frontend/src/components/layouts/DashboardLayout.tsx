@@ -73,6 +73,12 @@ const OPERATIONAL_NAV = [
   { name: "Analytics", href: "/analytics", icon: BarChart3, roles: ["clinic_admin"] },
 ];
 
+const PATIENT_NAV = [
+  { name: "My Appointments", href: "/appointments", icon: Calendar },
+  { name: "My Prescriptions", href: "/prescriptions", icon: Pill },
+  { name: "My Reports", href: "/lab", icon: FlaskConical },
+];
+
 const CLINIC_ADMIN_EXTRA = [
   { name: "Clinics", href: "/admin/clinics", icon: Building2 },
   { name: "Staff", href: "/admin/users", icon: Shield },
@@ -121,6 +127,11 @@ const ROLE_META: Record<string, { label: string; badgeClass: string; sidebarAcce
     label: "Lab Tech",
     badgeClass: "bg-cyan-500/20 text-cyan-200 border border-cyan-500/30",
     sidebarAccent: "bg-blue-600",
+  },
+  patient: {
+    label: "Patient",
+    badgeClass: "bg-emerald-500/20 text-emerald-200 border border-emerald-500/30",
+    sidebarAccent: "bg-emerald-600",
   },
 };
 
@@ -216,6 +227,7 @@ export default function DashboardLayout() {
   const navItems = (() => {
     if (role === "super_admin") return SUPER_ADMIN_NAV;
     if (role === "tenant_admin") return TENANT_ADMIN_NAV;
+    if (role === "patient") return PATIENT_NAV;
     // For other roles, filter operational nav
     const hasRole = (roles: string[]) => roles.includes("*") || roles.includes(role);
     return OPERATIONAL_NAV.filter((item) => hasRole(item.roles));

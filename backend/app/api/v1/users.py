@@ -163,6 +163,7 @@ async def list_users(
                     UserTenant.tenant_id == tenant_id,
                     UserTenant.is_deleted.isnot(True),
                     User.is_deleted.isnot(True),
+                    UserTenant.role != "patient",
                 )
             )
             if role:
@@ -195,8 +196,9 @@ async def list_users(
                 meta={"total": total, "page": page, "page_size": page_size},
             )
 
-        # Global view: all users not filtered by tenant
-        query = select(User).where(User.is_deleted.isnot(True))
+        # Global view: all users not filtered by tenant (exclude patients)
+        patient_user_ids = select(UserTenant.user_id).where(UserTenant.role == "patient", UserTenant.is_deleted.isnot(True))
+        query = select(User).where(User.is_deleted.isnot(True), User.id.notin_(patient_user_ids))
         if search:
             term = f"%{search}%"
             query = query.where(
@@ -242,6 +244,7 @@ async def list_users(
             UserTenant.tenant_id == current_user.tenant_id,
             UserTenant.is_deleted.isnot(True),
             User.is_deleted.isnot(True),
+            UserTenant.role != "patient",
         )
     )
 

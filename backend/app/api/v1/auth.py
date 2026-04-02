@@ -36,6 +36,7 @@ from app.schemas.auth import (
     RefreshTokenRequest,
     PasswordResetRequest,
     PasswordResetConfirm,
+    PatientRegisterRequest,
 )
 
 router = APIRouter()
@@ -159,18 +160,29 @@ async def login(
     ut.refresh_token_hash = hash_password(refresh_token)
     await db.commit()
 
+    user_dict: dict = {
+        "id": user.id,
+        "email": user.email,
+        "full_name": user.full_name,
+        "first_name": user.first_name,
+        "last_name": user.last_name,
+        "role": ut.role,
+        "tenant_id": ut.tenant_id,
+    }
+    if ut.role == "patient":
+        from app.models.patient import Patient as PatientModel
+        patient_row = (await db.execute(
+            select(PatientModel).where(PatientModel.user_id == user.id)
+        )).scalar_one_or_none()
+        if patient_row:
+            user_dict["patient_id"] = patient_row.id
+
     return _success(
         {
             "access_token": access_token,
             "refresh_token": refresh_token,
             "token_type": "bearer",
-            "user": {
-                "id": user.id,
-                "email": user.email,
-                "full_name": user.full_name,
-                "role": ut.role,
-                "tenant_id": ut.tenant_id,
-            },
+            "user": user_dict,
         },
         message="Login successful",
     )
@@ -316,18 +328,29 @@ async def verify_otp(
 
     access_token, refresh_token = _issue_tokens(user, ut)
 
+    otp_user_dict: dict = {
+        "id": user.id,
+        "phone": user.phone,
+        "full_name": user.full_name,
+        "first_name": user.first_name,
+        "last_name": user.last_name,
+        "role": ut.role,
+        "tenant_id": ut.tenant_id,
+    }
+    from app.models.patient import Patient as PatientModel
+    otp_patient = (await db.execute(
+        select(PatientModel).where(PatientModel.user_id == user.id)
+    )).scalar_one_or_none()
+    if otp_patient:
+        otp_user_dict["patient_id"] = otp_patient.id
+
     return _success(
         {
             "access_token": access_token,
             "refresh_token": refresh_token,
             "token_type": "bearer",
             "is_new_user": not bool(user.first_name and user.first_name != "Patient"),
-            "user": {
-                "id": user.id,
-                "phone": user.phone,
-                "role": ut.role,
-                "tenant_id": ut.tenant_id,
-            },
+            "user": otp_user_dict,
         }
     )
 
@@ -747,6 +770,106 @@ async def social_login(
             "tenant_id": ut.tenant_id,
         },
     }, message="Login successful")
+
+
+# ── Patient Self-Registration ────────────────────────────────────
+@router.post("/patient/register")
+async def register_patient(
+    body: PatientRegisterRequest,
+    db: AsyncSession = Depends(get_db),
+):
+    """Self-registration for patients via email + password."""
+    email = body.email.lower().strip()
+
+    existing = (await db.execute(
+        select(User).where(User.email == email, User.is_deleted.isnot(True))
+    )).scalar_one_or_none()
+
+    if existing:
+        raise ConflictException(detail="An account with this email already exists. Please sign in.")
+
+    from app.models.user import UserRole
+    from app.models.tenant import Tenant
+
+    user = User(
+        email=email,
+        first_name=body.first_name.strip(),
+        last_name=body.last_name.strip(),
+        phone=body.phone.strip() if body.phone else None,
+        password_hash=hash_password(body.password),
+        is_email_verified=False,
+    )
+    db.add(user)
+    await db.flush()
+
+    # Auto-assign to first active non-system tenant as patient
+    from app.models.tenant import TenantStatus
+    first_tenant = (await db.execute(
+        select(Tenant).where(
+            Tenant.id != SYSTEM_TENANT_ID,
+            Tenant.status == TenantStatus.ACTIVE,
+        ).order_by(Tenant.created_at).limit(1)
+    )).scalar_one_or_none()
+
+    if not first_tenant:
+        await db.commit()
+        return _success(
+            {"access_token": None, "refresh_token": None, "is_new_user": True,
+             "user": {"id": user.id, "email": user.email}},
+            message="Account created. No clinics are available yet.",
+        )
+
+    ut = UserTenant(
+        user_id=user.id,
+        tenant_id=first_tenant.id,
+        role=UserRole.PATIENT,
+        status=UserStatus.ACTIVE,
+    )
+    db.add(ut)
+    await db.flush()
+
+    # Create Patient profile linked to the new user
+    import uuid as _uuid
+    from app.models.patient import Patient
+    mrn_prefix = first_tenant.id[:3].upper()
+    mrn = f"{mrn_prefix}-{_uuid.uuid4().hex[:8].upper()}"
+    patient = Patient(
+        user_id=user.id,
+        tenant_id=first_tenant.id,
+        mrn=mrn,
+        first_name=user.first_name,
+        last_name=user.last_name,
+        email=user.email,
+        phone=user.phone or "",
+        date_of_birth="1900-01-01",  # placeholder — patient should update profile
+        gender="unknown",
+    )
+    db.add(patient)
+    await db.flush()
+
+    access_token, refresh_token = _issue_tokens(user, ut)
+    ut.refresh_token_hash = hash_password(refresh_token)
+    await db.commit()
+
+    return _success(
+        {
+            "access_token": access_token,
+            "refresh_token": refresh_token,
+            "token_type": "bearer",
+            "is_new_user": True,
+            "user": {
+                "id": user.id,
+                "email": user.email,
+                "full_name": f"{user.first_name} {user.last_name}".strip(),
+                "first_name": user.first_name,
+                "last_name": user.last_name,
+                "role": ut.role,
+                "tenant_id": ut.tenant_id,
+                "patient_id": patient.id,
+            },
+        },
+        message="Account created successfully",
+    )
 
 
 # ── Internal helpers ─────────────────────────────────────────────

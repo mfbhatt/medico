@@ -60,10 +60,10 @@ export default function PublicLayout() {
                     Sign In
                   </Link>
                   <Link
-                    to="/clinics"
-                    className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium px-4 py-2 rounded-lg transition-colors"
+                    to="/register"
+                    className="text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 px-4 py-2 rounded-lg transition-colors"
                   >
-                    Book Appointment
+                    Register
                   </Link>
                 </>
               )}
@@ -98,14 +98,23 @@ export default function PublicLayout() {
                 Dashboard
               </Link>
             ) : (
-              <Link
-                to="/login"
-                className="block text-sm font-medium text-gray-700 hover:text-blue-600 py-2 flex items-center gap-2"
-                onClick={() => setMobileMenuOpen(false)}
-              >
-                <LogIn className="h-4 w-4" />
-                Sign In
-              </Link>
+              <>
+                <Link
+                  to="/login"
+                  className="flex items-center gap-2 text-sm font-medium text-gray-700 hover:text-blue-600 py-2"
+                  onClick={() => setMobileMenuOpen(false)}
+                >
+                  <LogIn className="h-4 w-4" />
+                  Sign In
+                </Link>
+                <Link
+                  to="/register"
+                  className="block text-sm font-medium text-blue-600 hover:text-blue-700 py-2"
+                  onClick={() => setMobileMenuOpen(false)}
+                >
+                  Register
+                </Link>
+              </>
             )}
           </div>
         )}

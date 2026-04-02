@@ -26,6 +26,7 @@
 #     "/api/v1/auth/reset-password",
 #     "/api/v1/auth/otp/send",
 #     "/api/v1/auth/otp/verify",
+#     "/api/v1/auth/patient/register",
 #     "/api/v1/tenants/onboard",
 # }
 
@@ -207,6 +208,7 @@ TENANT_EXEMPT_PATHS = {
     "/api/v1/auth/reset-password",
     "/api/v1/auth/otp/send",
     "/api/v1/auth/otp/verify",
+    "/api/v1/auth/patient/register",
     "/api/v1/tenants/onboard",
 }
 

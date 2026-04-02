@@ -268,6 +268,8 @@ async def book_appointment(
     # Auto-resolve patient_id for patient role
     if current_user.role == "patient" and not body.get("patient_id"):
         from app.models.patient import Patient
+        import uuid as _uuid
+        from app.models.user import User as UserModel
         patient_result = await db.execute(
             select(Patient).where(Patient.user_id == current_user.user_id)
         )
@@ -275,7 +277,30 @@ async def book_appointment(
         if existing_patient:
             body = {**body, "patient_id": existing_patient.id}
         else:
-            raise BadRequestException(detail="Patient profile not found. Please complete registration.")
+            # Create a Patient profile on-the-fly for users who registered before the Patient record was required
+            user_row = (await db.execute(
+                select(UserModel).where(UserModel.id == current_user.user_id)
+            )).scalar_one_or_none()
+            first_name = (user_row.first_name or "Patient") if user_row else "Patient"
+            last_name = (user_row.last_name or "") if user_row else ""
+            email = user_row.email if user_row else None
+            phone = (user_row.phone or "") if user_row else ""
+            mrn_prefix = current_user.tenant_id[:3].upper()
+            mrn = f"{mrn_prefix}-{_uuid.uuid4().hex[:8].upper()}"
+            new_patient = Patient(
+                user_id=current_user.user_id,
+                tenant_id=current_user.tenant_id,
+                mrn=mrn,
+                first_name=first_name,
+                last_name=last_name,
+                email=email,
+                phone=phone,
+                date_of_birth="1900-01-01",
+                gender="unknown",
+            )
+            db.add(new_patient)
+            await db.flush()
+            body = {**body, "patient_id": new_patient.id}
 
     # Validate required fields
     required = ["patient_id", "doctor_id", "clinic_id", "appointment_date", "start_time"]
@@ -671,6 +696,79 @@ async def cancel_appointment(
     )
 
     return _success({"appointment_id": appointment_id}, message="Appointment cancelled")
+
+
+# ── Reschedule ───────────────────────────────────────────────────
+@router.patch("/{appointment_id}/reschedule")
+async def reschedule_appointment(
+    appointment_id: str,
+    body: dict,
+    db: AsyncSession = Depends(get_db),
+    current_user: CurrentUser = Depends(get_current_user),
+):
+    """Reschedule an appointment to a new date/time."""
+    result = await db.execute(
+        select(Appointment).where(
+            Appointment.id == appointment_id,
+            Appointment.tenant_id == current_user.tenant_id,
+            Appointment.is_deleted == False,
+        )
+    )
+    appt = result.scalar_one_or_none()
+    if not appt:
+        raise NotFoundException(detail="Appointment not found")
+
+    if appt.status in (AppointmentStatus.COMPLETED, AppointmentStatus.CANCELLED, AppointmentStatus.NO_SHOW):
+        raise BadRequestException(detail=f"Cannot reschedule a {appt.status} appointment")
+
+    # Patients can only reschedule their own
+    if current_user.role == "patient":
+        from app.models.patient import Patient
+        patient_result = await db.execute(
+            select(Patient).where(Patient.user_id == current_user.user_id)
+        )
+        patient = patient_result.scalar_one_or_none()
+        if not patient or appt.patient_id != patient.id:
+            from app.core.exceptions import ForbiddenException
+            raise ForbiddenException(detail="You can only reschedule your own appointments")
+
+    new_date = body.get("appointment_date")
+    new_start = body.get("start_time")
+    if not new_date or not new_start:
+        raise BadRequestException(detail="appointment_date and start_time are required")
+
+    try:
+        target_date = datetime.strptime(new_date, "%Y-%m-%d").date()
+    except ValueError:
+        raise BadRequestException(detail="Invalid date format")
+
+    if target_date < datetime.now().date():
+        raise BadRequestException(detail="Cannot reschedule to a past date")
+
+    # Check for double booking on new slot
+    conflict = await db.execute(
+        select(Appointment).where(
+            Appointment.id != appointment_id,
+            Appointment.doctor_id == appt.doctor_id,
+            Appointment.appointment_date == new_date,
+            Appointment.start_time == new_start,
+            Appointment.is_deleted == False,
+            Appointment.status.notin_([AppointmentStatus.CANCELLED, AppointmentStatus.NO_SHOW]),
+        )
+    )
+    if conflict.scalar_one_or_none():
+        raise BadRequestException(detail="The requested slot is already booked. Please choose a different time.")
+
+    duration = appt.duration_minutes or 15
+    end_dt = datetime.strptime(new_start, "%H:%M") + timedelta(minutes=duration)
+
+    appt.appointment_date = new_date
+    appt.start_time = new_start
+    appt.end_time = end_dt.strftime("%H:%M")
+    appt.status = AppointmentStatus.SCHEDULED
+    await db.commit()
+
+    return _success({"appointment_id": appointment_id}, message="Appointment rescheduled")
 
 
 # ── Check In ────────────────────────────────────────────────────

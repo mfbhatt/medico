@@ -218,7 +218,13 @@ export default function LoginPage() {
   // ── Render: login form ────────────────────────────────────────
   return (
     <>
-      <h2 className="text-xl font-semibold text-gray-900 mb-6">Sign in to your account</h2>
+      <h2 className="text-xl font-semibold text-gray-900 mb-1">Sign in to your account</h2>
+      <p className="text-sm text-gray-500 mb-5">
+        New patient?{" "}
+        <Link to="/register" state={location.state} className="text-blue-600 hover:underline font-medium">
+          Create an account
+        </Link>
+      </p>
 
       {/* Social buttons */}
       <div className="space-y-2 mb-5">

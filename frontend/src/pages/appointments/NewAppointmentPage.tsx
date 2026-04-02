@@ -2,13 +2,20 @@ import { useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Calendar, Clock, AlertCircle, Lock } from "lucide-react";
+import { useSelector } from "react-redux";
+import { RootState } from "@/store";
 import api from "@/services/api";
 
 export default function NewAppointmentPage() {
   const navigate = useNavigate();
   const qc = useQueryClient();
   const [searchParams] = useSearchParams();
-  const prefillPatientId = searchParams.get("patient_id") ?? "";
+  const { user } = useSelector((s: RootState) => s.auth);
+  const isPatient = user?.role === "patient";
+
+  const prefillPatientId = isPatient
+    ? (user?.patient_id ?? "")
+    : (searchParams.get("patient_id") ?? "");
 
   const [form, setForm] = useState({
     patientId: prefillPatientId,
@@ -26,6 +33,7 @@ export default function NewAppointmentPage() {
   const { data: patientsData } = useQuery({
     queryKey: ["patients-search"],
     queryFn: () => api.get("/patients/", { params: { limit: 100 } }).then((r) => r.data.data),
+    enabled: !isPatient,
   });
   const patients = patientsData?.patients ?? patientsData ?? [];
 
@@ -121,7 +129,7 @@ export default function NewAppointmentPage() {
     <div className="max-w-2xl mx-auto">
       <div className="mb-6">
         <h1 className="text-2xl font-bold text-slate-900">Schedule Appointment</h1>
-        <p className="text-sm text-slate-500 mt-1">Book a new appointment for a patient</p>
+        <p className="text-sm text-slate-500 mt-1">{isPatient ? "Book a new appointment" : "Book a new appointment for a patient"}</p>
       </div>
 
       {bookingError && (
@@ -138,12 +146,19 @@ export default function NewAppointmentPage() {
         {/* Patient */}
         <div>
           <label className="block text-sm font-medium text-slate-700 mb-1">Patient *</label>
-          <select value={form.patientId} onChange={(e) => set("patientId", e.target.value)} required className={cls}>
-            <option value="">Select patient…</option>
-            {patients.map((p: any) => (
-              <option key={p.id} value={p.id}>{p.first_name} {p.last_name} ({p.mrn ?? p.id.slice(0, 8)})</option>
-            ))}
-          </select>
+          {isPatient ? (
+            <div className={`${cls} bg-slate-50 text-slate-700 flex items-center gap-2 cursor-default`}>
+              <Lock className="h-3.5 w-3.5 text-slate-400 flex-shrink-0" />
+              {user?.full_name ?? `${user?.first_name ?? ""} ${user?.last_name ?? ""}`.trim()}
+            </div>
+          ) : (
+            <select value={form.patientId} onChange={(e) => set("patientId", e.target.value)} required className={cls}>
+              <option value="">Select patient…</option>
+              {patients.map((p: any) => (
+                <option key={p.id} value={p.id}>{p.first_name} {p.last_name} ({p.mrn ?? p.id.slice(0, 8)})</option>
+              ))}
+            </select>
+          )}
         </div>
 
         {/* Doctor */}

@@ -11,10 +11,12 @@ import PublicLayout from "./components/layouts/PublicLayout";
 import LoginPage from "./pages/LoginPage";
 import ForgotPasswordPage from "./pages/ForgotPasswordPage";
 import ResetPasswordPage from "./pages/auth/ResetPasswordPage";
+import PatientRegisterPage from "./pages/public/PatientRegisterPage";
 
 // ─── Public pages ────────────────────────────────────────────────────────────
 import LandingPage from "./pages/public/LandingPage";
 import PublicClinicsPage from "./pages/public/PublicClinicsPage";
+import PublicClinicDetailPage from "./pages/public/PublicClinicDetailPage";
 
 // ─── Dashboard pages ─────────────────────────────────────────────────────────
 import DashboardPage from "./pages/dashboard/DashboardPage";
@@ -75,12 +77,11 @@ import TelemedicinePage from "./pages/telemedicine/TelemedicinePage";
  */
 function RoleBasedHome() {
   const { user } = useSelector((s: RootState) => s.auth);
-  return (
-    <Navigate
-      to={user?.role === "super_admin" ? "/admin/dashboard" : "/dashboard"}
-      replace
-    />
-  );
+  const to =
+    user?.role === "super_admin" ? "/admin/dashboard" :
+    user?.role === "patient" ? "/appointments" :
+    "/dashboard";
+  return <Navigate to={to} replace />;
 }
 
 export default function App() {
@@ -90,11 +91,13 @@ export default function App() {
       <Route element={<PublicLayout />}>
         <Route path="/" element={<LandingPage />} />
         <Route path="/clinics" element={<PublicClinicsPage />} />
+        <Route path="/clinics/:id" element={<PublicClinicDetailPage />} />
       </Route>
 
       {/* ── Auth routes ──────────────────────────────────────────────────── */}
       <Route element={<AuthLayout />}>
         <Route path="/login" element={<LoginPage />} />
+        <Route path="/register" element={<PatientRegisterPage />} />
         <Route path="/forgot-password" element={<ForgotPasswordPage />} />
         <Route path="/reset-password" element={<ResetPasswordPage />} />
       </Route>
