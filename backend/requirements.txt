@@ -37,6 +37,5 @@ structlog==25.5.0
 typing-inspection==0.4.2
 typing_extensions==4.15.0
 uvicorn==0.42.0
-wheel==0.46.3httpx
 httpx==0.28.1
 twilio==8.0.0
