@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { Calendar, Clock, AlertCircle, Lock } from "lucide-react";
+import { Calendar, Clock, AlertCircle, Lock, CreditCard, Banknote } from "lucide-react";
 import { useSelector } from "react-redux";
 import { RootState } from "@/store";
 import api from "@/services/api";
@@ -50,6 +50,9 @@ export default function NewAppointmentPage() {
   const clinics = clinicsData?.clinics ?? clinicsData ?? [];
 
   const [bookingError, setBookingError] = useState<string | null>(null);
+  const [bookedApptId, setBookedApptId] = useState<string | null>(null);
+  const [paymentChoice, setPaymentChoice] = useState<"razorpay" | "pay_later">("pay_later");
+  const [paying, setPaying] = useState(false);
 
   // Proactive same-patient+doctor+day duplicate check
   const { data: existingAppts } = useQuery({
@@ -107,18 +110,63 @@ export default function NewAppointmentPage() {
         chief_complaint: form.chiefComplaint,
         notes: form.notes,
       }),
-    onSuccess: () => navigate("/appointments"),
+    onSuccess: async (res) => {
+      const appt = res.data?.data ?? res.data;
+      const apptId = appt?.id;
+      setBookedApptId(apptId ?? null);
+      if (paymentChoice === "razorpay" && apptId) {
+        setPaying(true);
+        try {
+          const { data: payRes } = await api.post(`/appointments/${apptId}/initiate-payment`, { payment_method: "razorpay" });
+          const order = payRes.data;
+          let Rzp = (window as any).Razorpay;
+          if (!Rzp) {
+            await new Promise<void>((resolve, reject) => {
+              const s = document.createElement("script");
+              s.src = "https://checkout.razorpay.com/v1/checkout.js";
+              s.onload = () => resolve();
+              s.onerror = () => reject();
+              document.body.appendChild(s);
+            });
+            Rzp = (window as any).Razorpay;
+          }
+          const rzp = new Rzp({
+            key: order.key_id,
+            amount: order.amount,
+            currency: order.currency,
+            order_id: order.order_id,
+            description: order.description,
+            handler: async (response: any) => {
+              await api.post(`/appointments/${apptId}/verify-payment`, {
+                razorpay_order_id: response.razorpay_order_id,
+                razorpay_payment_id: response.razorpay_payment_id,
+                razorpay_signature: response.razorpay_signature,
+              });
+              navigate(`/appointments/${apptId}`);
+            },
+          });
+          rzp.open();
+        } catch (err: any) {
+          alert(err?.response?.data?.message ?? "Payment failed. You can pay from the appointment detail page.");
+          navigate(`/appointments/${apptId}`);
+        } finally {
+          setPaying(false);
+        }
+      } else {
+        navigate(apptId ? `/appointments/${apptId}` : "/appointments");
+      }
+    },
     onError: (err: any) => {
       const code = err?.response?.data?.error_code;
       const msg = err?.response?.data?.message ?? "Failed to book appointment";
       setBookingError(msg);
       if (code === "DOUBLE_BOOKING") {
-        // Slot was taken between load and submit — refresh grid and deselect
         qc.invalidateQueries({ queryKey: slotsQueryKey });
         setForm((p) => ({ ...p, startTime: "" }));
       }
     },
   });
+
 
   const set = (key: string, val: string) => {
     setBookingError(null);
@@ -313,19 +361,66 @@ export default function NewAppointmentPage() {
           />
         </div>
 
+        {/* Payment method selection */}
+        <div>
+          <label className="block text-sm font-medium text-slate-700 mb-2">Payment Method</label>
+          <div className="grid grid-cols-2 gap-3">
+            <button
+              type="button"
+              onClick={() => setPaymentChoice("razorpay")}
+              className={`flex items-center gap-3 p-4 rounded-xl border-2 text-left transition ${
+                paymentChoice === "razorpay"
+                  ? "border-blue-600 bg-blue-50"
+                  : "border-slate-200 bg-white hover:border-slate-300"
+              }`}
+            >
+              <CreditCard className={`h-5 w-5 flex-shrink-0 ${paymentChoice === "razorpay" ? "text-blue-600" : "text-slate-400"}`} />
+              <div>
+                <p className={`text-sm font-semibold ${paymentChoice === "razorpay" ? "text-blue-700" : "text-slate-700"}`}>Pay Online</p>
+                <p className="text-xs text-slate-500 mt-0.5">Razorpay · UPI · Cards</p>
+              </div>
+              <div className={`ml-auto w-4 h-4 rounded-full border-2 flex-shrink-0 flex items-center justify-center ${paymentChoice === "razorpay" ? "border-blue-600" : "border-slate-300"}`}>
+                {paymentChoice === "razorpay" && <div className="w-2 h-2 rounded-full bg-blue-600" />}
+              </div>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setPaymentChoice("pay_later")}
+              className={`flex items-center gap-3 p-4 rounded-xl border-2 text-left transition ${
+                paymentChoice === "pay_later"
+                  ? "border-blue-600 bg-blue-50"
+                  : "border-slate-200 bg-white hover:border-slate-300"
+              }`}
+            >
+              <Banknote className={`h-5 w-5 flex-shrink-0 ${paymentChoice === "pay_later" ? "text-blue-600" : "text-slate-400"}`} />
+              <div>
+                <p className={`text-sm font-semibold ${paymentChoice === "pay_later" ? "text-blue-700" : "text-slate-700"}`}>Pay at Clinic</p>
+                <p className="text-xs text-slate-500 mt-0.5">Cash when you arrive</p>
+              </div>
+              <div className={`ml-auto w-4 h-4 rounded-full border-2 flex-shrink-0 flex items-center justify-center ${paymentChoice === "pay_later" ? "border-blue-600" : "border-slate-300"}`}>
+                {paymentChoice === "pay_later" && <div className="w-2 h-2 rounded-full bg-blue-600" />}
+              </div>
+            </button>
+          </div>
+        </div>
+
         <div className="flex gap-3 pt-2 border-t border-slate-100">
           <button
             type="submit"
-            disabled={mutation.isPending || !form.startTime || (patientAlreadyBooked && form.appointmentType !== "emergency")}
+            disabled={mutation.isPending || paying || !form.startTime || (patientAlreadyBooked && form.appointmentType !== "emergency")}
             className="bg-blue-600 hover:bg-blue-700 disabled:bg-blue-400 text-white font-medium px-6 py-2.5 rounded-lg text-sm transition"
           >
-            {mutation.isPending ? "Booking…" : "Book Appointment"}
+            {mutation.isPending || paying
+              ? (paymentChoice === "razorpay" ? "Preparing payment…" : "Booking…")
+              : (paymentChoice === "razorpay" ? "Book & Pay Online" : "Book Appointment")}
           </button>
           <button type="button" onClick={() => navigate("/appointments")} className="bg-white hover:bg-slate-50 text-slate-700 border border-slate-200 font-medium px-6 py-2.5 rounded-lg text-sm transition">
             Cancel
           </button>
         </div>
       </form>
+
     </div>
   );
 }

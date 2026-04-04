@@ -171,14 +171,17 @@ def _generate_time_slots(
 # ── My Appointments (patient shortcut) ──────────────────────────
 @router.get("/my")
 async def get_my_appointments(
-    status: Optional[str] = None,
+    filter: Optional[str] = Query(default="upcoming", description="'upcoming' or 'past'"),
     limit: int = Query(default=20, ge=1, le=100),
     db: AsyncSession = Depends(get_db),
     current_user: CurrentUser = Depends(get_current_user),
 ):
-    """Return appointments for the currently authenticated patient. Supports comma-separated status filter."""
+    """Return appointments for the currently authenticated patient.
+    filter='upcoming' → appointment_date >= today, any active status.
+    filter='past'     → appointment_date < today, any status.
+    """
+    from datetime import date as date_type
     from app.models.patient import Patient
-    from app.models.clinic import Clinic
 
     patient_result = await db.execute(
         select(Patient).where(Patient.user_id == current_user.user_id)
@@ -187,17 +190,26 @@ async def get_my_appointments(
     if not patient:
         return _success([])
 
+    today = date_type.today().isoformat()
+
     query = select(Appointment).where(
         Appointment.patient_id == patient.id,
         Appointment.tenant_id == current_user.tenant_id,
         Appointment.is_deleted == False,
     )
 
-    if status:
-        statuses = [s.strip() for s in status.split(",")]
-        query = query.where(Appointment.status.in_(statuses))
+    if filter == "past":
+        query = query.where(Appointment.appointment_date < today)
+        query = query.order_by(Appointment.appointment_date.desc(), Appointment.start_time.desc())
+    else:
+        # upcoming: on or after today, only active statuses
+        query = query.where(
+            Appointment.appointment_date >= today,
+            Appointment.status.in_(["scheduled", "confirmed", "checked_in", "in_progress"]),
+        )
+        query = query.order_by(Appointment.appointment_date, Appointment.start_time)
 
-    query = query.order_by(Appointment.appointment_date, Appointment.start_time).limit(limit)
+    query = query.limit(limit)
     result = await db.execute(query)
     appointments = result.scalars().all()
 
@@ -222,6 +234,16 @@ async def get_my_appointments(
         )).all()
         clinic_name_map = {r[0]: r[1] for r in c_rows}
 
+    from app.models.billing import Invoice as InvoiceModel
+    my_inv_ids = [a.invoice_id for a in appointments if a.invoice_id]
+    my_inv_map: dict = {}
+    if my_inv_ids:
+        inv_rows = (await db.execute(
+            select(InvoiceModel.id, InvoiceModel.status, InvoiceModel.total_amount)
+            .where(InvoiceModel.id.in_(my_inv_ids))
+        )).all()
+        my_inv_map = {r.id: {"status": r.status, "amount": r.total_amount} for r in inv_rows}
+
     return _success([
         {
             "id": a.id,
@@ -237,6 +259,9 @@ async def get_my_appointments(
             "status": a.status,
             "appointment_type": a.appointment_type,
             "chief_complaint": a.chief_complaint,
+            "invoice_id": a.invoice_id,
+            "payment_status": my_inv_map.get(a.invoice_id, {}).get("status") if a.invoice_id else None,
+            "consultation_fee": my_inv_map.get(a.invoice_id, {}).get("amount") if a.invoice_id else None,
         }
         for a in appointments
     ])
@@ -550,6 +575,17 @@ async def list_appointments(
         )).all()
         doctor_name_map = {r[0]: f"Dr. {r[1]} {r[2]}" for r in d_rows}
 
+    # Batch-fetch invoice payment_status
+    from app.models.billing import Invoice as InvoiceModel
+    invoice_ids = [a.invoice_id for a in appointments if a.invoice_id]
+    invoice_status_map: dict = {}
+    if invoice_ids:
+        inv_rows = (await db.execute(
+            select(InvoiceModel.id, InvoiceModel.status, InvoiceModel.total_amount)
+            .where(InvoiceModel.id.in_(invoice_ids))
+        )).all()
+        invoice_status_map = {r.id: {"status": r.status, "amount": r.total_amount} for r in inv_rows}
+
     return _success(
         [
             {
@@ -568,6 +604,9 @@ async def list_appointments(
                 "priority": a.priority,
                 "chief_complaint": a.chief_complaint,
                 "queue_number": a.queue_number,
+                "invoice_id": a.invoice_id,
+                "payment_status": invoice_status_map.get(a.invoice_id, {}).get("status") if a.invoice_id else None,
+                "consultation_fee": invoice_status_map.get(a.invoice_id, {}).get("amount") if a.invoice_id else None,
             }
             for a in appointments
         ],
@@ -623,6 +662,25 @@ async def get_appointment(
         if c:
             clinic_name = c.name
 
+    # Payment info
+    payment_status = None
+    payment_method = None
+    consultation_fee = None
+    if appt.invoice_id:
+        from app.models.billing import Invoice, Payment as PaymentModel
+        inv = (await db.execute(select(Invoice).where(Invoice.id == appt.invoice_id))).scalar_one_or_none()
+        if inv:
+            payment_status = inv.status
+            consultation_fee = inv.total_amount
+            last_pay = (await db.execute(
+                select(PaymentModel).where(
+                    PaymentModel.invoice_id == inv.id,
+                    PaymentModel.status == "completed",
+                ).order_by(PaymentModel.created_at.desc())
+            )).scalar_one_or_none()
+            if last_pay:
+                payment_method = last_pay.gateway if last_pay.gateway else last_pay.payment_method
+
     return _success({
         "id": appt.id,
         "patient_id": appt.patient_id,
@@ -641,6 +699,10 @@ async def get_appointment(
         "notes": appt.internal_notes,
         "queue_number": appt.queue_number,
         "cancellation_reason": appt.cancellation_reason,
+        "invoice_id": appt.invoice_id,
+        "payment_status": payment_status,
+        "payment_method": payment_method,
+        "consultation_fee": consultation_fee,
     })
 
 
@@ -682,7 +744,7 @@ async def cancel_appointment(
             raise ForbiddenException(detail="You can only cancel your own appointments")
 
     appt.status = AppointmentStatus.CANCELLED
-    appt.cancelled_at = datetime.now(timezone.utc).isoformat()
+    appt.cancelled_at = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
     appt.cancelled_by = current_user.user_id
     appt.cancellation_reason = body.get("reason")
     await db.commit()
@@ -794,7 +856,7 @@ async def check_in(
         raise BadRequestException(detail=f"Cannot check in: appointment is {appt.status}")
 
     appt.status = AppointmentStatus.CHECKED_IN
-    appt.checked_in_at = datetime.now(timezone.utc).isoformat()
+    appt.checked_in_at = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
     await db.commit()
 
     return _success({"status": appt.status})
@@ -832,6 +894,288 @@ async def mark_no_show(
     )
 
     return _success({"status": "no_show"})
+
+
+# ── Initiate Payment ────────────────────────────────────────────
+@router.post("/{appointment_id}/initiate-payment")
+async def initiate_payment(
+    appointment_id: str,
+    body: dict,
+    db: AsyncSession = Depends(get_db),
+    current_user: CurrentUser = Depends(get_current_user),
+):
+    """
+    Initiate payment for an appointment.
+    payment_method: 'cash' or 'razorpay'
+    For cash: creates invoice + payment immediately.
+    For razorpay: creates Razorpay order and returns checkout details.
+    """
+    import uuid as _uuid
+    from app.models.billing import Invoice, InvoiceItem, Payment, InvoiceStatus
+    from app.models.doctor import Doctor as DoctorModel
+
+    result = await db.execute(
+        select(Appointment).where(
+            Appointment.id == appointment_id,
+            Appointment.tenant_id == current_user.tenant_id,
+            Appointment.is_deleted == False,
+        )
+    )
+    appt = result.scalar_one_or_none()
+    if not appt:
+        raise NotFoundException(detail="Appointment not found")
+
+    if current_user.role == "patient":
+        from app.models.patient import Patient
+        p = (await db.execute(select(Patient).where(Patient.user_id == current_user.user_id))).scalar_one_or_none()
+        if not p or appt.patient_id != p.id:
+            from app.core.exceptions import ForbiddenException
+            raise ForbiddenException(detail="You can only pay for your own appointments")
+
+    # Check if already paid
+    if appt.invoice_id:
+        inv = (await db.execute(select(Invoice).where(Invoice.id == appt.invoice_id))).scalar_one_or_none()
+        if inv and inv.status in (InvoiceStatus.PAID, InvoiceStatus.PARTIALLY_PAID):
+            raise BadRequestException(detail="This appointment has already been paid")
+
+    payment_method = body.get("payment_method", "cash")
+    if payment_method not in ("cash", "razorpay"):
+        raise BadRequestException(detail="payment_method must be 'cash' or 'razorpay'")
+
+    # Get consultation fee from doctor
+    doctor = (await db.execute(select(DoctorModel).where(DoctorModel.id == appt.doctor_id))).scalar_one_or_none()
+    consultation_fee = float(doctor.consultation_fee or 0.0) if doctor else 0.0
+
+    today_str = datetime.now().strftime("%Y-%m-%d")
+    due_str = (datetime.now() + timedelta(days=30)).strftime("%Y-%m-%d")
+    invoice_number = f"INV-{datetime.now().strftime('%Y%m')}-{_uuid.uuid4().hex[:8].upper()}"
+
+    # Reuse existing draft invoice or create new one
+    if appt.invoice_id:
+        inv_obj = (await db.execute(select(Invoice).where(Invoice.id == appt.invoice_id))).scalar_one_or_none()
+    else:
+        inv_obj = None
+
+    if not inv_obj:
+        inv_obj = Invoice(
+            tenant_id=current_user.tenant_id,
+            invoice_number=invoice_number,
+            patient_id=appt.patient_id,
+            appointment_id=appointment_id,
+            clinic_id=appt.clinic_id,
+            doctor_id=appt.doctor_id,
+            issue_date=today_str,
+            due_date=due_str,
+            subtotal=consultation_fee,
+            discount_amount=0.0,
+            tax_amount=0.0,
+            total_amount=consultation_fee,
+            paid_amount=0.0,
+            balance_due=consultation_fee,
+            status=InvoiceStatus.ISSUED,
+            currency="INR",
+            created_by=current_user.user_id,
+        )
+        db.add(inv_obj)
+        await db.flush()
+        item = InvoiceItem(
+            tenant_id=current_user.tenant_id,
+            invoice_id=inv_obj.id,
+            description="Consultation Fee",
+            item_type="consultation",
+            quantity=1.0,
+            unit_price=consultation_fee,
+            line_total=consultation_fee,
+            created_by=current_user.user_id,
+        )
+        db.add(item)
+        appt.invoice_id = inv_obj.id
+        await db.flush()
+
+    if payment_method == "cash" and current_user.role == "patient":
+        raise BadRequestException(detail="Patients cannot record cash payments. Please use online payment or ask staff to record cash.")
+
+    if payment_method == "cash":
+        pay = Payment(
+            tenant_id=current_user.tenant_id,
+            invoice_id=inv_obj.id,
+            patient_id=appt.patient_id,
+            amount=consultation_fee,
+            payment_method="cash",
+            payment_date=today_str,
+            status="completed",
+            created_by=current_user.user_id,
+        )
+        db.add(pay)
+        inv_obj.paid_amount = consultation_fee
+        inv_obj.balance_due = 0.0
+        inv_obj.status = InvoiceStatus.PAID
+        await db.commit()
+        return _success(
+            {"payment_status": "paid", "payment_method": "cash", "invoice_id": inv_obj.id, "amount": consultation_fee},
+            message="Cash payment recorded",
+        )
+
+    # Razorpay
+    await db.commit()
+    from app.core.config import settings
+    if not settings.RAZORPAY_KEY_ID or not settings.RAZORPAY_KEY_SECRET:
+        raise BadRequestException(detail="Razorpay is not configured on this server")
+    import razorpay
+    rz = razorpay.Client(auth=(settings.RAZORPAY_KEY_ID, settings.RAZORPAY_KEY_SECRET))
+    amount_paise = int(consultation_fee * 100)
+    order = rz.order.create({
+        "amount": amount_paise,
+        "currency": "INR",
+        "receipt": inv_obj.id,
+        "notes": {"appointment_id": appointment_id, "invoice_id": inv_obj.id},
+    })
+    return _success({
+        "payment_status": "pending",
+        "payment_method": "razorpay",
+        "invoice_id": inv_obj.id,
+        "order_id": order["id"],
+        "key_id": settings.RAZORPAY_KEY_ID,
+        "amount": amount_paise,
+        "currency": "INR",
+        "description": f"Consultation Fee — {inv_obj.invoice_number}",
+    }, message="Razorpay order created")
+
+
+# ── Verify Razorpay Payment ──────────────────────────────────────
+@router.post("/{appointment_id}/verify-payment")
+async def verify_razorpay_payment(
+    appointment_id: str,
+    body: dict,
+    db: AsyncSession = Depends(get_db),
+    current_user: CurrentUser = Depends(get_current_user),
+):
+    """Verify Razorpay payment signature and mark invoice as paid."""
+    import hmac, hashlib
+    from app.models.billing import Invoice, Payment, InvoiceStatus
+    from app.core.config import settings
+
+    result = await db.execute(
+        select(Appointment).where(
+            Appointment.id == appointment_id,
+            Appointment.tenant_id == current_user.tenant_id,
+            Appointment.is_deleted == False,
+        )
+    )
+    appt = result.scalar_one_or_none()
+    if not appt:
+        raise NotFoundException(detail="Appointment not found")
+    if not appt.invoice_id:
+        raise BadRequestException(detail="No pending payment for this appointment")
+
+    inv = (await db.execute(select(Invoice).where(Invoice.id == appt.invoice_id))).scalar_one_or_none()
+    if not inv:
+        raise NotFoundException(detail="Invoice not found")
+
+    order_id = body.get("razorpay_order_id", "")
+    payment_id = body.get("razorpay_payment_id", "")
+    signature = body.get("razorpay_signature", "")
+    if not all([order_id, payment_id, signature]):
+        raise BadRequestException(detail="Missing Razorpay payment details")
+
+    # Verify HMAC-SHA256 signature
+    expected = hmac.new(
+        (settings.RAZORPAY_KEY_SECRET or "").encode(),
+        f"{order_id}|{payment_id}".encode(),
+        hashlib.sha256,
+    ).hexdigest()
+    if not hmac.compare_digest(expected, signature):
+        raise BadRequestException(detail="Invalid payment signature")
+
+    pay = Payment(
+        tenant_id=current_user.tenant_id,
+        invoice_id=inv.id,
+        patient_id=appt.patient_id,
+        amount=inv.total_amount,
+        payment_method="online",
+        payment_date=datetime.now(timezone.utc).strftime("%Y-%m-%d"),
+        status="completed",
+        transaction_id=payment_id,
+        gateway="razorpay",
+        gateway_response={"order_id": order_id, "payment_id": payment_id},
+        created_by=current_user.user_id,
+    )
+    db.add(pay)
+    inv.paid_amount = inv.total_amount
+    inv.balance_due = 0.0
+    inv.status = InvoiceStatus.PAID
+    await db.commit()
+    return _success(
+        {"payment_status": "paid", "payment_method": "razorpay", "invoice_id": inv.id, "amount": inv.total_amount},
+        message="Payment verified and recorded",
+    )
+
+
+# ── Refund Payment ───────────────────────────────────────────────
+@router.post("/{appointment_id}/refund")
+async def refund_payment(
+    appointment_id: str,
+    body: dict,
+    db: AsyncSession = Depends(get_db),
+    current_user: CurrentUser = Depends(get_current_user),
+):
+    """Issue refund for a cancelled appointment that had a paid invoice."""
+    from app.models.billing import Invoice, Payment, InvoiceStatus
+    from app.core.config import settings
+
+    result = await db.execute(
+        select(Appointment).where(
+            Appointment.id == appointment_id,
+            Appointment.tenant_id == current_user.tenant_id,
+            Appointment.is_deleted == False,
+        )
+    )
+    appt = result.scalar_one_or_none()
+    if not appt:
+        raise NotFoundException(detail="Appointment not found")
+    if appt.status != AppointmentStatus.CANCELLED:
+        raise BadRequestException(detail="Refund is only available for cancelled appointments")
+    if not appt.invoice_id:
+        raise BadRequestException(detail="No payment found for this appointment")
+
+    inv = (await db.execute(select(Invoice).where(Invoice.id == appt.invoice_id))).scalar_one_or_none()
+    if not inv or inv.status != InvoiceStatus.PAID:
+        raise BadRequestException(detail="No paid invoice found for this appointment")
+
+    pay = (await db.execute(
+        select(Payment).where(
+            Payment.invoice_id == inv.id,
+            Payment.status == "completed",
+        ).order_by(Payment.created_at.desc())
+    )).scalar_one_or_none()
+    if not pay:
+        raise BadRequestException(detail="No completed payment found")
+
+    refund_id = None
+    if pay.gateway == "razorpay" and pay.transaction_id:
+        if not settings.RAZORPAY_KEY_ID or not settings.RAZORPAY_KEY_SECRET:
+            raise BadRequestException(detail="Razorpay is not configured")
+        import razorpay
+        rz = razorpay.Client(auth=(settings.RAZORPAY_KEY_ID, settings.RAZORPAY_KEY_SECRET))
+        rf = rz.payment.refund(pay.transaction_id, {
+            "amount": int(inv.total_amount * 100),
+            "notes": {"reason": body.get("reason", "Appointment cancelled"), "appointment_id": appointment_id},
+        })
+        refund_id = rf.get("id")
+
+    reason = body.get("reason", "Appointment cancelled")
+    pay.status = "refunded"
+    pay.refund_amount = inv.total_amount
+    pay.refund_reason = reason
+    pay.refunded_at = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+    inv.status = InvoiceStatus.VOIDED
+    inv.paid_amount = 0.0
+    inv.balance_due = inv.total_amount
+    await db.commit()
+    return _success(
+        {"refund_status": "refunded", "amount": inv.total_amount, "refund_id": refund_id},
+        message="Refund processed successfully",
+    )
 
 
 # ── Join Waitlist ────────────────────────────────────────────────

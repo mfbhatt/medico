@@ -167,6 +167,84 @@ async def submit_lab_results(
     return _success({"report_id": report.id}, message="Lab results submitted")
 
 
+@router.get("/my")
+async def get_my_lab_reports(
+    page: int = 1,
+    page_size: int = 20,
+    db: AsyncSession = Depends(get_db),
+    current_user: CurrentUser = Depends(get_current_user),
+):
+    """Return lab reports for the currently authenticated patient."""
+    from app.models.patient import Patient
+
+    patient_res = await db.execute(
+        select(Patient).where(
+            Patient.user_id == current_user.user_id,
+            Patient.tenant_id == current_user.tenant_id,
+            Patient.is_deleted.isnot(True),
+        )
+    )
+    patient = patient_res.scalar_one_or_none()
+    if not patient:
+        return _success([], meta={"total": 0, "page": page, "page_size": page_size})
+
+    # Join LabReport with LabOrder to get order metadata
+    query = (
+        select(LabReport, LabOrder)
+        .join(LabOrder, LabReport.order_id == LabOrder.id)
+        .where(
+            LabReport.patient_id == patient.id,
+            LabReport.tenant_id == current_user.tenant_id,
+            LabReport.is_deleted == False,
+        )
+        .order_by(LabReport.report_date.desc())
+    )
+
+    total = (await db.execute(select(func.count()).select_from(
+        select(LabReport).where(
+            LabReport.patient_id == patient.id,
+            LabReport.tenant_id == current_user.tenant_id,
+            LabReport.is_deleted == False,
+        ).subquery()
+    ))).scalar()
+
+    result = await db.execute(query.offset((page - 1) * page_size).limit(page_size))
+    rows = result.all()
+
+    # Also fetch ordering doctor names
+    from app.models.doctor import Doctor
+    from app.models.user import User
+
+    reports = []
+    for report, order in rows:
+        doctor_name = ""
+        if report.ordering_doctor_id:
+            dr_res = await db.execute(
+                select(Doctor, User)
+                .join(User, Doctor.user_id == User.id)
+                .where(Doctor.id == report.ordering_doctor_id)
+            )
+            dr_row = dr_res.first()
+            if dr_row:
+                doctor_name = dr_row[1].full_name or f"{dr_row[1].first_name or ''} {dr_row[1].last_name or ''}".strip()
+
+        reports.append({
+            "id": report.id,
+            "order_id": report.order_id,
+            "order_date": order.order_date,
+            "lab_name": order.lab_name or "Lab",
+            "doctor_name": doctor_name,
+            "report_date": report.report_date,
+            "status": report.status,
+            "has_critical_values": report.has_critical_values,
+            "results": report.results or [],
+            "overall_interpretation": report.overall_interpretation,
+            "report_pdf_url": report.report_pdf_url,
+        })
+
+    return _success(reports, meta={"total": total, "page": page, "page_size": page_size})
+
+
 @router.get("/reports/patient/{patient_id}")
 async def get_patient_lab_reports(
     patient_id: str,

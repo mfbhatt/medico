@@ -1,0 +1,37 @@
+diff --git a/node_modules/@react-navigation/bottom-tabs/lib/commonjs/views/BottomTabBar.js b/node_modules/@react-navigation/bottom-tabs/lib/commonjs/views/BottomTabBar.js
+index 1360dc6..672505b 100644
+--- a/node_modules/@react-navigation/bottom-tabs/lib/commonjs/views/BottomTabBar.js
++++ b/node_modules/@react-navigation/bottom-tabs/lib/commonjs/views/BottomTabBar.js
+@@ -216,11 +216,10 @@ function BottomTabBar(_ref3) {
+       paddingBottom,
+       paddingHorizontal: Math.max(insets.left, insets.right)
+     }, tabBarStyle],
+-    pointerEvents: isTabBarHidden ? 'none' : 'auto',
++    style: [styles.tabBar, {
+     onLayout: handleLayout
+   }, /*#__PURE__*/_react.default.createElement(_reactNative.View, {
+-    pointerEvents: "none",
+-    style: _reactNative.StyleSheet.absoluteFill
++    style: [_reactNative.StyleSheet.absoluteFill, { pointerEvents: "none" }]
+   }, tabBarBackgroundElement), /*#__PURE__*/_react.default.createElement(_reactNative.View, {
+     accessibilityRole: "tablist",
+     style: styles.content
+diff --git a/node_modules/@react-navigation/bottom-tabs/lib/module/views/BottomTabBar.js b/node_modules/@react-navigation/bottom-tabs/lib/module/views/BottomTabBar.js
+index dccff42..04e639a 100644
+--- a/node_modules/@react-navigation/bottom-tabs/lib/module/views/BottomTabBar.js
++++ b/node_modules/@react-navigation/bottom-tabs/lib/module/views/BottomTabBar.js
+@@ -206,12 +206,10 @@ export default function BottomTabBar(_ref3) {
+       height: tabBarHeight,
+       paddingBottom,
+       paddingHorizontal: Math.max(insets.left, insets.right)
+-    }, tabBarStyle],
+-    pointerEvents: isTabBarHidden ? 'none' : 'auto',
++    }, tabBarStyle, { pointerEvents: isTabBarHidden ? 'none' : 'auto' }],
+     onLayout: handleLayout
+   }, /*#__PURE__*/React.createElement(View, {
+-    pointerEvents: "none",
+-    style: StyleSheet.absoluteFill
++    style: [StyleSheet.absoluteFill, { pointerEvents: "none" }]
+   }, tabBarBackgroundElement), /*#__PURE__*/React.createElement(View, {
+     accessibilityRole: "tablist",
+     style: styles.content

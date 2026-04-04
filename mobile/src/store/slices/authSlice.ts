@@ -56,20 +56,42 @@ export const restoreSessionThunk = createAsyncThunk('auth/restore', async () => 
     if (!storedToken) return null;
 
     // Validate token against backend; interceptor auto-refreshes if expired
-    const validatedUser: User | null = await api
-      .get('/auth/me')
-      .then((r) => r.data.data as User)
-      .catch(() => null);
+    let validatedUser: User | null = null;
+    let isAuthFailure = false;
 
-    if (!validatedUser) {
-      // Both access and refresh tokens invalid — clear persisted session
+    try {
+      validatedUser = await api.get('/auth/me').then((r) => r.data.data as User);
+    } catch (err: any) {
+      // Only treat as invalid credentials if we got an explicit 401/403 back.
+      // Network errors, timeouts, and server-down scenarios must NOT clear tokens —
+      // we fall back to the stored user_data so the session survives offline restarts.
+      const status = err?.response?.status;
+      if (status === 401 || status === 403) {
+        isAuthFailure = true;
+      }
+    }
+
+    if (isAuthFailure) {
+      // Tokens are definitively rejected by the server — clear everything
       await storage.deleteItemAsync('access_token');
       await storage.deleteItemAsync('refresh_token');
       await storage.deleteItemAsync('user_data');
       return null;
     }
 
-    // Re-read token (may have been silently refreshed by the interceptor)
+    if (!validatedUser) {
+      // Network / server error — restore from stored user_data so the user
+      // stays logged in and can retry once connectivity returns
+      const raw = await storage.getItemAsync('user_data');
+      if (!raw) return null;
+      try {
+        validatedUser = JSON.parse(raw) as User;
+      } catch {
+        return null;
+      }
+    }
+
+    // Re-read tokens (access token may have been silently refreshed by interceptor)
     const [token, refresh] = await Promise.all([
       storage.getItemAsync('access_token'),
       storage.getItemAsync('refresh_token'),

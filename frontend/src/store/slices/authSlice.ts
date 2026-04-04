@@ -69,49 +69,42 @@ interface SwitchTenantPayload {
   tenant_id: string;
 }
 
-export const switchTenantThunk = createAsyncThunk<LoginResponse, SwitchTenantPayload, { rejectValue: string }>(
-  "auth/switchTenant",
-  async (payload, { rejectWithValue }) => {
-    try {
-      const { data } = await import("../../services/api").then((m) =>
-        m.default.post("/auth/switch-tenant", { tenant_id: payload.tenant_id })
-      );
-      const resp = data.data as LoginResponse;
-      localStorage.setItem(STORAGE_KEYS.AUTH_TOKEN, resp.access_token);
-      localStorage.setItem(STORAGE_KEYS.REFRESH_TOKEN, resp.refresh_token);
-      localStorage.setItem(STORAGE_KEYS.USER, JSON.stringify(resp.user));
-      localStorage.setItem(STORAGE_KEYS.TENANT_ID, resp.user.tenant_id ?? "");
-      return resp;
-    } catch (error: any) {
-      return rejectWithValue(error.response?.data?.message ?? "Failed to switch tenant");
-    }
+export const switchTenantThunk = createAsyncThunk<LoginResponse, SwitchTenantPayload, { rejectValue: string }>("auth/switchTenant", async (payload, { rejectWithValue }) => {
+  try {
+    const { data } = await import("../../services/api").then((m) => m.default.post("/auth/switch-tenant", { tenant_id: payload.tenant_id }));
+    const resp = data.data as LoginResponse;
+    localStorage.setItem(STORAGE_KEYS.AUTH_TOKEN, resp.access_token);
+    localStorage.setItem(STORAGE_KEYS.REFRESH_TOKEN, resp.refresh_token);
+    localStorage.setItem(STORAGE_KEYS.USER, JSON.stringify(resp.user));
+    localStorage.setItem(STORAGE_KEYS.TENANT_ID, resp.user.tenant_id ?? "");
+    return resp;
+  } catch (error: any) {
+    console.error("Tenant switch failed:", error);
+    return rejectWithValue(error.response?.data?.message ?? "Failed to switch tenant");
   }
-);
+});
 
-export const loginThunk = createAsyncThunk<LoginResponse, LoginPayload, { rejectValue: string }>(
-  "auth/login",
-  async (payload, { rejectWithValue }) => {
-    try {
-      const response = await authService.login({
-        email: payload.email,
-        password: payload.password,
-      });
-      localStorage.setItem(STORAGE_KEYS.AUTH_TOKEN, response.access_token);
-      localStorage.setItem(STORAGE_KEYS.REFRESH_TOKEN, response.refresh_token);
-      localStorage.setItem(STORAGE_KEYS.USER, JSON.stringify(response.user));
-      if (response.user?.tenant_id) {
-        localStorage.setItem(STORAGE_KEYS.TENANT_ID, response.user.tenant_id);
-      }
-      return {
-        access_token: response.access_token,
-        refresh_token: response.refresh_token,
-        user: response.user,
-      };
-    } catch (error: any) {
-      return rejectWithValue(error.response?.data?.message ?? error.message ?? "Login failed");
+export const loginThunk = createAsyncThunk<LoginResponse, LoginPayload, { rejectValue: string }>("auth/login", async (payload, { rejectWithValue }) => {
+  try {
+    const response = await authService.login({
+      email: payload.email,
+      password: payload.password,
+    });
+    localStorage.setItem(STORAGE_KEYS.AUTH_TOKEN, response.access_token);
+    localStorage.setItem(STORAGE_KEYS.REFRESH_TOKEN, response.refresh_token);
+    localStorage.setItem(STORAGE_KEYS.USER, JSON.stringify(response.user));
+    if (response.user?.tenant_id) {
+      localStorage.setItem(STORAGE_KEYS.TENANT_ID, response.user.tenant_id);
     }
+    return {
+      access_token: response.access_token,
+      refresh_token: response.refresh_token,
+      user: response.user,
+    };
+  } catch (error: any) {
+    return rejectWithValue(error.response?.data?.message ?? error.message ?? "Login failed");
   }
-);
+});
 
 export const authSlice = createSlice({
   name: "auth",

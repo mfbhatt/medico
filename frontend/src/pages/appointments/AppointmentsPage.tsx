@@ -25,7 +25,19 @@ interface Appointment {
   doctor_name: string;
   appointment_type: string;
   status: string;
+  invoice_id?: string;
+  payment_status?: string;
+  consultation_fee?: number;
 }
+
+const PAYMENT_COLORS: Record<string, string> = {
+  paid: 'badge-green',
+  issued: 'badge-yellow',
+  partially_paid: 'badge-yellow',
+  overdue: 'badge-red',
+  draft: 'badge-gray',
+  voided: 'badge-gray',
+};
 
 interface ConfirmDialog {
   type: 'cancel' | 'checkin';
@@ -45,6 +57,8 @@ export default function AppointmentsPage() {
   const [rescheduleAppt, setRescheduleAppt] = useState<Appointment | null>(null);
   const [rescheduleDate, setRescheduleDate] = useState('');
   const [rescheduleTime, setRescheduleTime] = useState('');
+  const [payAppt, setPayAppt] = useState<Appointment | null>(null);
+  const [paying, setPaying] = useState(false);
   const limit = 20;
   const qc = useQueryClient();
 
@@ -110,6 +124,66 @@ export default function AppointmentsPage() {
   const canCheckIn = (s: string) => !isPatient && (s === 'scheduled' || s === 'confirmed');
   const canCancel = (s: string) => !['cancelled', 'completed', 'no_show'].includes(s);
   const canReschedule = (s: string) => !['cancelled', 'completed', 'no_show'].includes(s);
+  const canPay = (appt: Appointment) => !['cancelled', 'no_show'].includes(appt.status) && (!appt.payment_status || appt.payment_status === 'issued' || appt.payment_status === 'overdue');
+
+  const handlePay = async (appt: Appointment, method: 'cash' | 'razorpay') => {
+    setPaying(true);
+    try {
+      if (method === 'cash') {
+        await api.post(`/appointments/${appt.id}/initiate-payment`, { payment_method: 'cash' });
+        qc.invalidateQueries({ queryKey: ['appointments'] });
+        setPayAppt(null);
+        toast.success('Cash payment recorded');
+      } else {
+        const { data: res } = await api.post(`/appointments/${appt.id}/initiate-payment`, { payment_method: 'razorpay' });
+        const order = res.data;
+        const Razorpay = (window as any).Razorpay;
+        if (!Razorpay) {
+          // Load Razorpay script dynamically
+          await new Promise<void>((resolve, reject) => {
+            const s = document.createElement('script');
+            s.src = 'https://checkout.razorpay.com/v1/checkout.js';
+            s.onload = () => resolve();
+            s.onerror = () => reject(new Error('Failed to load Razorpay'));
+            document.body.appendChild(s);
+          });
+        }
+        const rzp = new (window as any).Razorpay({
+          key: order.key_id,
+          amount: order.amount,
+          currency: order.currency,
+          order_id: order.order_id,
+          description: order.description,
+          handler: async (response: any) => {
+            await api.post(`/appointments/${appt.id}/verify-payment`, {
+              razorpay_order_id: response.razorpay_order_id,
+              razorpay_payment_id: response.razorpay_payment_id,
+              razorpay_signature: response.razorpay_signature,
+            });
+            qc.invalidateQueries({ queryKey: ['appointments'] });
+            setPayAppt(null);
+            toast.success('Payment successful');
+          },
+        });
+        rzp.open();
+      }
+    } catch (err: any) {
+      toast.error(err?.response?.data?.message ?? 'Payment failed');
+    } finally {
+      setPaying(false);
+    }
+  };
+
+  const handleRefund = async (appt: Appointment) => {
+    if (!window.confirm('Issue refund for this cancelled appointment?')) return;
+    try {
+      await api.post(`/appointments/${appt.id}/refund`, { reason: 'Appointment cancelled' });
+      qc.invalidateQueries({ queryKey: ['appointments'] });
+      toast.success('Refund processed');
+    } catch (err: any) {
+      toast.error(err?.response?.data?.message ?? 'Refund failed');
+    }
+  };
 
   const today = new Date().toISOString().slice(0, 10);
 
@@ -157,17 +231,18 @@ export default function AppointmentsPage() {
               <th className="text-left px-4 py-3 font-medium text-gray-600">Doctor</th>
               <th className="text-left px-4 py-3 font-medium text-gray-600">Type</th>
               <th className="text-left px-4 py-3 font-medium text-gray-600">Status</th>
+              <th className="text-left px-4 py-3 font-medium text-gray-600">Payment</th>
               <th className="text-right px-4 py-3 font-medium text-gray-600">Actions</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-gray-100">
             {isLoading ? (
               <tr>
-                <td colSpan={isPatient ? 6 : 7} className="text-center py-12 text-gray-400">Loading…</td>
+                <td colSpan={isPatient ? 7 : 8} className="text-center py-12 text-gray-400">Loading…</td>
               </tr>
             ) : appointments.length === 0 ? (
               <tr>
-                <td colSpan={isPatient ? 6 : 7} className="text-center py-12 text-gray-400">
+                <td colSpan={isPatient ? 7 : 8} className="text-center py-12 text-gray-400">
                   {isPatient ? 'No appointments found. Book your first appointment!' : 'No appointments found'}
                 </td>
               </tr>
@@ -183,6 +258,15 @@ export default function AppointmentsPage() {
                     <span className={STATUS_COLORS[appt.status] ?? 'badge-gray'}>
                       {appt.status.replace(/_/g, ' ')}
                     </span>
+                  </td>
+                  <td className="px-4 py-3">
+                    {appt.payment_status ? (
+                      <span className={PAYMENT_COLORS[appt.payment_status] ?? 'badge-gray'}>
+                        {appt.payment_status.replace(/_/g, ' ')}
+                      </span>
+                    ) : (
+                      <span className="text-gray-400 text-xs">—</span>
+                    )}
                   </td>
                   <td className="px-4 py-3 text-right space-x-2">
                     <Link to={`/appointments/${appt.id}`} className="text-primary-600 hover:text-primary-800 text-sm font-medium">
@@ -203,6 +287,22 @@ export default function AppointmentsPage() {
                         className="text-green-600 hover:text-green-800 text-sm font-medium"
                       >
                         Check In
+                      </button>
+                    )}
+                    {canPay(appt) && (
+                      <button
+                        onClick={() => setPayAppt(appt)}
+                        className="text-emerald-600 hover:text-emerald-800 text-sm font-medium"
+                      >
+                        Pay
+                      </button>
+                    )}
+                    {appt.status === 'cancelled' && appt.payment_status === 'paid' && (
+                      <button
+                        onClick={() => handleRefund(appt)}
+                        className="text-orange-600 hover:text-orange-800 text-sm font-medium"
+                      >
+                        Refund
                       </button>
                     )}
                     {canCancel(appt.status) && (
@@ -282,6 +382,44 @@ export default function AppointmentsPage() {
                 </button>
                 <button onClick={() => { setConfirm(null); setCancelNote(''); }} className="flex-1 btn-secondary">
                   Go Back
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Payment dialog */}
+      {payAppt && (
+        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-xl shadow-xl w-full max-w-sm">
+            <div className="p-5">
+              <h2 className="text-lg font-semibold text-gray-900 mb-1">Pay for Appointment</h2>
+              <p className="text-sm text-gray-500 mb-1">Dr. {payAppt.doctor_name}</p>
+              {payAppt.consultation_fee != null && (
+                <p className="text-2xl font-bold text-gray-900 mb-5">
+                  ₹{payAppt.consultation_fee.toLocaleString()}
+                </p>
+              )}
+              <div className="flex flex-col gap-3">
+                {!isPatient && (
+                  <button
+                    onClick={() => handlePay(payAppt, 'cash')}
+                    disabled={paying}
+                    className="w-full bg-emerald-600 hover:bg-emerald-700 disabled:bg-emerald-300 text-white font-medium py-2.5 rounded-lg text-sm flex items-center justify-center gap-2"
+                  >
+                    💵 Pay with Cash
+                  </button>
+                )}
+                <button
+                  onClick={() => handlePay(payAppt, 'razorpay')}
+                  disabled={paying}
+                  className="w-full bg-blue-600 hover:bg-blue-700 disabled:bg-blue-300 text-white font-medium py-2.5 rounded-lg text-sm flex items-center justify-center gap-2"
+                >
+                  💳 Pay with Razorpay
+                </button>
+                <button onClick={() => setPayAppt(null)} className="w-full btn-secondary">
+                  Cancel
                 </button>
               </div>
             </div>

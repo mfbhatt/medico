@@ -88,7 +88,7 @@ export default function LabReportsScreen() {
   const insets = useSafeAreaInsets();
   const { data, isLoading, refetch, isRefetching } = useQuery({
     queryKey: ['my-lab-reports'],
-    queryFn: () => api.get('/lab-reports/my').then((r) => r.data.data),
+    queryFn: () => api.get('/lab/my').then((r) => r.data.data),
   });
 
   return (

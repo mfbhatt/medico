@@ -5,10 +5,13 @@ import {
   ScrollView,
   TouchableOpacity,
   Alert,
+  Modal,
+  SafeAreaView,
 } from 'react-native';
+import { useState } from 'react';
 import { toast } from '@/utils/toast';
 import { Ionicons } from '@expo/vector-icons';
-import { useQuery, useMutation } from '@tanstack/react-query';
+import { useQuery } from '@tanstack/react-query';
 import * as LocalAuthentication from 'expo-local-authentication';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import api from '@/services/api';
@@ -40,10 +43,37 @@ function MenuRow({ item }: { item: MenuItem }) {
   );
 }
 
+function InfoModal({ title, onClose, children }: { title: string; onClose: () => void; children: React.ReactNode }) {
+  return (
+    <Modal visible animationType="slide" onRequestClose={onClose}>
+      <SafeAreaView style={modalStyles.container}>
+        <View style={modalStyles.header}>
+          <Text style={modalStyles.title}>{title}</Text>
+          <TouchableOpacity onPress={onClose}>
+            <Ionicons name="close" size={24} color="#1e293b" />
+          </TouchableOpacity>
+        </View>
+        <ScrollView contentContainerStyle={modalStyles.body}>{children}</ScrollView>
+      </SafeAreaView>
+    </Modal>
+  );
+}
+
+function InfoRow({ label, value }: { label: string; value?: string | null }) {
+  if (!value) return null;
+  return (
+    <View style={modalStyles.infoRow}>
+      <Text style={modalStyles.infoLabel}>{label}</Text>
+      <Text style={modalStyles.infoValue}>{value}</Text>
+    </View>
+  );
+}
+
 export default function ProfileScreen() {
   const dispatch = useAppDispatch();
   const insets = useSafeAreaInsets();
   const { user } = useAppSelector((s) => s.auth);
+  const [activeModal, setActiveModal] = useState<'personal' | 'contacts' | null>(null);
 
   const { data: profile } = useQuery({
     queryKey: ['my-profile'],
@@ -76,13 +106,13 @@ export default function ProfileScreen() {
   };
 
   const menuItems: MenuItem[] = [
-    { label: 'Personal Information', icon: 'person-outline', onPress: () => {} },
-    { label: 'Insurance Policies', icon: 'shield-checkmark-outline', onPress: () => {} },
-    { label: 'Emergency Contacts', icon: 'alert-circle-outline', onPress: () => {} },
-    { label: 'Notification Preferences', icon: 'notifications-outline', onPress: () => {} },
+    { label: 'Personal Information', icon: 'person-outline', onPress: () => setActiveModal('personal') },
+    { label: 'Insurance Policies', icon: 'shield-checkmark-outline', onPress: () => toast.info('Insurance management coming soon') },
+    { label: 'Emergency Contacts', icon: 'alert-circle-outline', onPress: () => setActiveModal('contacts') },
+    { label: 'Notification Preferences', icon: 'notifications-outline', onPress: () => toast.info('Notification preferences coming soon') },
     { label: 'Biometric Login', icon: 'finger-print-outline', onPress: handleBiometric },
-    { label: 'Privacy & Data', icon: 'lock-closed-outline', onPress: () => {} },
-    { label: 'Help & Support', icon: 'help-circle-outline', onPress: () => {} },
+    { label: 'Privacy & Data', icon: 'lock-closed-outline', onPress: () => toast.info('Privacy settings coming soon') },
+    { label: 'Help & Support', icon: 'help-circle-outline', onPress: () => toast.info('Help & support coming soon') },
     { label: 'Sign Out', icon: 'log-out-outline', onPress: handleLogout, danger: true },
   ];
 
@@ -132,6 +162,43 @@ export default function ProfileScreen() {
           <MenuRow key={item.label} item={item} />
         ))}
       </View>
+
+      {/* Personal Information Modal */}
+      {activeModal === 'personal' && (
+        <InfoModal title="Personal Information" onClose={() => setActiveModal(null)}>
+          <InfoRow label="First Name" value={profile?.first_name} />
+          <InfoRow label="Last Name" value={profile?.last_name} />
+          <InfoRow label="Email" value={profile?.email ?? user?.email} />
+          <InfoRow label="Phone" value={profile?.phone} />
+          <InfoRow label="Date of Birth" value={profile?.date_of_birth} />
+          <InfoRow label="Gender" value={profile?.gender} />
+          <InfoRow label="Blood Group" value={profile?.blood_group} />
+          <InfoRow label="City" value={profile?.city} />
+          <InfoRow label="State" value={profile?.state} />
+          <InfoRow label="Country" value={profile?.country} />
+          <InfoRow label="MRN" value={profile?.mrn} />
+          {!profile && (
+            <Text style={modalStyles.emptyText}>Profile information not available.</Text>
+          )}
+        </InfoModal>
+      )}
+
+      {/* Emergency Contacts Modal */}
+      {activeModal === 'contacts' && (
+        <InfoModal title="Emergency Contacts" onClose={() => setActiveModal(null)}>
+          {profile?.emergency_contacts?.length > 0 ? (
+            profile.emergency_contacts.map((ec: any, i: number) => (
+              <View key={ec.id ?? i} style={modalStyles.contactCard}>
+                <Text style={modalStyles.contactName}>{ec.name}</Text>
+                <Text style={modalStyles.contactMeta}>{ec.relationship} · {ec.phone}</Text>
+                {ec.is_primary && <Text style={modalStyles.primaryBadge}>Primary</Text>}
+              </View>
+            ))
+          ) : (
+            <Text style={modalStyles.emptyText}>No emergency contacts on file.</Text>
+          )}
+        </InfoModal>
+      )}
     </ScrollView>
   );
 }
@@ -206,4 +273,48 @@ const styles = StyleSheet.create({
   menuIconContainerDanger: { backgroundColor: '#fee2e2' },
   menuLabel: { flex: 1, ...typography.body, color: '#1e293b' },
   menuLabelDanger: { color: '#ef4444' },
+});
+
+const modalStyles = StyleSheet.create({
+  container: { flex: 1, backgroundColor: '#fff' },
+  header: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: spacing.md,
+    paddingVertical: 14,
+    borderBottomWidth: 1,
+    borderBottomColor: '#f1f5f9',
+  },
+  title: { ...typography.heading3 },
+  body: { padding: spacing.md, gap: spacing.sm },
+  infoRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    paddingVertical: 12,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: '#f1f5f9',
+  },
+  infoLabel: { ...typography.label, color: '#64748b', flex: 1 },
+  infoValue: { ...typography.body, color: '#0f172a', flex: 2, textAlign: 'right' },
+  contactCard: {
+    backgroundColor: '#f8fafc',
+    borderRadius: 10,
+    padding: spacing.md,
+    marginBottom: spacing.sm,
+  },
+  contactName: { ...typography.body, fontWeight: '600', color: '#0f172a' },
+  contactMeta: { ...typography.caption, marginTop: 2, color: '#64748b' },
+  primaryBadge: {
+    marginTop: 6,
+    alignSelf: 'flex-start',
+    backgroundColor: '#dbeafe',
+    color: '#1d4ed8',
+    fontSize: 11,
+    fontWeight: '600',
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 20,
+  },
+  emptyText: { ...typography.body, color: '#94a3b8', textAlign: 'center', marginTop: 40 },
 });

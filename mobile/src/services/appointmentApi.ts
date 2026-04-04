@@ -12,10 +12,29 @@ export interface Appointment {
   clinic_name: string;
   scheduled_date: string;
   scheduled_time: string;
+  appointment_date: string;
+  start_time: string;
+  end_time?: string;
   appointment_type: string;
   status: string;
   chief_complaint?: string;
   telemedicine_url?: string;
+  invoice_id?: string;
+  payment_status?: string;
+  payment_method?: string;
+  consultation_fee?: number;
+}
+
+export interface PaymentInitResponse {
+  payment_status: string;
+  payment_method: string;
+  invoice_id: string;
+  amount: number;
+  // Razorpay-specific
+  order_id?: string;
+  key_id?: string;
+  currency?: string;
+  description?: string;
 }
 
 export interface ClinicOption {
@@ -48,7 +67,7 @@ const appointmentApi = {
         }))
       ),
 
-  getMyAppointments: (params?: { status?: string; limit?: number }): Promise<Appointment[]> =>
+  getMyAppointments: (params?: { filter?: 'upcoming' | 'past'; limit?: number }): Promise<Appointment[]> =>
     api.get('/appointments/my', { params }).then((r) => r.data.data ?? []),
 
   book: (data: {
@@ -67,6 +86,18 @@ const appointmentApi = {
 
   getDetail: (id: string): Promise<Appointment> =>
     api.get(`/appointments/${id}`).then((r) => r.data.data),
+
+  initiatePayment: (appointmentId: string, paymentMethod: 'cash' | 'razorpay'): Promise<PaymentInitResponse> =>
+    api.post(`/appointments/${appointmentId}/initiate-payment`, { payment_method: paymentMethod }).then((r) => r.data.data),
+
+  verifyPayment: (
+    appointmentId: string,
+    payload: { razorpay_order_id: string; razorpay_payment_id: string; razorpay_signature: string },
+  ): Promise<{ payment_status: string; amount: number }> =>
+    api.post(`/appointments/${appointmentId}/verify-payment`, payload).then((r) => r.data.data),
+
+  refundPayment: (appointmentId: string, reason?: string): Promise<{ refund_status: string; amount: number }> =>
+    api.post(`/appointments/${appointmentId}/refund`, { reason: reason ?? 'Appointment cancelled' }).then((r) => r.data.data),
 
   getClinics: (params?: { search?: string }): Promise<ClinicOption[]> =>
     api.get('/clinics/', { params }).then((r) => r.data.data),

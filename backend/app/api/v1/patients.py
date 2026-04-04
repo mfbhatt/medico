@@ -169,6 +169,87 @@ async def create_patient(
 
 
 # ── Get Patient ──────────────────────────────────────────────────
+@router.get("/me")
+async def get_my_patient_profile(
+    db: AsyncSession = Depends(get_db),
+    current_user: CurrentUser = Depends(get_current_user),
+):
+    """Return the patient profile for the currently authenticated patient user."""
+    from datetime import date as date_type
+
+    result = await db.execute(
+        select(Patient).where(
+            Patient.user_id == current_user.user_id,
+            Patient.tenant_id == current_user.tenant_id,
+            Patient.is_deleted == False,
+        )
+    )
+    patient = result.scalar_one_or_none()
+    if not patient:
+        raise NotFoundException(detail="Patient not found")
+
+    allergies = await db.execute(
+        select(PatientAllergy).where(
+            PatientAllergy.patient_id == patient.id,
+            PatientAllergy.is_active == True,
+        )
+    )
+    emergency_contacts = await db.execute(
+        select(EmergencyContact).where(EmergencyContact.patient_id == patient.id)
+    )
+    conditions = await db.execute(
+        select(ChronicCondition).where(
+            ChronicCondition.patient_id == patient.id,
+            ChronicCondition.status == "active",
+        )
+    )
+
+    # Compute age from date_of_birth
+    age = None
+    if patient.date_of_birth:
+        try:
+            today = date_type.today()
+            dob = patient.date_of_birth if isinstance(patient.date_of_birth, date_type) else date_type.fromisoformat(str(patient.date_of_birth))
+            age = today.year - dob.year - ((today.month, today.day) < (dob.month, dob.day))
+        except Exception:
+            pass
+
+    data = _patient_response(patient)
+    data["blood_type"] = patient.blood_group  # alias for mobile
+    data["age"] = age
+    data["allergies"] = [
+        {
+            "id": a.id,
+            "allergen": a.allergen,
+            "allergen_type": a.allergen_type,
+            "severity": a.severity,
+            "reaction": a.reaction,
+        }
+        for a in allergies.scalars()
+    ]
+    data["emergency_contacts"] = [
+        {
+            "id": ec.id,
+            "name": ec.name,
+            "relationship": ec.relationship,
+            "phone": ec.phone,
+            "is_primary": ec.is_primary,
+        }
+        for ec in emergency_contacts.scalars()
+    ]
+    data["chronic_conditions"] = [
+        {
+            "id": c.id,
+            "condition_name": c.condition_name,
+            "icd10_code": c.icd10_code,
+            "status": c.status,
+        }
+        for c in conditions.scalars()
+    ]
+
+    return _success(data)
+
+
 @router.get("/{patient_id}")
 async def get_patient(
     patient_id: str,

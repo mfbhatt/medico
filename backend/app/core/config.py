@@ -105,6 +105,10 @@ class Settings(BaseSettings):
     STRIPE_WEBHOOK_SECRET: Optional[str] = None
     STRIPE_PUBLISHABLE_KEY: Optional[str] = None
 
+    # ── Razorpay ─────────────────────────────────────────────────
+    RAZORPAY_KEY_ID: Optional[str] = None
+    RAZORPAY_KEY_SECRET: Optional[str] = None
+
     # ── Drug API ─────────────────────────────────────────────────
     DRUG_API_URL: Optional[str] = None
     DRUG_API_KEY: Optional[str] = None

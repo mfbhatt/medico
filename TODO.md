@@ -26,6 +26,13 @@ npm run web        # Opens in browser
 
 
 
+# Android Build
+
+npx expo prebuild --platform android
+cd android
+./gradlew assembleRelease
+
+./gradlew assembleDebug
 
 
 

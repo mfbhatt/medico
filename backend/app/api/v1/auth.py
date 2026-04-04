@@ -872,6 +872,40 @@ async def register_patient(
     )
 
 
+# ── Current User ─────────────────────────────────────────────────
+@router.get("/me")
+async def get_me(
+    db: AsyncSession = Depends(get_db),
+    current_user: CurrentUser = Depends(get_current_user),
+):
+    """Return the currently authenticated user's profile."""
+    user = (await db.execute(
+        select(User).where(User.id == current_user.user_id, User.is_deleted.isnot(True))
+    )).scalar_one_or_none()
+
+    if not user:
+        raise UnauthorizedException(detail="User not found")
+
+    user_dict: dict = {
+        "id": user.id,
+        "email": user.email,
+        "full_name": user.full_name,
+        "first_name": user.first_name,
+        "last_name": user.last_name,
+        "role": current_user.role,
+        "tenant_id": current_user.tenant_id,
+    }
+
+    if current_user.role == "patient":
+        patient_row = (await db.execute(
+            select(Patient).where(Patient.user_id == user.id)
+        )).scalar_one_or_none()
+        if patient_row:
+            user_dict["patient_id"] = patient_row.id
+
+    return _success(user_dict)
+
+
 # ── Internal helpers ─────────────────────────────────────────────
 async def _send_otp_sms(phone: str, otp: str) -> None:
     try:

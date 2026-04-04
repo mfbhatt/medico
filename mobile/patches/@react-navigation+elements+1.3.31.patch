@@ -1,3 +1,124 @@
+diff --git a/node_modules/@react-navigation/elements/lib/commonjs/Header/Header.js b/node_modules/@react-navigation/elements/lib/commonjs/Header/Header.js
+index 09ea2be..e103f69 100644
+--- a/node_modules/@react-navigation/elements/lib/commonjs/Header/Header.js
++++ b/node_modules/@react-navigation/elements/lib/commonjs/Header/Header.js
+@@ -169,52 +169,45 @@ function Header(props) {
+   }) : null;
+   const headerTitle = typeof customTitle !== 'function' ? props => /*#__PURE__*/React.createElement(_HeaderTitle.default, props) : customTitle;
+   return /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement(_reactNative.Animated.View, {
+-    pointerEvents: "box-none",
+     style: [_reactNative.StyleSheet.absoluteFill, {
+       zIndex: 0
+-    }, backgroundContainerStyle]
++    }, backgroundContainerStyle, { pointerEvents: "box-none" }]
+   }, headerBackground ? headerBackground({
+     style: backgroundStyle
+   }) : headerTransparent ? null : /*#__PURE__*/React.createElement(_HeaderBackground.default, {
+     style: backgroundStyle
+   })), /*#__PURE__*/React.createElement(_reactNative.Animated.View, {
+-    pointerEvents: "box-none",
+     style: [{
+       height,
+       minHeight,
+       maxHeight,
+       opacity,
+       transform
+-    }]
++    }, { pointerEvents: "box-none" }]
+   }, /*#__PURE__*/React.createElement(_reactNative.View, {
+-    pointerEvents: "none",
+     style: {
+       height: headerStatusBarHeight
+-    }
++    , pointerEvents: "none" }
+   }), /*#__PURE__*/React.createElement(_reactNative.View, {
+-    pointerEvents: "box-none",
+-    style: styles.content
++    style: [styles.content, { pointerEvents: "box-none" }]
+   }, /*#__PURE__*/React.createElement(_reactNative.Animated.View, {
+-    pointerEvents: "box-none",
+     style: [styles.left, headerTitleAlign === 'center' && styles.expand, {
+       marginStart: insets.left
+-    }, leftContainerStyle]
++    }, leftContainerStyle, { pointerEvents: "box-none" }]
+   }, leftButton), /*#__PURE__*/React.createElement(_reactNative.Animated.View, {
+-    pointerEvents: "box-none",
+     style: [styles.title, {
+       // Avoid the title from going offscreen or overlapping buttons
+       maxWidth: headerTitleAlign === 'center' ? layout.width - ((leftButton ? headerLeftLabelVisible !== false ? 80 : 32 : 16) + Math.max(insets.left, insets.right)) * 2 : layout.width - ((leftButton ? 72 : 16) + (rightButton ? 72 : 16) + insets.left - insets.right)
+-    }, titleContainerStyle]
++    }, titleContainerStyle, { pointerEvents: "box-none" }]
+   }, headerTitle({
+     children: title,
+     allowFontScaling: titleAllowFontScaling,
+     tintColor: headerTintColor,
+     style: titleStyle
+   })), /*#__PURE__*/React.createElement(_reactNative.Animated.View, {
+-    pointerEvents: "box-none",
+     style: [styles.right, styles.expand, {
+       marginEnd: insets.right
+-    }, rightContainerStyle]
++    }, rightContainerStyle, { pointerEvents: "box-none" }]
+   }, rightButton))));
+ }
+ const styles = _reactNative.StyleSheet.create({
+diff --git a/node_modules/@react-navigation/elements/lib/commonjs/Header/HeaderBackButton.js b/node_modules/@react-navigation/elements/lib/commonjs/Header/HeaderBackButton.js
+index e540459..c58e20b 100644
+--- a/node_modules/@react-navigation/elements/lib/commonjs/Header/HeaderBackButton.js
++++ b/node_modules/@react-navigation/elements/lib/commonjs/Header/HeaderBackButton.js
+@@ -54,6 +54,7 @@ function HeaderBackButton(_ref) {
+       });
+     } else {
+       return /*#__PURE__*/React.createElement(_reactNative.Image, {
++        resizeMode: 'contain',
+         style: [styles.icon, Boolean(labelVisible) && styles.iconWithLabel, Boolean(tintColor) && {
+           tintColor
+         }],
+@@ -95,6 +96,7 @@ function HeaderBackButton(_ref) {
+       maskElement: /*#__PURE__*/React.createElement(_reactNative.View, {
+         style: styles.iconMaskContainer
+       }, /*#__PURE__*/React.createElement(_reactNative.Image, {
++        resizeMode: 'contain',
+         source: require('../assets/back-icon-mask.png'),
+         style: styles.iconMask
+       }), /*#__PURE__*/React.createElement(_reactNative.View, {
+@@ -166,7 +168,6 @@ const styles = _reactNative.StyleSheet.create({
+       marginLeft: 8,
+       marginRight: 22,
+       marginVertical: 12,
+-      resizeMode: 'contain',
+       transform: [{
+         scaleX: _reactNative.I18nManager.getConstants().isRTL ? -1 : 1
+       }]
+@@ -175,7 +176,6 @@ const styles = _reactNative.StyleSheet.create({
+       height: 24,
+       width: 24,
+       margin: 3,
+-      resizeMode: 'contain',
+       transform: [{
+         scaleX: _reactNative.I18nManager.getConstants().isRTL ? -1 : 1
+       }]
+@@ -199,7 +199,6 @@ const styles = _reactNative.StyleSheet.create({
+     marginLeft: -14.5,
+     marginVertical: 12,
+     alignSelf: 'center',
+-    resizeMode: 'contain',
+     transform: [{
+       scaleX: _reactNative.I18nManager.getConstants().isRTL ? -1 : 1
+     }]
+diff --git a/node_modules/@react-navigation/elements/lib/commonjs/Header/HeaderBackground.js b/node_modules/@react-navigation/elements/lib/commonjs/Header/HeaderBackground.js
+index de92f73..ae247d5 100644
+--- a/node_modules/@react-navigation/elements/lib/commonjs/Header/HeaderBackground.js
++++ b/node_modules/@react-navigation/elements/lib/commonjs/Header/HeaderBackground.js
+@@ -22,7 +22,7 @@ function HeaderBackground(_ref) {
+     style: [styles.container, {
+       backgroundColor: colors.card,
+       borderBottomColor: colors.border,
+-      shadowColor: colors.border
++      ..._reactNative.Platform.OS === 'ios' ? { shadowColor: colors.border } : {}
+     }, style]
+   }, rest));
+ }
 diff --git a/node_modules/@react-navigation/elements/lib/commonjs/ResourceSavingView.js b/node_modules/@react-navigation/elements/lib/commonjs/ResourceSavingView.js
 index 024cb54..6edf364 100644
 --- a/node_modules/@react-navigation/elements/lib/commonjs/ResourceSavingView.js

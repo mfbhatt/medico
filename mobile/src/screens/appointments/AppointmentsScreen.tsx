@@ -51,10 +51,7 @@ export default function AppointmentsScreen() {
 
   const { data, isLoading, refetch, isRefetching } = useQuery({
     queryKey: ['my-appointments', filter],
-    queryFn: () =>
-      appointmentApi.getMyAppointments({
-        status: filter === 'upcoming' ? 'scheduled,checked_in' : 'completed,cancelled,no_show',
-      }),
+    queryFn: () => appointmentApi.getMyAppointments({ filter }),
   });
 
   return (

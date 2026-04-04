@@ -51,6 +51,7 @@ export default function BookAppointmentScreen() {
   const [selectedSlot, setSelectedSlot] = useState<string | null>(null);
   const [visitType, setVisitType] = useState<"new" | "follow_up">("new");
   const [chiefComplaint, setChiefComplaint] = useState("");
+  const [paymentChoice, setPaymentChoice] = useState<"razorpay" | "pay_later">("pay_later");
 
   // ── Discovery state ────────────────────────────────────────────────────────
   const [activeTab, setActiveTab] = useState<SearchTab>("nearby");
@@ -70,6 +71,9 @@ export default function BookAppointmentScreen() {
   const [slots, setSlots] = useState<string[]>([]);
   const [loadingSlots, setLoadingSlots] = useState(false);
   const [booking, setBooking] = useState(false);
+
+  // ── Payment state ──────────────────────────────────────────────────────────
+  const [bookedAppointmentId, setBookedAppointmentId] = useState<string | null>(null);
 
   // ── Load nearby clinics on mount ───────────────────────────────────────────
   useEffect(() => {
@@ -192,8 +196,13 @@ export default function BookAppointmentScreen() {
         appointment_type: visitType === "new" ? "new_visit" : "follow_up",
         chief_complaint: chiefComplaint || undefined,
       });
-      toast.success("Appointment booked successfully!");
-      navigation.navigate("AppointmentDetail", { appointmentId: appt.id });
+      toast.success("Appointment booked!");
+      if (paymentChoice === "razorpay") {
+        // Navigate to detail screen where Razorpay payment can be initiated
+        navigation.navigate("AppointmentDetail", { appointmentId: appt.id });
+      } else {
+        navigation.navigate("AppointmentDetail", { appointmentId: appt.id });
+      }
     } catch (err: any) {
       toast.error(err.response?.data?.message ?? "Booking failed. Please try again.");
     } finally {
@@ -618,8 +627,45 @@ export default function BookAppointmentScreen() {
               numberOfLines={3}
               textAlignVertical="top"
             />
+
+            {/* ── Payment selection ─────────────────────────────────────────── */}
+            <Text style={styles.sectionLabel}>Payment Method</Text>
+            <TouchableOpacity
+              style={[styles.payOptionCard, paymentChoice === "razorpay" && styles.payOptionCardActive]}
+              onPress={() => setPaymentChoice("razorpay")}
+              activeOpacity={0.8}
+            >
+              <View style={styles.payOptionLeft}>
+                <Ionicons name="card" size={22} color={paymentChoice === "razorpay" ? "#2563eb" : "#64748b"} />
+                <View>
+                  <Text style={[styles.payOptionTitle, paymentChoice === "razorpay" && { color: "#2563eb" }]}>Pay Online</Text>
+                  <Text style={styles.payOptionSub}>Razorpay · UPI · Cards · Net Banking</Text>
+                </View>
+              </View>
+              <View style={[styles.payOptionRadio, paymentChoice === "razorpay" && styles.payOptionRadioActive]}>
+                {paymentChoice === "razorpay" && <View style={styles.payOptionRadioDot} />}
+              </View>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={[styles.payOptionCard, paymentChoice === "pay_later" && styles.payOptionCardActive]}
+              onPress={() => setPaymentChoice("pay_later")}
+              activeOpacity={0.8}
+            >
+              <View style={styles.payOptionLeft}>
+                <Ionicons name="cash" size={22} color={paymentChoice === "pay_later" ? "#2563eb" : "#64748b"} />
+                <View>
+                  <Text style={[styles.payOptionTitle, paymentChoice === "pay_later" && { color: "#2563eb" }]}>Pay at Clinic</Text>
+                  <Text style={styles.payOptionSub}>Cash · Pay when you arrive</Text>
+                </View>
+              </View>
+              <View style={[styles.payOptionRadio, paymentChoice === "pay_later" && styles.payOptionRadioActive]}>
+                {paymentChoice === "pay_later" && <View style={styles.payOptionRadioDot} />}
+              </View>
+            </TouchableOpacity>
           </View>
         )}
+
       </ScrollView>
 
       {/* Footer navigation */}
@@ -660,6 +706,7 @@ export default function BookAppointmentScreen() {
           </TouchableOpacity>
         )}
       </View>
+
     </View>
   );
 }
@@ -1063,4 +1110,21 @@ const styles = StyleSheet.create({
   },
   nextBtnDisabled: { opacity: 0.45 },
   nextBtnText: { fontSize: 15, fontWeight: "700", color: "#fff" },
+
+  // Payment selection (Step 4)
+  payOptionCard: {
+    flexDirection: "row", alignItems: "center", justifyContent: "space-between",
+    borderWidth: 1.5, borderColor: "#e2e8f0", borderRadius: 14,
+    padding: 16, marginBottom: 10, backgroundColor: "#fff",
+  },
+  payOptionCardActive: { borderColor: "#2563eb", backgroundColor: "#eff6ff" },
+  payOptionLeft: { flexDirection: "row", alignItems: "center", gap: 12, flex: 1 },
+  payOptionTitle: { fontSize: 15, fontWeight: "700", color: "#1e293b" },
+  payOptionSub: { fontSize: 12, color: "#64748b", marginTop: 2 },
+  payOptionRadio: {
+    width: 20, height: 20, borderRadius: 10, borderWidth: 2, borderColor: "#cbd5e1",
+    alignItems: "center", justifyContent: "center",
+  },
+  payOptionRadioActive: { borderColor: "#2563eb" },
+  payOptionRadioDot: { width: 10, height: 10, borderRadius: 5, backgroundColor: "#2563eb" },
 });
