@@ -3,6 +3,13 @@ import type { User } from "../../types";
 import { authService } from "../../services/authService";
 import { STORAGE_KEYS } from "../../utils/constants";
 
+export interface ActivePatient {
+  id: string;
+  name: string;
+  relationship_type: string;
+  is_minor: boolean;
+}
+
 interface AuthState {
   user: User | null;
   token: string | null;
@@ -10,6 +17,7 @@ interface AuthState {
   loading: boolean;
   error: string | null;
   isAuthenticated: boolean;
+  activePatient: ActivePatient | null; // null = self
 }
 
 function isTokenExpired(token: string): boolean {
@@ -51,6 +59,7 @@ const initialState: AuthState = {
   ...loadAuthFromStorage(),
   loading: false,
   error: null,
+  activePatient: null,
 };
 
 interface LoginPayload {
@@ -123,10 +132,14 @@ export const authSlice = createSlice({
       state.token = null;
       state.refreshToken = null;
       state.isAuthenticated = false;
+      state.activePatient = null;
       localStorage.removeItem(STORAGE_KEYS.AUTH_TOKEN);
       localStorage.removeItem(STORAGE_KEYS.REFRESH_TOKEN);
       localStorage.removeItem(STORAGE_KEYS.USER);
       localStorage.removeItem(STORAGE_KEYS.TENANT_ID);
+    },
+    setActivePatient: (state, action: PayloadAction<ActivePatient | null>) => {
+      state.activePatient = action.payload;
     },
     setLoading: (state, action: PayloadAction<boolean>) => {
       state.loading = action.payload;
@@ -172,5 +185,5 @@ export const authSlice = createSlice({
   },
 });
 
-export const { setUser, setToken, logout, setLoading, setError } = authSlice.actions;
+export const { setUser, setToken, logout, setLoading, setError, setActivePatient } = authSlice.actions;
 export default authSlice.reducer;

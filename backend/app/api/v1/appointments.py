@@ -514,16 +514,63 @@ async def list_appointments(
         Appointment.is_deleted == False,
     )
 
-    # Patients can only see their own appointments
+    # Patients can only see their own appointments or linked family members' appointments
     if current_user.role == "patient":
-        # Get patient profile for this user
         from app.models.patient import Patient
+        from app.models.patient import PatientFamilyLink
+
+        # Find this user's own Patient record (may have been admin-created with user_id=NULL
+        # but claimed at login time, so user_id should now be set)
         patient_result = await db.execute(
-            select(Patient).where(Patient.user_id == current_user.user_id)
+            select(Patient).where(
+                Patient.user_id == current_user.user_id,
+                Patient.tenant_id == current_user.tenant_id,
+                Patient.is_deleted == False,
+            )
         )
         patient = patient_result.scalar_one_or_none()
-        if patient:
-            query = query.where(Appointment.patient_id == patient.id)
+
+        if patient_id and patient is None:
+            # user_id still not linked — check if patient_id itself belongs to this user
+            # (edge case: user hasn't re-logged-in after admin record claim)
+            own_result = await db.execute(
+                select(Patient).where(
+                    Patient.id == str(patient_id),
+                    Patient.user_id == current_user.user_id,
+                    Patient.tenant_id == current_user.tenant_id,
+                    Patient.is_deleted == False,
+                )
+            )
+            if own_result.scalar_one_or_none():
+                query = query.where(Appointment.patient_id == str(patient_id))
+            # else: no patient record found at all — return empty result set
+        elif patient:
+            if patient_id and str(patient_id) != str(patient.id):
+                # Caller is requesting a specific patient — verify it's a linked family member
+                link_result = await db.execute(
+                    select(PatientFamilyLink).where(
+                        or_(
+                            and_(
+                                PatientFamilyLink.patient_id == str(patient.id),
+                                PatientFamilyLink.related_patient_id == str(patient_id),
+                            ),
+                            and_(
+                                PatientFamilyLink.patient_id == str(patient_id),
+                                PatientFamilyLink.related_patient_id == str(patient.id),
+                            ),
+                        ),
+                        PatientFamilyLink.tenant_id == current_user.tenant_id,
+                        PatientFamilyLink.is_deleted == False,
+                    )
+                )
+                if link_result.scalar_one_or_none():
+                    # Allowed: filter to the requested family member
+                    query = query.where(Appointment.patient_id == str(patient_id))
+                else:
+                    # Not a linked member — fall back to own appointments only
+                    query = query.where(Appointment.patient_id == patient.id)
+            else:
+                query = query.where(Appointment.patient_id == patient.id)
 
     if clinic_id:
         query = query.where(Appointment.clinic_id == clinic_id)

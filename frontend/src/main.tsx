@@ -16,7 +16,7 @@ const GOOGLE_CLIENT_ID = import.meta.env.VITE_GOOGLE_CLIENT_ID ?? "";
 const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
-      staleTime: 5 * 60 * 1000,    // 5 minutes
+      staleTime: 30 * 1000,    // 30 seconds
       retry: 2,
       refetchOnWindowFocus: false,
     },

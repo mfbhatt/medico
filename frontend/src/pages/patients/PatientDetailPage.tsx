@@ -6,7 +6,7 @@ import api from '@/services/api';
 import AddressFields, { type AddressValue } from '@/components/ui/AddressFields';
 import { useEnabledCountries } from '@/hooks/useEnabledCountries';
 
-type Tab = 'overview' | 'appointments' | 'records' | 'prescriptions' | 'labs' | 'billing';
+type Tab = 'overview' | 'appointments' | 'records' | 'prescriptions' | 'labs' | 'billing' | 'family';
 
 const TABS: { id: Tab; label: string }[] = [
   { id: 'overview', label: 'Overview' },
@@ -15,6 +15,7 @@ const TABS: { id: Tab; label: string }[] = [
   { id: 'prescriptions', label: 'Prescriptions' },
   { id: 'labs', label: 'Lab Reports' },
   { id: 'billing', label: 'Billing' },
+  { id: 'family', label: 'Family Links' },
 ];
 
 const BLOOD_GROUPS = ['A+', 'A-', 'B+', 'B-', 'AB+', 'AB-', 'O+', 'O-'];
@@ -36,6 +37,10 @@ export default function PatientDetailPage() {
   const { id } = useParams<{ id: string }>();
   const [tab, setTab] = useState<Tab>('overview');
   const [editOpen, setEditOpen] = useState(false);
+  const [linkModalOpen, setLinkModalOpen] = useState(false);
+  const [linkSearch, setLinkSearch] = useState('');
+  const [selectedRelated, setSelectedRelated] = useState<{ id: string; name: string } | null>(null);
+  const [linkRelType, setLinkRelType] = useState('child');
   const qc = useQueryClient();
   const { countries } = useEnabledCountries();
 
@@ -99,6 +104,39 @@ export default function PatientDetailPage() {
     queryFn: () =>
       api.get(`/prescriptions/patient/${id}`, { params: { limit: 10 } }).then((r) => r.data.data),
     enabled: tab === 'prescriptions' && !!id,
+  });
+
+  const { data: familyLinks } = useQuery({
+    queryKey: ['patient-family-links', id],
+    queryFn: () => api.get(`/patients/${id}/family`).then((r) => r.data.data),
+    enabled: tab === 'family' && !!id,
+  });
+
+  const { data: patientSearchResults } = useQuery({
+    queryKey: ['patient-link-search', linkSearch],
+    queryFn: () =>
+      api.get('/patients/', { params: { q: linkSearch, page_size: 8 } }).then((r) => r.data.data),
+    enabled: linkSearch.trim().length >= 2,
+    staleTime: 10_000,
+  });
+
+  const addLinkMutation = useMutation({
+    mutationFn: (data: { related_patient_id: string; relationship_type: string }) =>
+      api.post(`/patients/${id}/family`, data),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['patient-family-links', id] });
+      setLinkModalOpen(false);
+      setLinkSearch('');
+      setSelectedRelated(null);
+      setLinkRelType('child');
+    },
+  });
+
+  const removeLinkMutation = useMutation({
+    mutationFn: (link_id: string) => api.delete(`/patients/${id}/family/${link_id}`),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['patient-family-links', id] });
+    },
   });
 
   if (isLoading) return <div className="text-center py-20 text-gray-400">Loading patient…</div>;
@@ -327,6 +365,176 @@ export default function PatientDetailPage() {
           <Link to={`/billing?patient_id=${id}`} className="btn-secondary">
             View Billing History
           </Link>
+        </div>
+      )}
+
+      {tab === 'family' && (
+        <div>
+          <div className="flex items-center justify-between mb-4">
+            <h3 className="font-semibold text-gray-900">Linked Family Members</h3>
+            <button onClick={() => setLinkModalOpen(true)} className="btn-primary text-sm">
+              + Link Family Member
+            </button>
+          </div>
+          <div className="card overflow-hidden">
+            <table className="w-full text-sm">
+              <thead className="bg-gray-50 border-b border-gray-200">
+                <tr>
+                  <th className="text-left px-4 py-3 font-medium text-gray-600">Name</th>
+                  <th className="text-left px-4 py-3 font-medium text-gray-600">MRN</th>
+                  <th className="text-left px-4 py-3 font-medium text-gray-600">Date of Birth</th>
+                  <th className="text-left px-4 py-3 font-medium text-gray-600">Relationship</th>
+                  <th className="text-right px-4 py-3 font-medium text-gray-600">Actions</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-gray-100">
+                {!(familyLinks ?? []).length ? (
+                  <tr>
+                    <td colSpan={5} className="text-center py-12 text-gray-400">
+                      No family members linked yet
+                    </td>
+                  </tr>
+                ) : (familyLinks ?? []).map((f: any) => (
+                  <tr key={f.link_id} className="hover:bg-gray-50">
+                    <td className="px-4 py-3">
+                      <Link
+                        to={`/patients/${f.patient_id}`}
+                        className="font-medium text-primary-600 hover:text-primary-800"
+                      >
+                        {f.first_name} {f.last_name}
+                      </Link>
+                      {f.is_minor && (
+                        <span className="ml-2 text-xs bg-amber-100 text-amber-700 px-1.5 py-0.5 rounded-full">
+                          Minor
+                        </span>
+                      )}
+                    </td>
+                    <td className="px-4 py-3 font-mono text-xs text-gray-500">{f.mrn}</td>
+                    <td className="px-4 py-3">{f.date_of_birth}</td>
+                    <td className="px-4 py-3 capitalize">{f.relationship_type.replace(/_/g, ' ')}</td>
+                    <td className="px-4 py-3 text-right">
+                      <button
+                        onClick={() => removeLinkMutation.mutate(f.link_id)}
+                        disabled={removeLinkMutation.isPending}
+                        className="text-red-500 hover:text-red-700 text-sm font-medium disabled:opacity-50"
+                      >
+                        Remove
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
+      {/* Link Family Member Modal */}
+      {linkModalOpen && (
+        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-xl shadow-xl w-full max-w-lg">
+            <div className="flex items-center justify-between p-5 border-b border-gray-200">
+              <h2 className="text-lg font-semibold text-gray-900">Link Family Member</h2>
+              <button
+                onClick={() => { setLinkModalOpen(false); setLinkSearch(''); setSelectedRelated(null); }}
+                className="text-gray-400 hover:text-gray-600"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            <div className="p-5 space-y-4">
+              <div>
+                <label className="label">Search Patient</label>
+                <input
+                  className="input"
+                  placeholder="Name, MRN, or phone…"
+                  value={linkSearch}
+                  onChange={(e) => { setLinkSearch(e.target.value); setSelectedRelated(null); }}
+                  autoFocus
+                />
+              </div>
+
+              {linkSearch.trim().length >= 2 && !selectedRelated && (
+                <div className="border border-gray-200 rounded-lg overflow-hidden max-h-48 overflow-y-auto">
+                  {!(patientSearchResults ?? []).length ? (
+                    <p className="text-center py-4 text-gray-400 text-sm">No patients found</p>
+                  ) : (patientSearchResults ?? []).map((p: any) => (
+                    <button
+                      key={p.id}
+                      onClick={() => {
+                        setSelectedRelated({ id: p.id, name: `${p.first_name} ${p.last_name}` });
+                        setLinkSearch('');
+                      }}
+                      disabled={p.id === id}
+                      className={`flex w-full items-center justify-between px-3 py-2.5 text-sm border-b last:border-0 border-gray-100 hover:bg-slate-50 transition text-left ${p.id === id ? 'opacity-40 cursor-not-allowed' : ''}`}
+                    >
+                      <div>
+                        <span className="font-medium text-gray-900">{p.first_name} {p.last_name}</span>
+                        <span className="ml-2 text-xs text-gray-400 font-mono">{p.mrn}</span>
+                      </div>
+                      {p.is_minor && (
+                        <span className="text-xs bg-amber-100 text-amber-600 px-1.5 py-0.5 rounded-full">
+                          Minor
+                        </span>
+                      )}
+                    </button>
+                  ))}
+                </div>
+              )}
+
+              {selectedRelated && (
+                <div className="flex items-center justify-between bg-blue-50 border border-blue-200 rounded-lg px-3 py-2.5">
+                  <span className="text-sm font-medium text-blue-800">{selectedRelated.name}</span>
+                  <button
+                    onClick={() => setSelectedRelated(null)}
+                    className="text-blue-400 hover:text-blue-600"
+                  >
+                    <X className="w-4 h-4" />
+                  </button>
+                </div>
+              )}
+
+              <div>
+                <label className="label">Relationship to this Patient</label>
+                <select className="input" value={linkRelType} onChange={(e) => setLinkRelType(e.target.value)}>
+                  <option value="child">Child</option>
+                  <option value="parent">Parent</option>
+                  <option value="spouse">Spouse</option>
+                  <option value="sibling">Sibling</option>
+                  <option value="guardian">Guardian</option>
+                </select>
+              </div>
+
+              {addLinkMutation.isError && (
+                <div className="bg-red-50 border border-red-200 text-red-700 px-3 py-2 rounded text-sm">
+                  {(addLinkMutation.error as any)?.response?.data?.detail ?? 'Failed to create link'}
+                </div>
+              )}
+
+              <div className="flex gap-3 pt-2">
+                <button
+                  onClick={() =>
+                    selectedRelated &&
+                    addLinkMutation.mutate({
+                      related_patient_id: selectedRelated.id,
+                      relationship_type: linkRelType,
+                    })
+                  }
+                  disabled={!selectedRelated || addLinkMutation.isPending}
+                  className="btn-primary flex-1"
+                >
+                  {addLinkMutation.isPending ? 'Linking…' : 'Link Patient'}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => { setLinkModalOpen(false); setLinkSearch(''); setSelectedRelated(null); }}
+                  className="btn-secondary flex-1"
+                >
+                  Cancel
+                </button>
+              </div>
+            </div>
+          </div>
         </div>
       )}
 

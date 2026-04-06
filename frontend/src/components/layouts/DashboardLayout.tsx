@@ -3,7 +3,7 @@ import { Outlet, NavLink, Link, useNavigate } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import api from "../../services/api";
 import { useDispatch, useSelector } from "react-redux";
-import { switchTenantThunk } from "../../store/slices/authSlice";
+import { switchTenantThunk, setActivePatient, ActivePatient } from "../../store/slices/authSlice";
 import {
   Calendar,
   Users,
@@ -32,6 +32,8 @@ import {
   ArrowLeftRight,
   Check,
   Loader2,
+  UserCircle,
+  Baby,
 } from "lucide-react";
 import { RootState, AppDispatch } from "../../store";
 import { logout } from "../../store/slices/authSlice";
@@ -174,7 +176,7 @@ export default function DashboardLayout() {
   const [tenantMenuOpen, setTenantMenuOpen] = useState(false);
   const [switchingTenant, setSwitchingTenant] = useState<string | null>(null);
 
-  const { user } = useSelector((state: RootState) => state.auth);
+  const { user, activePatient } = useSelector((state: RootState) => state.auth);
   const dispatch = useDispatch<AppDispatch>();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
@@ -210,9 +212,34 @@ export default function DashboardLayout() {
     staleTime: 60_000,
     retry: false,
   });
-  const myTenants: any[] = myTenantsData ?? [];
+  // Override is_current using live Redux state so stale cache never causes a wrong switch
+  const myTenants: any[] = (myTenantsData ?? []).map((t: any) => ({
+    ...t,
+    is_current: t.tenant_id === user?.tenant_id,
+  }));
   const hasMultipleTenants = myTenants.length > 1;
   const currentTenantName = myTenants.find((t) => t.is_current)?.tenant_name ?? null;
+
+  // Family members for patient profile switcher
+  const [profileMenuOpen, setProfileMenuOpen] = useState(false);
+  const { data: familyData } = useQuery({
+    queryKey: ["my-family", user?.id],
+    queryFn: () => api.get("/patients/me/family").then((r) => r.data.data),
+    enabled: role === "patient",
+    staleTime: 60_000,
+    retry: false,
+  });
+  const familyMembers: ActivePatient[] = (familyData ?? []).map((f: any) => ({
+    id: f.id,
+    name: `${f.first_name} ${f.last_name}`.trim(),
+    relationship_type: f.relationship_type,
+    is_minor: f.is_minor ?? false,
+  }));
+
+  const handleSwitchProfile = (profile: ActivePatient | null) => {
+    dispatch(setActivePatient(profile));
+    setProfileMenuOpen(false);
+  };
 
   // Live notification count — poll every 30 s
   const { data: unreadData } = useQuery({
@@ -355,6 +382,68 @@ export default function DashboardLayout() {
           <div className="flex-1" />
 
           <div className="flex items-center gap-4">
+            {/* Patient profile switcher — only shown for patient role with linked dependents */}
+            {role === "patient" && familyMembers.length > 0 && (
+              <div className="relative">
+                <button
+                  onClick={() => setProfileMenuOpen((v) => !v)}
+                  className="flex items-center gap-2 px-3 py-1.5 rounded-lg border border-slate-200 bg-white hover:border-blue-400 text-sm text-slate-700 transition"
+                >
+                  {activePatient ? (
+                    <Baby className="h-4 w-4 text-blue-500 flex-shrink-0" />
+                  ) : (
+                    <UserCircle className="h-4 w-4 text-slate-400 flex-shrink-0" />
+                  )}
+                  <span className="max-w-[120px] truncate font-medium">
+                    {activePatient ? activePatient.name : "My Profile"}
+                  </span>
+                  <ChevronDown className="h-3.5 w-3.5 text-slate-400" />
+                </button>
+
+                {profileMenuOpen && (
+                  <>
+                    <div className="fixed inset-0 z-40" onClick={() => setProfileMenuOpen(false)} />
+                    <div className="absolute right-0 mt-2 w-56 bg-white rounded-lg shadow-lg border border-slate-200 z-50 py-1">
+                      <p className="px-3 py-1.5 text-[10px] font-semibold text-slate-400 uppercase tracking-wider">
+                        Book appointment for
+                      </p>
+                      {/* Self */}
+                      <button
+                        onClick={() => handleSwitchProfile(null)}
+                        className={`flex w-full items-center gap-2.5 px-3 py-2.5 text-sm hover:bg-slate-50 transition ${!activePatient ? "bg-blue-50" : ""}`}
+                      >
+                        <UserCircle className={`h-4 w-4 flex-shrink-0 ${!activePatient ? "text-blue-600" : "text-slate-400"}`} />
+                        <div className="text-left min-w-0">
+                          <p className={`font-medium truncate ${!activePatient ? "text-blue-700" : "text-slate-800"}`}>
+                            My Profile
+                          </p>
+                          <p className="text-xs text-slate-400">Self</p>
+                        </div>
+                        {!activePatient && <Check className="h-4 w-4 text-blue-600 ml-auto flex-shrink-0" />}
+                      </button>
+                      {/* Dependents */}
+                      {familyMembers.map((m) => (
+                        <button
+                          key={m.id}
+                          onClick={() => handleSwitchProfile(m)}
+                          className={`flex w-full items-center gap-2.5 px-3 py-2.5 text-sm hover:bg-slate-50 transition ${activePatient?.id === m.id ? "bg-blue-50" : ""}`}
+                        >
+                          <Baby className={`h-4 w-4 flex-shrink-0 ${activePatient?.id === m.id ? "text-blue-600" : "text-slate-400"}`} />
+                          <div className="text-left min-w-0">
+                            <p className={`font-medium truncate ${activePatient?.id === m.id ? "text-blue-700" : "text-slate-800"}`}>
+                              {m.name}
+                            </p>
+                            <p className="text-xs text-slate-400 capitalize">{m.relationship_type.replace(/_/g, " ")}</p>
+                          </div>
+                          {activePatient?.id === m.id && <Check className="h-4 w-4 text-blue-600 ml-auto flex-shrink-0" />}
+                        </button>
+                      ))}
+                    </div>
+                  </>
+                )}
+              </div>
+            )}
+
             {/* Notifications */}
             <Link to="/notifications" className="relative text-slate-500 hover:text-slate-700">
               <Bell className="h-5 w-5" />

@@ -55,7 +55,7 @@ class Patient(BaseModel):
 
     # Contact
     email: Mapped[Optional[str]] = mapped_column(String(255), nullable=True, index=True)
-    phone: Mapped[str] = mapped_column(String(20), nullable=False, index=True)
+    phone: Mapped[Optional[str]] = mapped_column(String(20), nullable=True, index=True)
     alternate_phone: Mapped[Optional[str]] = mapped_column(String(20), nullable=True)
 
     # Address

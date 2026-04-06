@@ -45,11 +45,13 @@ interface ConfirmDialog {
 }
 
 export default function AppointmentsPage() {
-  const { user } = useSelector((s: RootState) => s.auth);
+  const { user, activePatient } = useSelector((s: RootState) => s.auth);
   const dispatch = useDispatch<AppDispatch>();
   const isPatient = user?.role === 'patient';
 
-  const [date, setDate] = useState(() => new Date().toISOString().slice(0, 10));
+  const today = new Date().toISOString().slice(0, 10);
+  // Single date picker: when set shows only that day; when empty shows all
+  const [dateFilter, setDateFilter] = useState(() => today);
   const [status, setStatus] = useState('');
   const [page, setPage] = useState(0);
   const [confirm, setConfirm] = useState<ConfirmDialog | null>(null);
@@ -67,12 +69,24 @@ export default function AppointmentsPage() {
     error: (message: string) => dispatch(addToast({ id: Date.now().toString(), type: 'error', message, duration: 5000 })),
   };
 
+  // For patient role: use the navbar-selected family profile, or fall back to self
+  const activePatientId = isPatient
+    ? (activePatient?.id ?? user?.patient_id ?? undefined)
+    : undefined;
+
   const { data, isLoading } = useQuery({
-    queryKey: ['appointments', date, status, page],
+    queryKey: ['appointments', dateFilter, status, page, activePatientId],
     queryFn: () =>
       api
         .get('/appointments/', {
-          params: { date_from: date, date_to: date, status: status || undefined, page: page + 1, page_size: limit },
+          params: {
+            date_from: dateFilter || undefined,
+            date_to: dateFilter || undefined,
+            status: status || undefined,
+            page: page + 1,
+            page_size: limit,
+            ...(isPatient && activePatientId ? { patient_id: activePatientId } : {}),
+          },
         })
         .then((r) => r.data),
   });
@@ -185,12 +199,16 @@ export default function AppointmentsPage() {
     }
   };
 
-  const today = new Date().toISOString().slice(0, 10);
-
   return (
     <div>
       <div className="page-header">
-        <h1 className="page-title">{isPatient ? 'My Appointments' : 'Appointments'}</h1>
+        <h1 className="page-title">
+          {isPatient
+            ? activePatient
+              ? `${activePatient.name}'s Appointments`
+              : 'My Appointments'
+            : 'Appointments'}
+        </h1>
         <Link to="/appointments/new" className="btn-primary">
           <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
@@ -203,7 +221,28 @@ export default function AppointmentsPage() {
       <div className="card p-4 mb-6 flex flex-wrap gap-3 items-end">
         <div>
           <label className="label">Date</label>
-          <input type="date" className="input" value={date} onChange={(e) => setDate(e.target.value)} />
+          <input
+            type="date"
+            className="input"
+            value={dateFilter}
+            onChange={(e) => { setDateFilter(e.target.value); setPage(0); }}
+          />
+        </div>
+        <div className="flex gap-2 pt-5">
+          <button
+            className={`btn-secondary py-1.5 px-3 text-sm ${dateFilter === today ? 'ring-2 ring-primary-500' : ''}`}
+            onClick={() => { setDateFilter(today); setPage(0); }}
+          >
+            Today
+          </button>
+          {dateFilter && (
+            <button
+              className="btn-secondary py-1.5 px-3 text-sm text-gray-500"
+              onClick={() => { setDateFilter(''); setPage(0); }}
+            >
+              All dates
+            </button>
+          )}
         </div>
         <div>
           <label className="label">Status</label>

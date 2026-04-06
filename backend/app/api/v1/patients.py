@@ -8,8 +8,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
 from app.core.dependencies import get_current_user, CurrentUser, require_perm
-from app.core.exceptions import BadRequestException, NotFoundException, ConflictException
-from app.models.patient import Patient, EmergencyContact, PatientAllergy, ChronicCondition
+from app.core.exceptions import BadRequestException, NotFoundException, ConflictException, ForbiddenException
+from app.models.patient import Patient, EmergencyContact, PatientAllergy, ChronicCondition, PatientFamilyLink
 
 router = APIRouter()
 
@@ -52,28 +52,59 @@ def _generate_mrn(tenant_id: str) -> str:
 async def create_patient(
     body: dict,
     db: AsyncSession = Depends(get_db),
-    current_user: CurrentUser = Depends(require_perm("patients:create")),
+    current_user: CurrentUser = Depends(get_current_user),
 ):
-    """Register a new patient."""
-    # Required fields
-    required = ["first_name", "last_name", "date_of_birth", "gender", "phone"]
+    """Register a new patient.
+
+    Staff with patients:create can register any patient.
+    Patients with patients:create:family can register a new family member by
+    supplying link_to_patient_id equal to their own patient record's ID.
+    """
+    if current_user.has_permission("patients:create"):
+        pass  # full access
+    elif current_user.has_permission("patients:create:family"):
+        # Patient role: they must link the new record to their own patient record
+        link_to_patient_id = body.get("link_to_patient_id")
+        if not link_to_patient_id:
+            raise ForbiddenException(
+                detail="Patients may only register family members (link_to_patient_id required)"
+            )
+        # Verify link_to_patient_id resolves to the current user's own patient record
+        own_patient = await db.execute(
+            select(Patient).where(
+                Patient.user_id == current_user.user_id,
+                Patient.tenant_id == current_user.tenant_id,
+                Patient.is_deleted == False,
+            )
+        )
+        own = own_patient.scalar_one_or_none()
+        if not own or str(own.id) != str(link_to_patient_id):
+            raise ForbiddenException(
+                detail="link_to_patient_id must reference your own patient record"
+            )
+    else:
+        raise ForbiddenException(detail=f"Role '{current_user.role}' lacks permission 'patients:create'")
+
+    # Required fields (phone and email are optional for walk-in / on-behalf registrations)
+    required = ["first_name", "last_name", "date_of_birth", "gender"]
     for field in required:
         if not body.get(field):
             raise BadRequestException(detail=f"Missing required field: {field}")
 
-    # Check duplicate by phone
-    existing = await db.execute(
-        select(Patient).where(
-            Patient.phone == body["phone"],
-            Patient.tenant_id == current_user.tenant_id,
-            Patient.is_deleted == False,
+    # Check duplicate by phone only when provided
+    if body.get("phone"):
+        existing = await db.execute(
+            select(Patient).where(
+                Patient.phone == body["phone"],
+                Patient.tenant_id == current_user.tenant_id,
+                Patient.is_deleted == False,
+            )
         )
-    )
-    if existing.scalar_one_or_none():
-        raise ConflictException(
-            detail=f"A patient with phone {body['phone']} already exists. "
-                   "Please check for duplicate records."
-        )
+        if existing.scalar_one_or_none():
+            raise ConflictException(
+                detail=f"A patient with phone {body['phone']} already exists. "
+                       "Please check for duplicate records."
+            )
 
     # Check for potential duplicate by name + DOB (fuzzy duplicate detection)
     name_dob_check = await db.execute(
@@ -134,6 +165,27 @@ async def create_patient(
     )
     db.add(patient)
     await db.flush()
+
+    # Auto-link to an existing patient (e.g. patient booking for a family member)
+    link_to_patient_id = body.get("link_to_patient_id")
+    link_relationship_type = body.get("relationship_type", "child")
+    if link_to_patient_id:
+        head_result = await db.execute(
+            select(Patient).where(
+                Patient.id == link_to_patient_id,
+                Patient.tenant_id == current_user.tenant_id,
+                Patient.is_deleted == False,
+            )
+        )
+        if head_result.scalar_one_or_none():
+            family_link = PatientFamilyLink(
+                tenant_id=current_user.tenant_id,
+                patient_id=link_to_patient_id,
+                related_patient_id=patient.id,
+                relationship_type=link_relationship_type,
+                created_by=current_user.user_id,
+            )
+            db.add(family_link)
 
     # Add emergency contacts
     for ec_data in body.get("emergency_contacts", []):
@@ -248,6 +300,84 @@ async def get_my_patient_profile(
     ]
 
     return _success(data)
+
+
+@router.get("/me/family")
+async def get_my_family_members(
+    db: AsyncSession = Depends(get_db),
+    current_user: CurrentUser = Depends(get_current_user),
+):
+    """Return dependent/linked profiles for the currently authenticated patient."""
+    result = await db.execute(
+        select(Patient).where(
+            Patient.user_id == current_user.user_id,
+            Patient.tenant_id == current_user.tenant_id,
+            Patient.is_deleted == False,
+        )
+    )
+    patient = result.scalar_one_or_none()
+    if not patient:
+        return {"success": True, "data": [], "message": "No patient profile found"}
+
+    links_result = await db.execute(
+        select(PatientFamilyLink).where(
+            or_(
+                PatientFamilyLink.patient_id == patient.id,
+                PatientFamilyLink.related_patient_id == patient.id,
+            ),
+            PatientFamilyLink.is_deleted == False,
+        )
+    )
+    links = links_result.scalars().all()
+
+    INVERSE = {
+        "child": "parent", "parent": "child",
+        "spouse": "spouse", "sibling": "sibling",
+        "guardian": "ward", "ward": "guardian",
+    }
+
+    # Collect all other-side IDs to batch-fetch
+    other_ids = []
+    link_meta = []  # (other_patient_id, relationship_label)
+    for link in links:
+        if str(link.patient_id) == str(patient.id):
+            other_ids.append(link.related_patient_id)
+            link_meta.append((link.related_patient_id, link.relationship_type))
+        else:
+            other_ids.append(link.patient_id)
+            link_meta.append((link.patient_id, INVERSE.get(link.relationship_type, link.relationship_type)))
+
+    patient_rows = {}
+    if other_ids:
+        rows = (await db.execute(
+            select(Patient).where(
+                Patient.id.in_(other_ids),
+                Patient.is_deleted == False,
+            )
+        )).scalars().all()
+        patient_rows = {str(p.id): p for p in rows}
+
+    family = []
+    seen = set()
+    for other_id, rel in link_meta:
+        key = str(other_id)
+        if key in seen:
+            continue
+        seen.add(key)
+        dep = patient_rows.get(key)
+        if dep:
+            family.append({
+                "id": dep.id,
+                "mrn": dep.mrn,
+                "first_name": dep.first_name,
+                "last_name": dep.last_name,
+                "date_of_birth": dep.date_of_birth,
+                "gender": dep.gender,
+                "is_minor": dep.is_minor,
+                "relationship_type": rel,
+            })
+
+    return _success(family)
 
 
 @router.get("/{patient_id}")
@@ -365,10 +495,70 @@ async def search_patients(
     result = await db.execute(query)
     patients = result.scalars().all()
 
-    return _success(
-        [_patient_response(p) for p in patients],
-        meta={"total": total, "page": page, "page_size": page_size},
-    )
+    # Attach family members for this page — check both link directions
+    patient_ids = [p.id for p in patients]
+    patient_id_set = set(patient_ids)
+    family_map: dict = {pid: [] for pid in patient_ids}
+
+    INVERSE = {
+        "child": "parent", "parent": "child",
+        "spouse": "spouse", "sibling": "sibling",
+        "guardian": "ward", "ward": "guardian",
+    }
+
+    if patient_ids:
+        links_result = await db.execute(
+            select(PatientFamilyLink).where(
+                or_(
+                    PatientFamilyLink.patient_id.in_(patient_ids),
+                    PatientFamilyLink.related_patient_id.in_(patient_ids),
+                )
+            )
+        )
+        links = links_result.scalars().all()
+
+        # Collect all "other" patient IDs we need to look up
+        other_ids = list({
+            lnk.related_patient_id if lnk.patient_id in patient_id_set else lnk.patient_id
+            for lnk in links
+        })
+        other_map: dict = {}
+        if other_ids:
+            rel_result = await db.execute(
+                select(Patient).where(Patient.id.in_(other_ids), Patient.is_deleted == False)
+            )
+            other_map = {rp.id: rp for rp in rel_result.scalars()}
+
+        for lnk in links:
+            # Determine which side is the "head" (in our page) and which is the dependent
+            if lnk.patient_id in patient_id_set:
+                head_id = lnk.patient_id
+                dep_id = lnk.related_patient_id
+                rel = lnk.relationship_type
+            else:
+                head_id = lnk.related_patient_id
+                dep_id = lnk.patient_id
+                rel = INVERSE.get(lnk.relationship_type, lnk.relationship_type)
+
+            dep = other_map.get(dep_id)
+            if dep:
+                family_map[head_id].append({
+                    "id": dep.id,
+                    "mrn": dep.mrn,
+                    "name": f"{dep.first_name} {dep.last_name}",
+                    "relationship_type": rel,
+                    "is_minor": dep.is_minor,
+                    "date_of_birth": dep.date_of_birth,
+                    "gender": dep.gender,
+                })
+
+    rows = []
+    for p in patients:
+        row = _patient_response(p)
+        row["family_members"] = family_map.get(p.id, [])
+        rows.append(row)
+
+    return _success(rows, meta={"total": total, "page": page, "page_size": page_size})
 
 
 # ── Update Patient ───────────────────────────────────────────────
@@ -405,3 +595,152 @@ async def update_patient(
     await db.commit()
 
     return _success(_patient_response(patient), message="Patient updated")
+
+
+# ── Family Links (Admin) ─────────────────────────────────────────────────────
+
+@router.get("/{patient_id}/family")
+async def list_patient_family_links(
+    patient_id: str,
+    db: AsyncSession = Depends(get_db),
+    current_user: CurrentUser = Depends(require_perm("patients:read")),
+):
+    """List all family links for a patient (admin view)."""
+    result = await db.execute(
+        select(Patient).where(
+            Patient.id == patient_id,
+            Patient.tenant_id == current_user.tenant_id,
+            Patient.is_deleted == False,
+        )
+    )
+    if not result.scalar_one_or_none():
+        raise NotFoundException(detail="Patient not found")
+
+    # Fetch links in both directions
+    links_result = await db.execute(
+        select(PatientFamilyLink).where(
+            or_(
+                PatientFamilyLink.patient_id == patient_id,
+                PatientFamilyLink.related_patient_id == patient_id,
+            )
+        )
+    )
+    links = links_result.scalars().all()
+
+    # Collect the "other" patient ID for each link
+    other_ids = list({
+        (lnk.related_patient_id if lnk.patient_id == patient_id else lnk.patient_id)
+        for lnk in links
+    })
+
+    other_map: dict = {}
+    if other_ids:
+        others_result = await db.execute(
+            select(Patient).where(Patient.id.in_(other_ids), Patient.is_deleted == False)
+        )
+        other_map = {p.id: p for p in others_result.scalars()}
+
+    INVERSE = {
+        "child": "parent", "parent": "child",
+        "spouse": "spouse", "sibling": "sibling",
+        "guardian": "ward", "ward": "guardian",
+    }
+
+    family = []
+    for link in links:
+        if link.patient_id == patient_id:
+            other_id = link.related_patient_id
+            rel = link.relationship_type
+        else:
+            other_id = link.patient_id
+            rel = INVERSE.get(link.relationship_type, link.relationship_type)
+
+        dep = other_map.get(other_id)
+        if dep:
+            family.append({
+                "link_id": link.id,
+                "patient_id": dep.id,
+                "mrn": dep.mrn,
+                "first_name": dep.first_name,
+                "last_name": dep.last_name,
+                "date_of_birth": dep.date_of_birth,
+                "gender": dep.gender,
+                "is_minor": dep.is_minor,
+                "relationship_type": rel,
+            })
+
+    return _success(family)
+
+
+@router.post("/{patient_id}/family")
+async def add_patient_family_link(
+    patient_id: str,
+    body: dict,
+    db: AsyncSession = Depends(get_db),
+    current_user: CurrentUser = Depends(require_perm("patients:update")),
+):
+    """Link two patients as family members."""
+    related_patient_id = body.get("related_patient_id")
+    relationship_type = body.get("relationship_type")
+
+    if not related_patient_id or not relationship_type:
+        raise BadRequestException(detail="related_patient_id and relationship_type are required")
+
+    if patient_id == related_patient_id:
+        raise BadRequestException(detail="Cannot link a patient to themselves")
+
+    for pid in [patient_id, related_patient_id]:
+        r = await db.execute(
+            select(Patient).where(
+                Patient.id == pid,
+                Patient.tenant_id == current_user.tenant_id,
+                Patient.is_deleted == False,
+            )
+        )
+        if not r.scalar_one_or_none():
+            raise NotFoundException(detail=f"Patient {pid} not found")
+
+    existing = await db.execute(
+        select(PatientFamilyLink).where(
+            PatientFamilyLink.patient_id == patient_id,
+            PatientFamilyLink.related_patient_id == related_patient_id,
+        )
+    )
+    if existing.scalar_one_or_none():
+        raise ConflictException(detail="This family link already exists")
+
+    link = PatientFamilyLink(
+        tenant_id=current_user.tenant_id,
+        patient_id=patient_id,
+        related_patient_id=related_patient_id,
+        relationship_type=relationship_type,
+        created_by=current_user.user_id,
+    )
+    db.add(link)
+    await db.commit()
+
+    return _success({"link_id": link.id}, message="Family link created")
+
+
+@router.delete("/{patient_id}/family/{link_id}")
+async def remove_patient_family_link(
+    patient_id: str,
+    link_id: str,
+    db: AsyncSession = Depends(get_db),
+    current_user: CurrentUser = Depends(require_perm("patients:update")),
+):
+    """Remove a family link."""
+    result = await db.execute(
+        select(PatientFamilyLink).where(
+            PatientFamilyLink.id == link_id,
+            PatientFamilyLink.patient_id == patient_id,
+        )
+    )
+    link = result.scalar_one_or_none()
+    if not link:
+        raise NotFoundException(detail="Family link not found")
+
+    await db.delete(link)
+    await db.commit()
+
+    return _success(None, message="Family link removed")

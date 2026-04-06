@@ -175,6 +175,7 @@ ROLE_PERMISSIONS: Dict[str, set] = {
     },
     "patient": {
         "patients:read:own",
+        "patients:create:family",
         "appointments:read:own", "appointments:create", "appointments:cancel:own",
         "medical_records:read:own",
         "prescriptions:read:own",

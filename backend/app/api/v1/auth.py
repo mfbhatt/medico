@@ -174,6 +174,28 @@ async def login(
         patient_row = (await db.execute(
             select(PatientModel).where(PatientModel.user_id == user.id)
         )).scalar_one_or_none()
+
+        if not patient_row:
+            # Try to claim an admin-created Patient record with matching email or phone
+            filters = []
+            if user.email:
+                filters.append(PatientModel.email == user.email)
+            if user.phone:
+                filters.append(PatientModel.phone == user.phone)
+            if filters:
+                from sqlalchemy import or_ as _or
+                patient_row = (await db.execute(
+                    select(PatientModel).where(
+                        _or(*filters),
+                        PatientModel.user_id == None,
+                        PatientModel.tenant_id == ut.tenant_id,
+                        PatientModel.is_deleted == False,
+                    )
+                )).scalar_one_or_none()
+                if patient_row:
+                    patient_row.user_id = user.id
+                    await db.commit()
+
         if patient_row:
             user_dict["patient_id"] = patient_row.id
 
@@ -314,9 +336,8 @@ async def verify_otp(
                 db.add(ut)
                 await db.flush()
 
-    await db.commit()
-
     if not ut:
+        await db.commit()
         return _success(
             {
                 "access_token": None,
@@ -325,6 +346,49 @@ async def verify_otp(
                 "user": {"id": user.id, "phone": user.phone},
             }
         )
+
+    # Ensure a Patient record exists for this user (may be missing for OTP-only registrations)
+    from app.models.patient import Patient as PatientModel
+    otp_patient = (await db.execute(
+        select(PatientModel).where(PatientModel.user_id == user.id)
+    )).scalar_one_or_none()
+    if not otp_patient:
+        # Try to claim an admin-created Patient record with the same phone
+        if user.phone:
+            otp_patient = (await db.execute(
+                select(PatientModel).where(
+                    PatientModel.phone == user.phone,
+                    PatientModel.user_id == None,
+                    PatientModel.tenant_id == ut.tenant_id,
+                    PatientModel.is_deleted == False,
+                )
+            )).scalar_one_or_none()
+            if otp_patient:
+                otp_patient.user_id = user.id
+                await db.flush()
+
+    if not otp_patient:
+        import uuid as _uuid
+        from app.models.tenant import Tenant
+        tenant_row = (await db.execute(
+            select(Tenant).where(Tenant.id == ut.tenant_id)
+        )).scalar_one_or_none()
+        mrn_prefix = (tenant_row.id[:3].upper() if tenant_row else "PAT")
+        mrn = f"{mrn_prefix}-{_uuid.uuid4().hex[:8].upper()}"
+        otp_patient = PatientModel(
+            user_id=user.id,
+            tenant_id=ut.tenant_id,
+            mrn=mrn,
+            first_name=user.first_name if user.first_name and user.first_name != "Patient" else "Patient",
+            last_name=user.last_name or "",
+            phone=user.phone or "",
+            date_of_birth="1900-01-01",
+            gender="unknown",
+        )
+        db.add(otp_patient)
+        await db.flush()
+
+    await db.commit()
 
     access_token, refresh_token = _issue_tokens(user, ut)
 
@@ -336,13 +400,8 @@ async def verify_otp(
         "last_name": user.last_name,
         "role": ut.role,
         "tenant_id": ut.tenant_id,
+        "patient_id": otp_patient.id,
     }
-    from app.models.patient import Patient as PatientModel
-    otp_patient = (await db.execute(
-        select(PatientModel).where(PatientModel.user_id == user.id)
-    )).scalar_one_or_none()
-    if otp_patient:
-        otp_user_dict["patient_id"] = otp_patient.id
 
     return _success(
         {

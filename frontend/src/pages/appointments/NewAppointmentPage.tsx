@@ -1,7 +1,7 @@
-import { useState } from "react";
+import { useState, useRef, useEffect } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { Calendar, Clock, AlertCircle, Lock, CreditCard, Banknote } from "lucide-react";
+import { Calendar, Clock, AlertCircle, Lock, CreditCard, Banknote, Search, X } from "lucide-react";
 import { useSelector } from "react-redux";
 import { RootState } from "@/store";
 import api from "@/services/api";
@@ -10,12 +10,17 @@ export default function NewAppointmentPage() {
   const navigate = useNavigate();
   const qc = useQueryClient();
   const [searchParams] = useSearchParams();
-  const { user } = useSelector((s: RootState) => s.auth);
+  const { user, activePatient } = useSelector((s: RootState) => s.auth);
   const isPatient = user?.role === "patient";
 
+  // For patients: use the active profile (dependent) if selected, otherwise self
   const prefillPatientId = isPatient
-    ? (user?.patient_id ?? "")
+    ? (activePatient?.id ?? user?.patient_id ?? "")
     : (searchParams.get("patient_id") ?? "");
+
+  const prefillPatientLabel = isPatient && activePatient
+    ? activePatient.name
+    : (isPatient ? (user?.full_name ?? `${user?.first_name ?? ""} ${user?.last_name ?? ""}`.trim()) : "");
 
   const [form, setForm] = useState({
     patientId: prefillPatientId,
@@ -30,12 +35,90 @@ export default function NewAppointmentPage() {
 
   const cls = "w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500";
 
-  const { data: patientsData } = useQuery({
-    queryKey: ["patients-search"],
-    queryFn: () => api.get("/patients/", { params: { limit: 100 } }).then((r) => r.data.data),
-    enabled: !isPatient,
+  // Patient autocomplete state
+  const [patientQuery, setPatientQuery] = useState("");
+  const [patientLabel, setPatientLabel] = useState("");
+  const [showPatientDropdown, setShowPatientDropdown] = useState(false);
+  const patientRef = useRef<HTMLDivElement>(null);
+
+  // Fetch existing family members for patient role
+  const { data: familyData } = useQuery({
+    queryKey: ["my-family-members"],
+    queryFn: () => api.get("/patients/me/family").then((r) => r.data.data ?? []),
+    enabled: isPatient,
+    staleTime: 60_000,
   });
-  const patients = patientsData?.patients ?? patientsData ?? [];
+  const familyMembers: Array<{ id: string; first_name: string; last_name: string; relationship_type: string; is_minor: boolean }> =
+    familyData ?? [];
+
+  // Inline new-patient registration
+  const [showRegisterForm, setShowRegisterForm] = useState(false);
+  const [registerForm, setRegisterForm] = useState({
+    first_name: "", last_name: "", date_of_birth: "", gender: "", phone: "", email: "",
+  });
+  const [registerRelType, setRegisterRelType] = useState("child");
+  const [registerError, setRegisterError] = useState<string | null>(null);
+  const [registerLoading, setRegisterLoading] = useState(false);
+
+  const handleRegisterPatient = async () => {
+    setRegisterError(null);
+    setRegisterLoading(true);
+    try {
+      const payload: any = { ...registerForm };
+      // For patients: auto-link the new patient as a family member
+      if (isPatient && user?.patient_id) {
+        payload.link_to_patient_id = user.patient_id;
+        payload.relationship_type = registerRelType;
+      }
+      const res = await api.post("/patients/", payload);
+      const created = res.data?.data;
+      if (created?.id) {
+        const name = `${registerForm.first_name} ${registerForm.last_name}`.trim();
+        set("patientId", created.id);
+        setPatientLabel(name);
+        setShowRegisterForm(false);
+        setRegisterForm({ first_name: "", last_name: "", date_of_birth: "", gender: "", phone: "", email: "" });
+        setRegisterRelType("child");
+        // Refresh family members list so the new member appears in the selector
+        qc.invalidateQueries({ queryKey: ["my-family-members"] });
+      }
+    } catch (err: any) {
+      const code = err?.response?.data?.error_code;
+      if (code === "POTENTIAL_DUPLICATE") {
+        const d = err.response.data.data;
+        setRegisterError(
+          `A patient with the same name and date of birth already exists (MRN: ${d.existing_mrn}). Search for them above instead.`
+        );
+      } else {
+        setRegisterError(err?.response?.data?.message ?? "Failed to register patient");
+      }
+    } finally {
+      setRegisterLoading(false);
+    }
+  };
+
+  const { data: patientResults, isFetching: searchingPatients } = useQuery({
+    queryKey: ["patients-search", patientQuery],
+    queryFn: () =>
+      api.get("/patients/", { params: { q: patientQuery, page_size: 20 } }).then((r) => {
+        const raw = r.data.data;
+        return Array.isArray(raw) ? raw : raw?.patients ?? [];
+      }),
+    enabled: !isPatient && patientQuery.trim().length >= 3,
+    staleTime: 10_000,
+  });
+  const patientResults_ = patientResults ?? [];
+
+  // Close dropdown on outside click
+  useEffect(() => {
+    function handleClick(e: MouseEvent) {
+      if (patientRef.current && !patientRef.current.contains(e.target as Node)) {
+        setShowPatientDropdown(false);
+      }
+    }
+    document.addEventListener("mousedown", handleClick);
+    return () => document.removeEventListener("mousedown", handleClick);
+  }, []);
 
   const { data: doctorsData } = useQuery({
     queryKey: ["doctors-list"],
@@ -50,7 +133,7 @@ export default function NewAppointmentPage() {
   const clinics = clinicsData?.clinics ?? clinicsData ?? [];
 
   const [bookingError, setBookingError] = useState<string | null>(null);
-  const [bookedApptId, setBookedApptId] = useState<string | null>(null);
+  const [, setBookedApptId] = useState<string | null>(null);
   const [paymentChoice, setPaymentChoice] = useState<"razorpay" | "pay_later">("pay_later");
   const [paying, setPaying] = useState(false);
 
@@ -195,17 +278,340 @@ export default function NewAppointmentPage() {
         <div>
           <label className="block text-sm font-medium text-slate-700 mb-1">Patient *</label>
           {isPatient ? (
-            <div className={`${cls} bg-slate-50 text-slate-700 flex items-center gap-2 cursor-default`}>
-              <Lock className="h-3.5 w-3.5 text-slate-400 flex-shrink-0" />
-              {user?.full_name ?? `${user?.first_name ?? ""} ${user?.last_name ?? ""}`.trim()}
+            <div className="space-y-3">
+              {/* "Book for" selector: self + existing family members + register new */}
+              <div className="flex flex-wrap gap-2">
+                {/* Self */}
+                <button
+                  type="button"
+                  onClick={() => {
+                    set("patientId", user?.patient_id ?? "");
+                    setPatientLabel("");
+                    setShowRegisterForm(false);
+                    setRegisterError(null);
+                  }}
+                  className={`px-3 py-1.5 rounded-full text-sm font-medium border transition ${
+                    form.patientId === (user?.patient_id ?? "") && !showRegisterForm
+                      ? "bg-blue-600 text-white border-blue-600"
+                      : "bg-white text-slate-700 border-slate-300 hover:border-blue-400"
+                  }`}
+                >
+                  {`${user?.first_name ?? ""} ${user?.last_name ?? ""}`.trim() || "Myself"}
+                  <span className="ml-1.5 text-[10px] opacity-70">(You)</span>
+                </button>
+
+                {/* Existing family members */}
+                {familyMembers.map((fm) => (
+                  <button
+                    key={fm.id}
+                    type="button"
+                    onClick={() => {
+                      set("patientId", fm.id);
+                      setPatientLabel(`${fm.first_name} ${fm.last_name}`);
+                      setShowRegisterForm(false);
+                      setRegisterError(null);
+                    }}
+                    className={`px-3 py-1.5 rounded-full text-sm font-medium border transition ${
+                      form.patientId === fm.id && !showRegisterForm
+                        ? "bg-blue-600 text-white border-blue-600"
+                        : "bg-white text-slate-700 border-slate-300 hover:border-blue-400"
+                    }`}
+                  >
+                    {`${fm.first_name} ${fm.last_name}`}
+                    <span className="ml-1.5 text-[10px] opacity-70 capitalize">({fm.relationship_type.replace(/_/g, " ")})</span>
+                  </button>
+                ))}
+
+                {/* Register new */}
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowRegisterForm(true);
+                    set("patientId", user?.patient_id ?? "");
+                    setPatientLabel("");
+                    setRegisterError(null);
+                    setRegisterForm({ first_name: "", last_name: "", date_of_birth: "", gender: "", phone: "", email: "" });
+                  }}
+                  className={`px-3 py-1.5 rounded-full text-sm font-medium border transition ${
+                    showRegisterForm
+                      ? "bg-blue-600 text-white border-blue-600"
+                      : "bg-white text-slate-700 border-slate-300 hover:border-blue-400"
+                  }`}
+                >
+                  + Register new family member
+                </button>
+              </div>
+
+              {/* Selected patient display */}
+              {!showRegisterForm && (
+                <div className={`${cls} bg-slate-50 text-slate-700 flex items-center gap-2 cursor-default`}>
+                  <Lock className="h-3.5 w-3.5 text-slate-400 flex-shrink-0" />
+                  <span>{patientLabel || prefillPatientLabel || `${user?.first_name ?? ""} ${user?.last_name ?? ""}`.trim()}</span>
+                </div>
+              )}
+
+              {/* Inline family member registration */}
+              {showRegisterForm && (
+                <div className="mt-1 border border-blue-200 bg-blue-50 rounded-xl p-4 space-y-3">
+                  <p className="text-sm font-semibold text-blue-900">Register New Family Member</p>
+
+                  {registerError && (
+                    <div className="bg-red-50 border border-red-200 text-red-700 px-3 py-2 rounded-lg text-xs flex gap-2">
+                      <AlertCircle className="h-3.5 w-3.5 flex-shrink-0 mt-0.5" />
+                      <span>{registerError}</span>
+                    </div>
+                  )}
+
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="block text-xs font-medium text-slate-600 mb-1">First Name *</label>
+                      <input type="text" value={registerForm.first_name} required
+                        onChange={(e) => setRegisterForm((p) => ({ ...p, first_name: e.target.value }))}
+                        className={cls} placeholder="First name" />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-medium text-slate-600 mb-1">Last Name *</label>
+                      <input type="text" value={registerForm.last_name} required
+                        onChange={(e) => setRegisterForm((p) => ({ ...p, last_name: e.target.value }))}
+                        className={cls} placeholder="Last name" />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-medium text-slate-600 mb-1">Date of Birth *</label>
+                      <input type="date" value={registerForm.date_of_birth} required
+                        max={new Date().toISOString().slice(0, 10)}
+                        onChange={(e) => setRegisterForm((p) => ({ ...p, date_of_birth: e.target.value }))}
+                        className={cls} />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-medium text-slate-600 mb-1">Gender *</label>
+                      <select value={registerForm.gender} required
+                        onChange={(e) => setRegisterForm((p) => ({ ...p, gender: e.target.value }))}
+                        className={cls}>
+                        <option value="">Select…</option>
+                        <option value="male">Male</option>
+                        <option value="female">Female</option>
+                        <option value="other">Other</option>
+                      </select>
+                    </div>
+                    <div>
+                      <label className="block text-xs font-medium text-slate-600 mb-1">Mobile Number</label>
+                      <input type="tel" value={registerForm.phone}
+                        onChange={(e) => setRegisterForm((p) => ({ ...p, phone: e.target.value }))}
+                        className={cls} placeholder="Optional" />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-medium text-slate-600 mb-1">Email</label>
+                      <input type="email" value={registerForm.email}
+                        onChange={(e) => setRegisterForm((p) => ({ ...p, email: e.target.value }))}
+                        className={cls} placeholder="Optional" />
+                    </div>
+                    <div className="col-span-2">
+                      <label className="block text-xs font-medium text-slate-600 mb-1">Their relationship to you *</label>
+                      <select value={registerRelType} onChange={(e) => setRegisterRelType(e.target.value)} className={cls}>
+                        <option value="child">Child</option>
+                        <option value="parent">Parent</option>
+                        <option value="spouse">Spouse</option>
+                        <option value="sibling">Sibling</option>
+                        <option value="guardian">Guardian</option>
+                      </select>
+                    </div>
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={handleRegisterPatient}
+                    disabled={registerLoading || !registerForm.first_name || !registerForm.last_name || !registerForm.date_of_birth || !registerForm.gender}
+                    className="w-full bg-blue-600 hover:bg-blue-700 disabled:bg-blue-400 text-white text-sm font-medium py-2 rounded-lg transition"
+                  >
+                    {registerLoading ? "Registering…" : "Register & Book for Them"}
+                  </button>
+                </div>
+              )}
             </div>
           ) : (
-            <select value={form.patientId} onChange={(e) => set("patientId", e.target.value)} required className={cls}>
-              <option value="">Select patient…</option>
-              {patients.map((p: any) => (
-                <option key={p.id} value={p.id}>{p.first_name} {p.last_name} ({p.mrn ?? p.id.slice(0, 8)})</option>
-              ))}
-            </select>
+            <>
+            <div ref={patientRef} className="relative">
+              <div className="relative">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400 pointer-events-none" />
+                <input
+                  type="text"
+                  value={patientLabel || patientQuery}
+                  placeholder="Search by name, mobile or email…"
+                  className={`${cls} pl-9 pr-8`}
+                  onFocus={() => {
+                    if (form.patientId) {
+                      // allow re-search after a selection
+                      setPatientLabel("");
+                      set("patientId", "");
+                    }
+                    setShowPatientDropdown(true);
+                  }}
+                  onChange={(e) => {
+                    setPatientLabel("");
+                    set("patientId", "");
+                    setPatientQuery(e.target.value);
+                    setShowPatientDropdown(true);
+                  }}
+                />
+                {(patientLabel || patientQuery) && (
+                  <button
+                    type="button"
+                    className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
+                    onClick={() => {
+                      setPatientLabel("");
+                      setPatientQuery("");
+                      set("patientId", "");
+                      setShowPatientDropdown(false);
+                    }}
+                  >
+                    <X className="h-3.5 w-3.5" />
+                  </button>
+                )}
+              </div>
+
+              {/* Hidden required validation anchor */}
+              <input type="hidden" value={form.patientId} required />
+
+              {showPatientDropdown && patientQuery.trim().length >= 3 && (
+                <div className="absolute z-50 top-full left-0 right-0 mt-1 bg-white border border-slate-200 rounded-lg shadow-lg max-h-60 overflow-y-auto">
+                  {searchingPatients ? (
+                    <div className="px-4 py-3 text-sm text-slate-400">Searching…</div>
+                  ) : patientResults_.length === 0 ? (
+                    <div className="px-4 py-3 text-sm text-slate-400">No patients found</div>
+                  ) : (
+                    patientResults_.map((p: any) => {
+                      const name = `${p.first_name ?? ""} ${p.last_name ?? ""}`.trim();
+                      const phone = p.phone ?? p.mobile ?? "";
+                      const email = p.email ?? "";
+                      const mrn = p.mrn ?? p.id?.slice(0, 8);
+                      return (
+                        <button
+                          key={p.id}
+                          type="button"
+                          className="w-full text-left px-4 py-2.5 hover:bg-blue-50 flex flex-col gap-0.5 border-b border-slate-100 last:border-0"
+                          onMouseDown={() => {
+                            set("patientId", p.id);
+                            setPatientLabel(name);
+                            setPatientQuery("");
+                            setShowPatientDropdown(false);
+                          }}
+                        >
+                          <span className="text-sm font-semibold text-slate-900">{name}</span>
+                          <span className="text-xs text-slate-500 flex items-center gap-3">
+                            {phone && <span>📱 {phone}</span>}
+                            {email && <span>✉ {email}</span>}
+                            {mrn && <span className="font-mono text-slate-400">#{mrn}</span>}
+                          </span>
+                        </button>
+                      );
+                    })
+                  )}
+                </div>
+              )}
+
+              {patientQuery.trim().length > 0 && patientQuery.trim().length < 3 && (
+                <p className="mt-1 text-xs text-slate-400">Type at least 3 characters to search</p>
+              )}
+              {form.patientId && patientLabel && (
+                <p className="mt-1 text-xs text-emerald-600 font-medium">✓ {patientLabel} selected</p>
+              )}
+            </div>
+
+            {/* Register new patient toggle */}
+            <label className="mt-2 flex items-center gap-2 cursor-pointer w-fit">
+              <input
+                type="checkbox"
+                checked={showRegisterForm}
+                onChange={(e) => {
+                  setShowRegisterForm(e.target.checked);
+                  setRegisterError(null);
+                  if (e.target.checked) setShowPatientDropdown(false);
+                }}
+                className="h-4 w-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500"
+              />
+              <span className="text-sm text-slate-600">Register a new patient</span>
+            </label>
+
+            {/* Inline patient registration form */}
+            {showRegisterForm && (
+              <div className="mt-3 border border-blue-200 bg-blue-50 rounded-xl p-4 space-y-3">
+                <p className="text-sm font-semibold text-blue-900 mb-1">Register New Patient</p>
+
+                {registerError && (
+                  <div className="bg-red-50 border border-red-200 text-red-700 px-3 py-2 rounded-lg text-xs flex gap-2">
+                    <AlertCircle className="h-3.5 w-3.5 flex-shrink-0 mt-0.5" />
+                    <span>{registerError}</span>
+                  </div>
+                )}
+
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-xs font-medium text-slate-600 mb-1">First Name *</label>
+                    <input
+                      type="text" value={registerForm.first_name} required
+                      onChange={(e) => setRegisterForm((p) => ({ ...p, first_name: e.target.value }))}
+                      className={cls} placeholder="First name"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-slate-600 mb-1">Last Name *</label>
+                    <input
+                      type="text" value={registerForm.last_name} required
+                      onChange={(e) => setRegisterForm((p) => ({ ...p, last_name: e.target.value }))}
+                      className={cls} placeholder="Last name"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-slate-600 mb-1">Date of Birth *</label>
+                    <input
+                      type="date" value={registerForm.date_of_birth} required
+                      max={new Date().toISOString().slice(0, 10)}
+                      onChange={(e) => setRegisterForm((p) => ({ ...p, date_of_birth: e.target.value }))}
+                      className={cls}
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-slate-600 mb-1">Gender *</label>
+                    <select
+                      value={registerForm.gender} required
+                      onChange={(e) => setRegisterForm((p) => ({ ...p, gender: e.target.value }))}
+                      className={cls}
+                    >
+                      <option value="">Select…</option>
+                      <option value="male">Male</option>
+                      <option value="female">Female</option>
+                      <option value="other">Other</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-slate-600 mb-1">Mobile Number</label>
+                    <input
+                      type="tel" value={registerForm.phone}
+                      onChange={(e) => setRegisterForm((p) => ({ ...p, phone: e.target.value }))}
+                      className={cls} placeholder="Optional"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-slate-600 mb-1">Email</label>
+                    <input
+                      type="email" value={registerForm.email}
+                      onChange={(e) => setRegisterForm((p) => ({ ...p, email: e.target.value }))}
+                      className={cls} placeholder="Optional"
+                    />
+                  </div>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={handleRegisterPatient}
+                  disabled={registerLoading || !registerForm.first_name || !registerForm.last_name || !registerForm.date_of_birth || !registerForm.gender}
+                  className="w-full bg-blue-600 hover:bg-blue-700 disabled:bg-blue-400 text-white text-sm font-medium py-2 rounded-lg transition"
+                >
+                  {registerLoading ? "Registering…" : "Register & Select Patient"}
+                </button>
+              </div>
+            )}
+            </>
           )}
         </div>
 

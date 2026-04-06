@@ -1,9 +1,34 @@
-import { useState } from 'react';
+import { Fragment, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
-import { Download } from 'lucide-react';
+import { Download, Users } from 'lucide-react';
 import api from '@/services/api';
 import { useDebounce } from '@/hooks/useDebounce';
+
+interface FamilyMember {
+  id: string;
+  mrn: string;
+  name: string;
+  relationship_type: string;
+  is_minor: boolean;
+  date_of_birth: string;
+  gender: string;
+}
+
+interface Patient {
+  id: string;
+  mrn: string;
+  first_name: string;
+  last_name: string;
+  date_of_birth: string;
+  age: number;
+  gender: string;
+  phone: string;
+  email: string;
+  is_deceased: boolean;
+  is_minor: boolean;
+  family_members: FamilyMember[];
+}
 
 function exportPatientsCSV(patients: any[]) {
   const headers = ['MRN', 'First Name', 'Last Name', 'DOB', 'Age', 'Gender', 'Phone', 'Email'];
@@ -36,8 +61,14 @@ export default function PatientsPage() {
         .then((r) => r.data),
   });
 
-  const patients = data?.data ?? [];
+  const allPatients = data?.data ?? [];
   const meta = data?.meta ?? {};
+
+  // Collect all IDs that appear as family sub-rows so we don't render them twice
+  const subRowIds = new Set<string>(
+    allPatients.flatMap((p: Patient) => (p.family_members ?? []).map((fm) => fm.id))
+  );
+  const patients = allPatients.filter((p: Patient) => !subRowIds.has(p.id));
 
   return (
     <div>
@@ -97,46 +128,98 @@ export default function PatientsPage() {
             ) : patients.length === 0 ? (
               <tr><td colSpan={6} className="text-center py-12 text-gray-400">No patients found</td></tr>
             ) : (
-              patients.map((p: {
-                id: string;
-                mrn: string;
-                first_name: string;
-                last_name: string;
-                date_of_birth: string;
-                age: number;
-                gender: string;
-                phone: string;
-                email: string;
-                is_deceased: boolean;
-              }) => (
-                <tr key={p.id} className="hover:bg-gray-50 transition-colors">
-                  <td className="px-4 py-3 font-mono text-xs text-gray-500">{p.mrn}</td>
-                  <td className="px-4 py-3">
-                    <p className={`font-medium ${p.is_deceased ? 'line-through text-gray-400' : 'text-gray-900'}`}>
-                      {p.first_name} {p.last_name}
-                    </p>
-                    {p.is_deceased && <span className="badge-gray text-xs">Deceased</span>}
-                  </td>
-                  <td className="px-4 py-3 text-gray-600">
-                    {p.date_of_birth} <span className="text-gray-400">({p.age}y)</span>
-                  </td>
-                  <td className="px-4 py-3 text-gray-600 capitalize">{p.gender}</td>
-                  <td className="px-4 py-3">
-                    <p className="text-gray-900">{p.phone}</p>
-                    {p.email && <p className="text-xs text-gray-400">{p.email}</p>}
-                  </td>
-                  <td className="px-4 py-3 text-right space-x-2">
-                    <Link to={`/patients/${p.id}`} className="text-primary-600 hover:text-primary-800 text-sm font-medium">
-                      View
-                    </Link>
-                    <Link
-                      to={`/appointments/new?patient_id=${p.id}`}
-                      className="text-green-600 hover:text-green-800 text-sm font-medium"
+              patients.map((p: Patient) => (
+                <Fragment key={p.id}>
+                  {/* Primary patient row */}
+                  <tr
+                    className={`transition-colors ${
+                      p.family_members?.length > 0
+                        ? 'bg-blue-50/40 hover:bg-blue-50/70 border-b-0'
+                        : 'hover:bg-gray-50'
+                    }`}
+                  >
+                    <td className={`py-3 font-mono text-xs text-gray-500 ${p.family_members?.length > 0 ? 'pl-3 pr-4 border-l-4 border-l-blue-500' : 'px-4'}`}>{p.mrn}</td>
+                    <td className="px-4 py-3">
+                      <div className="flex items-center gap-2">
+                        <p className={`font-medium ${p.is_deceased ? 'line-through text-gray-400' : 'text-gray-900'}`}>
+                          {p.first_name} {p.last_name}
+                        </p>
+                        {p.is_minor && (
+                          <span className="text-[10px] bg-amber-100 text-amber-700 px-1.5 py-0.5 rounded-full font-medium">Minor</span>
+                        )}
+                        {p.is_deceased && (
+                          <span className="text-[10px] bg-gray-100 text-gray-500 px-1.5 py-0.5 rounded-full font-medium">Deceased</span>
+                        )}
+                        {p.family_members?.length > 0 && (
+                          <span className="flex items-center gap-1 text-[10px] bg-blue-50 text-blue-600 px-1.5 py-0.5 rounded-full font-medium border border-blue-100">
+                            <Users className="w-2.5 h-2.5" />
+                            {p.family_members.length} linked
+                          </span>
+                        )}
+                      </div>
+                    </td>
+                    <td className="px-4 py-3 text-gray-600">
+                      {p.date_of_birth} <span className="text-gray-400">({p.age}y)</span>
+                    </td>
+                    <td className="px-4 py-3 text-gray-600 capitalize">{p.gender}</td>
+                    <td className="px-4 py-3">
+                      <p className="text-gray-900">{p.phone}</p>
+                      {p.email && <p className="text-xs text-gray-400">{p.email}</p>}
+                    </td>
+                    <td className="px-4 py-3 text-right space-x-2">
+                      <Link to={`/patients/${p.id}`} className="text-primary-600 hover:text-primary-800 text-sm font-medium">
+                        View
+                      </Link>
+                      <Link
+                        to={`/appointments/new?patient_id=${p.id}`}
+                        className="text-green-600 hover:text-green-800 text-sm font-medium"
+                      >
+                        Book
+                      </Link>
+                    </td>
+                  </tr>
+
+                  {/* Family member sub-rows */}
+                  {p.family_members?.map((fm, idx) => (
+                    <tr
+                      key={fm.id}
+                      className={`bg-blue-50/60 hover:bg-blue-100/70 transition-colors ${idx === p.family_members.length - 1 ? 'border-b-2 border-b-blue-200' : 'border-b-0'}`}
                     >
-                      Book
-                    </Link>
-                  </td>
-                </tr>
+                      <td className="pl-7 pr-4 py-2.5 font-mono text-xs text-gray-400 border-l-4 border-l-blue-300">{fm.mrn}</td>
+                      <td className="px-4 py-2.5">
+                        <div className="flex items-center gap-2">
+                          <span className="text-blue-300 text-sm select-none">└</span>
+                          <Link
+                            to={`/patients/${fm.id}`}
+                            className="text-sm text-gray-700 hover:text-primary-600 font-medium"
+                          >
+                            {fm.name}
+                          </Link>
+                          <span className="text-[10px] bg-white border border-blue-200 text-blue-600 px-1.5 py-0.5 rounded-full font-medium capitalize">
+                            {fm.relationship_type.replace(/_/g, ' ')}
+                          </span>
+                          {fm.is_minor && (
+                            <span className="text-[10px] bg-amber-100 text-amber-700 px-1.5 py-0.5 rounded-full font-medium">Minor</span>
+                          )}
+                        </div>
+                      </td>
+                      <td className="px-4 py-2.5 text-xs text-gray-500">{fm.date_of_birth}</td>
+                      <td className="px-4 py-2.5 text-xs text-gray-500 capitalize">{fm.gender}</td>
+                      <td className="px-4 py-2.5 text-xs text-gray-400">—</td>
+                      <td className="px-4 py-2.5 text-right space-x-2">
+                        <Link to={`/patients/${fm.id}`} className="text-primary-600 hover:text-primary-800 text-xs font-medium">
+                          View
+                        </Link>
+                        <Link
+                          to={`/appointments/new?patient_id=${fm.id}`}
+                          className="text-green-600 hover:text-green-800 text-xs font-medium"
+                        >
+                          Book
+                        </Link>
+                      </td>
+                    </tr>
+                  ))}
+                </Fragment>
               ))
             )}
           </tbody>
