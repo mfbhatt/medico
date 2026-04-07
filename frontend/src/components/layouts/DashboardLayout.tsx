@@ -35,8 +35,6 @@ import {
   UserCircle,
   Baby,
   BookOpen,
-  TrendingUp,
-  Scale,
 } from "lucide-react";
 import { RootState, AppDispatch } from "../../store";
 import { logout } from "../../store/slices/authSlice";
@@ -49,6 +47,7 @@ const SUPER_ADMIN_NAV = [
   { name: "All Clinics", href: "/admin/clinics", icon: Globe },
   { name: "System Users", href: "/admin/users", icon: Shield },
   { name: "Specializations", href: "/admin/specializations", icon: Stethoscope },
+  { name: "Accounting", href: "/accounting", icon: BookOpen },
   { name: "Analytics", href: "/analytics", icon: BarChart3 },
   { name: "Settings", href: "/settings", icon: Settings },
 ];
@@ -159,7 +158,7 @@ const ACCOUNTING_SUB_NAV = [
 ];
 
 function AccountingSubNav({ collapsed }: { collapsed: boolean }) {
-  const [open, setOpen] = useState(false);
+  const [open, setOpen] = useState(true);
   if (collapsed) return null;
   return (
     <div>
