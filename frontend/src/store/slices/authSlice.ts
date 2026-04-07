@@ -80,7 +80,8 @@ interface SwitchTenantPayload {
 
 export const switchTenantThunk = createAsyncThunk<LoginResponse, SwitchTenantPayload, { rejectValue: string }>("auth/switchTenant", async (payload, { rejectWithValue }) => {
   try {
-    const { data } = await import("../../services/api").then((m) => m.default.post("/auth/switch-tenant", { tenant_id: payload.tenant_id }));
+    const apiModule = await import("../../services/api");
+    const { data } = await apiModule.default.post("/auth/switch-tenant", { tenant_id: payload.tenant_id });
     const resp = data.data as LoginResponse;
     localStorage.setItem(STORAGE_KEYS.AUTH_TOKEN, resp.access_token);
     localStorage.setItem(STORAGE_KEYS.REFRESH_TOKEN, resp.refresh_token);
