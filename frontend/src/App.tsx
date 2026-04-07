@@ -86,15 +86,12 @@ import ARAgingPage from "./pages/accounting/ARAgingPage";
 
 /**
  * After login, redirect to role-appropriate home.
- * super_admin → /admin/dashboard
+ * super_admin → /admin/dashboard..
  * everyone else → /dashboard
  */
 function RoleBasedHome() {
   const { user } = useSelector((s: RootState) => s.auth);
-  const to =
-    user?.role === "super_admin" ? "/admin/dashboard" :
-    user?.role === "patient" ? "/appointments" :
-    "/dashboard";
+  const to = user?.role === "super_admin" ? "/admin/dashboard" : user?.role === "patient" ? "/appointments" : "/dashboard";
   return <Navigate to={to} replace />;
 }
 
@@ -123,14 +120,7 @@ export default function App() {
           <Route path="/home" element={<RoleBasedHome />} />
 
           {/* Dashboard — staff only; patients redirected to their appointments */}
-          <Route
-            element={
-              <ProtectedRoute
-                allowedRoles={["super_admin", "tenant_admin", "clinic_admin", "doctor", "nurse", "receptionist", "pharmacist", "lab_technician"]}
-                redirectTo="/appointments"
-              />
-            }
-          >
+          <Route element={<ProtectedRoute allowedRoles={["super_admin", "tenant_admin", "clinic_admin", "doctor", "nurse", "receptionist", "pharmacist", "lab_technician"]} redirectTo="/appointments" />}>
             <Route path="/dashboard" element={<DashboardPage />} />
           </Route>
 
@@ -173,16 +163,12 @@ export default function App() {
           <Route path="/telemedicine/:appointmentId" element={<TelemedicinePage />} />
 
           {/* Analytics (tenant_admin, clinic_admin, super_admin) */}
-          <Route
-            element={<ProtectedRoute allowedRoles={["super_admin", "tenant_admin", "clinic_admin"]} />}
-          >
+          <Route element={<ProtectedRoute allowedRoles={["super_admin", "tenant_admin", "clinic_admin"]} />}>
             <Route path="/analytics" element={<AnalyticsPage />} />
           </Route>
 
           {/* Accounting (tenant_admin, clinic_admin, super_admin) */}
-          <Route
-            element={<ProtectedRoute allowedRoles={["super_admin", "tenant_admin", "clinic_admin"]} />}
-          >
+          <Route element={<ProtectedRoute allowedRoles={["super_admin", "tenant_admin", "clinic_admin"]} />}>
             <Route path="/accounting" element={<AccountingDashboard />} />
             <Route path="/accounting/chart-of-accounts" element={<ChartOfAccountsPage />} />
             <Route path="/accounting/vouchers" element={<VoucherListPage />} />
@@ -206,11 +192,7 @@ export default function App() {
           </Route>
 
           {/* ── Admin shared (super_admin + tenant_admin + clinic_admin) ─── */}
-          <Route
-            element={
-              <ProtectedRoute allowedRoles={["super_admin", "tenant_admin", "clinic_admin"]} />
-            }
-          >
+          <Route element={<ProtectedRoute allowedRoles={["super_admin", "tenant_admin", "clinic_admin"]} />}>
             <Route path="/admin/clinics" element={<ClinicsPage />} />
             <Route path="/admin/users" element={<UsersPage />} />
             <Route path="/settings" element={<SettingsPage />} />
