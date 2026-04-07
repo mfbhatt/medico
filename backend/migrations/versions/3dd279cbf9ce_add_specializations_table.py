@@ -54,7 +54,7 @@ def upgrade() -> None:
     op.create_foreign_key(None, 'purchase_orders', 'tenants', ['tenant_id'], ['id'], ondelete='CASCADE')
     op.create_foreign_key(None, 'stock_batches', 'tenants', ['tenant_id'], ['id'], ondelete='CASCADE')
     op.create_foreign_key(None, 'stock_transactions', 'tenants', ['tenant_id'], ['id'], ondelete='CASCADE')
-    op.create_foreign_key(None, 'users', 'tenants', ['tenant_id'], ['id'], ondelete='CASCADE')
+    # users table has no tenant_id (users are tenant-free, linked via user_tenants)
     # ### end Alembic commands ###
 
 

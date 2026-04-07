@@ -94,6 +94,21 @@ async def create_invoice(
         )
         db.add(item)
 
+    # Auto-post sales voucher (DR AR / CR Revenue)
+    try:
+        from app.api.v1.accounting import post_invoice_voucher
+        await post_invoice_voucher(
+            tenant_id=current_user.tenant_id,
+            user_id=current_user.user_id,
+            invoice_id=invoice.id,
+            invoice_number=invoice_number,
+            items_data=items_data,
+            total=total,
+            db=db,
+        )
+    except Exception:
+        pass  # Accounting is non-blocking; billing must not fail because of it
+
     await db.commit()
 
     # Generate PDF in background
@@ -154,6 +169,21 @@ async def record_payment(
         invoice.status = InvoiceStatus.PAID
     else:
         invoice.status = InvoiceStatus.PARTIALLY_PAID
+
+    # Auto-post receipt voucher (DR Cash/Bank / CR AR)
+    try:
+        from app.api.v1.accounting import post_payment_voucher
+        await post_payment_voucher(
+            tenant_id=current_user.tenant_id,
+            user_id=current_user.user_id,
+            payment_id=payment.id,
+            invoice_number=invoice.invoice_number,
+            amount=amount,
+            payment_method=payment.payment_method,
+            db=db,
+        )
+    except Exception:
+        pass  # Accounting is non-blocking
 
     await db.commit()
 

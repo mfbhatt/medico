@@ -70,6 +70,20 @@ import SpecializationsPage from "./pages/admin/SpecializationsPage";
 // ─── Telemedicine ────────────────────────────────────────────────────────────
 import TelemedicinePage from "./pages/telemedicine/TelemedicinePage";
 
+// ─── Accounting ──────────────────────────────────────────────────────────────
+import AccountingDashboard from "./pages/accounting/AccountingDashboard";
+import ChartOfAccountsPage from "./pages/accounting/ChartOfAccountsPage";
+import VoucherEntryPage from "./pages/accounting/VoucherEntryPage";
+import VoucherListPage from "./pages/accounting/VoucherListPage";
+import VoucherDetailPage from "./pages/accounting/VoucherDetailPage";
+import DayBookPage from "./pages/accounting/DayBookPage";
+import LedgerPage from "./pages/accounting/LedgerPage";
+import TrialBalancePage from "./pages/accounting/TrialBalancePage";
+import ProfitLossPage from "./pages/accounting/ProfitLossPage";
+import BalanceSheetPage from "./pages/accounting/BalanceSheetPage";
+import CashBankBookPage from "./pages/accounting/CashBankBookPage";
+import ARAgingPage from "./pages/accounting/ARAgingPage";
+
 /**
  * After login, redirect to role-appropriate home.
  * super_admin → /admin/dashboard
@@ -163,6 +177,25 @@ export default function App() {
             element={<ProtectedRoute allowedRoles={["super_admin", "tenant_admin", "clinic_admin"]} />}
           >
             <Route path="/analytics" element={<AnalyticsPage />} />
+          </Route>
+
+          {/* Accounting (tenant_admin, clinic_admin, super_admin) */}
+          <Route
+            element={<ProtectedRoute allowedRoles={["super_admin", "tenant_admin", "clinic_admin"]} />}
+          >
+            <Route path="/accounting" element={<AccountingDashboard />} />
+            <Route path="/accounting/chart-of-accounts" element={<ChartOfAccountsPage />} />
+            <Route path="/accounting/vouchers" element={<VoucherListPage />} />
+            <Route path="/accounting/vouchers/new" element={<VoucherEntryPage />} />
+            <Route path="/accounting/vouchers/:id" element={<VoucherDetailPage />} />
+            <Route path="/accounting/vouchers/:id/edit" element={<VoucherEntryPage />} />
+            <Route path="/accounting/day-book" element={<DayBookPage />} />
+            <Route path="/accounting/ledger" element={<LedgerPage />} />
+            <Route path="/accounting/reports/trial-balance" element={<TrialBalancePage />} />
+            <Route path="/accounting/reports/profit-loss" element={<ProfitLossPage />} />
+            <Route path="/accounting/reports/balance-sheet" element={<BalanceSheetPage />} />
+            <Route path="/accounting/reports/cash-book" element={<CashBankBookPage />} />
+            <Route path="/accounting/reports/ar-aging" element={<ARAgingPage />} />
           </Route>
 
           {/* ── Super-admin only ─────────────────────────────────────────── */}

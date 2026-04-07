@@ -21,6 +21,7 @@ from app.api.v1 import (
     public,
     specializations,
     settings,
+    accounting,
 )
 
 api_router = APIRouter()
@@ -44,3 +45,4 @@ api_router.include_router(files.router, prefix="/files", tags=["Files"])
 api_router.include_router(public.router, prefix="/public", tags=["Public"])
 api_router.include_router(specializations.router, prefix="/specializations", tags=["Specializations"])
 api_router.include_router(settings.router, prefix="/settings", tags=["Settings"])
+api_router.include_router(accounting.router, prefix="/accounting", tags=["Accounting"])

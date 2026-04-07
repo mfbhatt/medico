@@ -18,16 +18,17 @@ depends_on: Union[str, Sequence[str], None] = None
 
 
 def upgrade() -> None:
-    op.create_table(
-        'platform_config',
-        sa.Column('id', sa.String(36), primary_key=True),
-        sa.Column('settings', sa.JSON(), nullable=False, server_default='{}'),
-        sa.Column('created_at', sa.String(50), nullable=True),
-        sa.Column('updated_at', sa.String(50), nullable=True),
-    )
-    # Seed the single default row
+    # Use raw SQL with IF NOT EXISTS — table may already exist if DB was created via create_all
+    op.execute("""
+        CREATE TABLE IF NOT EXISTS platform_config (
+            id VARCHAR(36) NOT NULL PRIMARY KEY,
+            settings JSON NOT NULL DEFAULT '{}',
+            created_at VARCHAR(50),
+            updated_at VARCHAR(50)
+        )
+    """)
     op.execute(
-        "INSERT INTO platform_config (id, settings) VALUES ('default', '{}')"
+        "INSERT INTO platform_config (id, settings) VALUES ('default', '{}') ON CONFLICT (id) DO NOTHING"
     )
 
 

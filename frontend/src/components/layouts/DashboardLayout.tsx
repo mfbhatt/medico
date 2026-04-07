@@ -34,6 +34,9 @@ import {
   Loader2,
   UserCircle,
   Baby,
+  BookOpen,
+  TrendingUp,
+  Scale,
 } from "lucide-react";
 import { RootState, AppDispatch } from "../../store";
 import { logout } from "../../store/slices/authSlice";
@@ -58,6 +61,7 @@ const TENANT_ADMIN_NAV = [
   { name: "Appointments", href: "/appointments", icon: Calendar },
   { name: "Staff & Users", href: "/admin/users", icon: UserCheck },
   { name: "Billing", href: "/billing", icon: CreditCard },
+  { name: "Accounting", href: "/accounting", icon: BookOpen },
   { name: "Analytics", href: "/analytics", icon: BarChart3 },
   { name: "Settings", href: "/settings", icon: Settings },
 ];
@@ -72,6 +76,7 @@ const OPERATIONAL_NAV = [
   { name: "Lab Reports", href: "/lab", icon: FlaskConical, roles: ["doctor", "lab_technician", "nurse"] },
   { name: "Billing", href: "/billing", icon: CreditCard, roles: ["receptionist", "clinic_admin"] },
   { name: "Pharmacy", href: "/pharmacy", icon: Package, roles: ["pharmacist", "clinic_admin"] },
+  { name: "Accounting", href: "/accounting", icon: BookOpen, roles: ["clinic_admin"] },
   { name: "Analytics", href: "/analytics", icon: BarChart3, roles: ["clinic_admin"] },
 ];
 
@@ -136,6 +141,56 @@ const ROLE_META: Record<string, { label: string; badgeClass: string; sidebarAcce
     sidebarAccent: "bg-emerald-600",
   },
 };
+
+// ─── Accounting sub-nav items ────────────────────────────────────────────────
+
+const ACCOUNTING_SUB_NAV = [
+  { name: "Dashboard", href: "/accounting" },
+  { name: "Chart of Accounts", href: "/accounting/chart-of-accounts" },
+  { name: "Voucher Entry", href: "/accounting/vouchers/new" },
+  { name: "All Vouchers", href: "/accounting/vouchers" },
+  { name: "Day Book", href: "/accounting/day-book" },
+  { name: "Ledger", href: "/accounting/ledger" },
+  { name: "Trial Balance", href: "/accounting/reports/trial-balance" },
+  { name: "Profit & Loss", href: "/accounting/reports/profit-loss" },
+  { name: "Balance Sheet", href: "/accounting/reports/balance-sheet" },
+  { name: "Cash / Bank Book", href: "/accounting/reports/cash-book" },
+  { name: "AR Aging", href: "/accounting/reports/ar-aging" },
+];
+
+function AccountingSubNav({ collapsed }: { collapsed: boolean }) {
+  const [open, setOpen] = useState(false);
+  if (collapsed) return null;
+  return (
+    <div>
+      <button
+        onClick={() => setOpen(o => !o)}
+        className="w-full flex items-center justify-between px-3 py-1.5 text-xs text-slate-400 hover:text-slate-200 font-semibold uppercase tracking-wider"
+      >
+        <span className="flex items-center gap-2"><BookOpen className="h-3.5 w-3.5" /> Accounting</span>
+        <ChevronDown className={`h-3.5 w-3.5 transition-transform ${open ? 'rotate-180' : ''}`} />
+      </button>
+      {open && (
+        <div className="ml-3 space-y-0.5 border-l border-slate-700 pl-3 mt-0.5">
+          {ACCOUNTING_SUB_NAV.map(item => (
+            <NavLink
+              key={item.href}
+              to={item.href}
+              end={item.href === '/accounting'}
+              className={({ isActive }) =>
+                `block px-2 py-1.5 rounded text-xs font-medium transition-colors ${
+                  isActive ? 'text-white bg-slate-700' : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800'
+                }`
+              }
+            >
+              {item.name}
+            </NavLink>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
 
 // ─── NavItem ─────────────────────────────────────────────────────────────────
 
@@ -275,7 +330,7 @@ export default function DashboardLayout() {
 
       {/* Sidebar */}
       <aside
-        className={`fixed inset-y-0 left-0 z-50 flex flex-col bg-slate-900 transition-all duration-300 lg:static lg:z-auto
+        className={`print:hidden fixed inset-y-0 left-0 z-50 flex flex-col bg-slate-900 transition-all duration-300 lg:static lg:z-auto
           ${sidebarOpen ? "w-64" : "-translate-x-full lg:translate-x-0"}
           ${sidebarCollapsed ? "lg:w-16" : "lg:w-64"}
         `}
@@ -330,6 +385,13 @@ export default function DashboardLayout() {
             <NavItem key={item.href} item={item} collapsed={sidebarCollapsed} accentClass={meta.sidebarAccent} />
           ))}
 
+          {/* Accounting sub-nav for admin roles */}
+          {(role === "tenant_admin" || role === "clinic_admin" || role === "super_admin") && (
+            <div className="pt-2">
+              <AccountingSubNav collapsed={sidebarCollapsed} />
+            </div>
+          )}
+
           {/* Extra admin items for clinic_admin */}
           {showClinicAdminExtra && (
             <>
@@ -371,7 +433,7 @@ export default function DashboardLayout() {
       {/* Main */}
       <div className="flex flex-1 flex-col overflow-hidden">
         {/* Topbar */}
-        <header className="flex h-16 items-center justify-between bg-white px-4 shadow-sm border-b border-slate-200 flex-shrink-0">
+        <header className="print:hidden flex h-16 items-center justify-between bg-white px-4 shadow-sm border-b border-slate-200 flex-shrink-0">
           <button
             onClick={() => setSidebarOpen(true)}
             className="lg:hidden text-slate-500 hover:text-slate-700"
