@@ -103,7 +103,6 @@ export default function ChartOfAccountsPage() {
   const [showGroupModal, setShowGroupModal] = useState(false);
   const [editAccount, setEditAccount] = useState<any>(null);
   const [editGroup, setEditGroup] = useState<any>(null);
-  const [selectedGroup, setSelectedGroup] = useState<any>(null);
   const [form, setForm] = useState<any>({});
 
   const toast = {
@@ -178,7 +177,6 @@ export default function ChartOfAccountsPage() {
   });
 
   const openAddAccount = (group: any) => {
-    setSelectedGroup(group);
     setEditAccount(null);
     setForm({ account_group_id: group.id, account_type: 'asset' });
     setShowAccountModal(true);
@@ -198,7 +196,7 @@ export default function ChartOfAccountsPage() {
           <button className="btn-secondary" onClick={() => { setEditGroup(null); setForm({ nature: 'dr' }); setShowGroupModal(true); }}>
             + Add Group
           </button>
-          <button className="btn-primary" onClick={() => { setSelectedGroup(null); setEditAccount(null); setForm({}); setShowAccountModal(true); }}>
+          <button className="btn-primary" onClick={() => { setEditAccount(null); setForm({}); setShowAccountModal(true); }}>
             + Add Account
           </button>
         </div>

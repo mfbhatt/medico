@@ -84,7 +84,7 @@ export default function VoucherEntryPage() {
 
   const saveMutation = useMutation({
     mutationFn: (data: any) => isEdit ? api.put(`/accounting/vouchers/${id}`, data) : api.post('/accounting/vouchers', data),
-    onSuccess: (res) => {
+    onSuccess: (_res) => {
       qc.invalidateQueries({ queryKey: ['accounting'] });
       toast.success(isEdit ? 'Voucher updated' : 'Voucher created');
       navigate('/accounting/vouchers');
