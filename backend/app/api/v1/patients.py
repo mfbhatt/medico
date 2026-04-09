@@ -558,6 +558,7 @@ async def search_patients(
             or_(
                 Patient.first_name.ilike(search),
                 Patient.last_name.ilike(search),
+                func.concat(Patient.first_name, " ", Patient.last_name).ilike(search),
                 Patient.phone.ilike(search),
                 Patient.email.ilike(search),
                 Patient.mrn.ilike(search),

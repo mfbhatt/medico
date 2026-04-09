@@ -4,6 +4,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { X, Search } from 'lucide-react';
 import api from '@/services/api';
 import Pagination from '@/components/ui/Pagination';
+import { useDebounce } from '@/hooks/useDebounce';
 
 const PAGE_SIZE = 20;
 
@@ -26,16 +27,14 @@ const INITIAL_FORM: AddDoctorForm = {
 };
 
 export default function DoctorsPage() {
-  const [searchInput, setSearchInput] = useState('');
   const [search, setSearch] = useState('');
+  const debouncedSearch = useDebounce(search, 300);
   const [specializationFilter, setSpecializationFilter] = useState('');
   const [page, setPage] = useState(1);
   const [addOpen, setAddOpen] = useState(false);
   const [addForm, setAddForm] = useState<AddDoctorForm>(INITIAL_FORM);
   const [addError, setAddError] = useState('');
   const qc = useQueryClient();
-
-  const handleSearch = () => { setSearch(searchInput); setPage(1); };
 
   // Fetch specialization catalog for dropdowns
   const { data: specsData } = useQuery({
@@ -47,12 +46,12 @@ export default function DoctorsPage() {
   const specializations = specsData ?? [];
 
   const { data: doctorsRaw, isLoading } = useQuery({
-    queryKey: ['doctors', search, specializationFilter, page],
+    queryKey: ['doctors', debouncedSearch, specializationFilter, page],
     queryFn: () =>
       api
         .get('/doctors/', {
           params: {
-            search: search || undefined,
+            search: debouncedSearch || undefined,
             specialization: specializationFilter || undefined,
             page,
             page_size: PAGE_SIZE,
@@ -129,15 +128,11 @@ export default function DoctorsPage() {
               type="text"
               className="input pl-9"
               placeholder="Doctor name, registration…"
-              value={searchInput}
-              onChange={(e) => setSearchInput(e.target.value)}
-              onKeyDown={(e) => e.key === 'Enter' && handleSearch()}
+              value={search}
+              onChange={(e) => { setSearch(e.target.value); setPage(1); }}
             />
           </div>
         </div>
-        <button onClick={handleSearch} className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 text-sm font-medium rounded-lg self-end">
-          Search
-        </button>
         <div>
           <label className="label">Specialization</label>
           <select

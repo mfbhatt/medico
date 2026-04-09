@@ -52,6 +52,9 @@ async def list_doctors(
             or_(
                 User.first_name.ilike(term),
                 User.last_name.ilike(term),
+                func.concat(User.first_name, " ", User.last_name).ilike(term),
+                User.email.ilike(term),
+                User.phone.ilike(term),
                 Doctor.registration_number.ilike(term),
             )
         )
