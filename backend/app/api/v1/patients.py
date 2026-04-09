@@ -1,5 +1,7 @@
 """Patient management endpoints."""
 import uuid
+import secrets
+import string
 from typing import Optional
 
 from fastapi import APIRouter, Depends, Query
@@ -9,7 +11,10 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.database import get_db
 from app.core.dependencies import get_current_user, CurrentUser, require_perm
 from app.core.exceptions import BadRequestException, NotFoundException, ConflictException, ForbiddenException
+from app.core.security import hash_password
 from app.models.patient import Patient, EmergencyContact, PatientAllergy, ChronicCondition, PatientFamilyLink
+from app.models.user import User, UserStatus
+from app.models.user_tenant import UserTenant
 
 router = APIRouter()
 
@@ -38,6 +43,12 @@ def _patient_response(p: Patient) -> dict:
         "is_deceased": p.is_deceased,
         "created_at": p.created_at.isoformat() if p.created_at else None,
     }
+
+
+def _generate_temp_password(length: int = 10) -> str:
+    """Generate a random temporary password: letters + digits."""
+    alphabet = string.ascii_letters + string.digits
+    return "".join(secrets.choice(alphabet) for _ in range(length))
 
 
 def _generate_mrn(tenant_id: str) -> str:
@@ -166,6 +177,65 @@ async def create_patient(
     db.add(patient)
     await db.flush()
 
+    # ── Auto-create a user account for the patient ────────────────────────────
+    # Only when staff (not a patient self-registering a family member) and the
+    # patient has an email or phone we can use as login identity.
+    temp_password: Optional[str] = None
+    if (
+        current_user.role in ("super_admin", "tenant_admin", "clinic_admin", "receptionist")
+        and (body.get("email") or body.get("phone"))
+        and not body.get("link_to_patient_id")  # skip for family-member sub-records
+    ):
+        login_email = body.get("email") or None
+        login_phone = body.get("phone") or None
+
+        # Check if a user with this email/phone already exists
+        existing_user_q = select(User).where(
+            (User.email == login_email) if login_email else (User.phone == login_phone)
+        )
+        existing_user = (await db.execute(existing_user_q)).scalar_one_or_none()
+
+        if existing_user is None:
+            temp_password = body.get("password") or _generate_temp_password()
+            new_user = User(
+                id=str(uuid.uuid4()),
+                email=login_email,
+                phone=login_phone,
+                first_name=body["first_name"],
+                last_name=body["last_name"],
+                middle_name=body.get("middle_name"),
+                gender=body.get("gender"),
+                date_of_birth=body["date_of_birth"],
+                password_hash=hash_password(temp_password),
+                is_email_verified=bool(login_email),
+                is_phone_verified=bool(login_phone and not login_email),
+            )
+            db.add(new_user)
+            await db.flush()  # get new_user.id
+
+            # Tenant membership with patient role
+            membership = UserTenant(
+                id=str(uuid.uuid4()),
+                user_id=new_user.id,
+                tenant_id=current_user.tenant_id,
+                role="patient",
+                status=UserStatus.ACTIVE,
+                created_by=current_user.user_id,
+            )
+            db.add(membership)
+
+            # Link user → patient
+            patient.user_id = new_user.id
+        else:
+            # User exists — just link if not already linked to a patient
+            existing_patient_q = select(Patient).where(
+                Patient.user_id == existing_user.id,
+                Patient.is_deleted == False,
+            )
+            already_linked = (await db.execute(existing_patient_q)).scalar_one_or_none()
+            if not already_linked:
+                patient.user_id = existing_user.id
+
     # Auto-link to an existing patient (e.g. patient booking for a family member)
     link_to_patient_id = body.get("link_to_patient_id")
     link_relationship_type = body.get("relationship_type", "child")
@@ -217,7 +287,15 @@ async def create_patient(
 
     await db.commit()
 
-    return _success(_patient_response(patient), message="Patient registered successfully")
+    response_data = _patient_response(patient)
+    if temp_password is not None:
+        response_data["login_credentials"] = {
+            "username": body.get("email") or body.get("phone"),
+            "temporary_password": temp_password,
+            "note": "Share these credentials with the patient. They should change their password on first login.",
+        }
+
+    return _success(response_data, message="Patient registered successfully")
 
 
 # ── Get Patient ──────────────────────────────────────────────────

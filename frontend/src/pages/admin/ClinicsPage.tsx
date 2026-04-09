@@ -6,6 +6,15 @@ import { useAppSelector } from "@/store/hooks";
 import Pagination from "@/components/ui/Pagination";
 import AddressFields, { type AddressValue } from "@/components/ui/AddressFields";
 import { useEnabledCountries } from "@/hooks/useEnabledCountries";
+import { ALL_COUNTRIES } from "@/utils/addressData";
+
+function resolveStateName(countryCode: string, stateCode: string): string {
+  if (!stateCode) return "";
+  const country = ALL_COUNTRIES.find((c) => c.code === countryCode);
+  if (!country || country.states.length === 0) return stateCode;
+  const state = country.states.find((s) => s.code === stateCode);
+  return state ? state.name : stateCode;
+}
 
 const PAGE_SIZE = 20;
 
@@ -133,7 +142,7 @@ export default function ClinicsPage() {
             {(c.address_line1 || c.city) && (
               <div className="flex items-start gap-2 text-sm text-slate-600 mb-2">
                 <MapPin className="h-4 w-4 flex-shrink-0 mt-0.5 text-slate-400" />
-                <span>{[c.address_line1, c.city, c.state].filter(Boolean).join(", ")}</span>
+                <span>{[c.address_line1, c.city, resolveStateName(c.country, c.state)].filter(Boolean).join(", ")}</span>
               </div>
             )}
 

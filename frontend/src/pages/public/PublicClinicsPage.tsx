@@ -1,6 +1,15 @@
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Link, useSearchParams } from "react-router-dom";
+import { ALL_COUNTRIES } from "@/utils/addressData";
+
+function resolveStateName(countryCode: string, stateCode: string): string {
+  if (!stateCode) return "";
+  const country = ALL_COUNTRIES.find((c) => c.code === countryCode);
+  if (!country || country.states.length === 0) return stateCode;
+  const state = country.states.find((s) => s.code === stateCode);
+  return state ? state.name : stateCode;
+}
 import {
   Search,
   MapPin,
@@ -19,6 +28,7 @@ interface PublicClinic {
   name: string;
   city: string;
   state: string;
+  country: string;
   address: string;
   phone?: string;
   email?: string;
@@ -168,7 +178,7 @@ export default function PublicClinicsPage() {
                       <div className="flex items-center gap-1 text-xs text-gray-500 mt-1">
                         <MapPin className="h-3 w-3 flex-shrink-0" />
                         <span className="truncate">
-                          {clinic.address}, {clinic.city}, {clinic.state}
+                          {clinic.address}, {clinic.city}, {resolveStateName(clinic.country, clinic.state)}
                         </span>
                       </div>
                     </div>

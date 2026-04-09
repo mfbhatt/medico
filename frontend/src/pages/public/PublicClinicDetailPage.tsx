@@ -3,6 +3,15 @@ import { useParams, Link, useNavigate } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { useSelector } from "react-redux";
 import axios from "axios";
+import { ALL_COUNTRIES } from "@/utils/addressData";
+
+function resolveStateName(countryCode: string, stateCode: string): string {
+  if (!stateCode) return "";
+  const country = ALL_COUNTRIES.find((c) => c.code === countryCode);
+  if (!country || country.states.length === 0) return stateCode;
+  const state = country.states.find((s) => s.code === stateCode);
+  return state ? state.name : stateCode;
+}
 import {
   Building2,
   MapPin,
@@ -215,7 +224,7 @@ export default function PublicClinicDetailPage() {
                   <MapPin className="h-4 w-4 flex-shrink-0" />
                   {clinic.address_line1}
                   {clinic.address_line2 ? `, ${clinic.address_line2}` : ""}, {clinic.city},{" "}
-                  {clinic.state}
+                  {resolveStateName(clinic.country, clinic.state)}
                 </div>
                 {clinic.phone && (
                   <div className="flex items-center gap-1 text-sm text-gray-500">

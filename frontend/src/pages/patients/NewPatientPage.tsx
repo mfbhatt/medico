@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useMutation } from "@tanstack/react-query";
-import { User, Phone, MapPin, FileText } from "lucide-react";
+import { User, Phone, MapPin, FileText, Copy, CheckCircle } from "lucide-react";
 import api from "@/services/api";
 import AddressFields, { type AddressValue } from "@/components/ui/AddressFields";
 import { useEnabledCountries } from "@/hooks/useEnabledCountries";
@@ -19,9 +19,17 @@ interface PatientForm {
   notes: string;
 }
 
+interface LoginCredentials {
+  username: string;
+  temporary_password: string;
+  note: string;
+}
+
 export default function NewPatientPage() {
   const navigate = useNavigate();
   const { countries } = useEnabledCountries();
+  const [credentials, setCredentials] = useState<LoginCredentials | null>(null);
+  const [copied, setCopied] = useState(false);
   const [form, setForm] = useState<PatientForm>({
     firstName: "", lastName: "", email: "", phone: "", dateOfBirth: "",
     gender: "", address: "",
@@ -50,8 +58,24 @@ export default function NewPatientPage() {
           : [],
         notes: data.notes || undefined,
       }),
-    onSuccess: () => navigate("/patients"),
+    onSuccess: (res) => {
+      const creds = res.data?.data?.login_credentials;
+      if (creds) {
+        setCredentials(creds);
+      } else {
+        navigate("/patients");
+      }
+    },
   });
+
+  const handleCopy = () => {
+    if (!credentials) return;
+    navigator.clipboard.writeText(
+      `Login: ${credentials.username}\nPassword: ${credentials.temporary_password}`
+    );
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  };
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
     const { name, value } = e.target;
@@ -59,6 +83,44 @@ export default function NewPatientPage() {
   };
 
   const cls = "w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500";
+
+  if (credentials) {
+    return (
+      <div className="max-w-lg mx-auto mt-16">
+        <div className="bg-white rounded-xl border border-slate-200 p-8 text-center space-y-5">
+          <div className="w-14 h-14 bg-green-100 rounded-full flex items-center justify-center mx-auto">
+            <CheckCircle className="h-8 w-8 text-green-600" />
+          </div>
+          <div>
+            <h2 className="text-xl font-bold text-slate-900">Patient Registered</h2>
+            <p className="text-sm text-slate-500 mt-1">A login account has been created. Share the credentials below with the patient.</p>
+          </div>
+          <div className="bg-slate-50 border border-slate-200 rounded-lg p-4 text-left space-y-2">
+            <div className="flex justify-between items-center text-sm">
+              <span className="text-slate-500 font-medium">Username</span>
+              <span className="font-mono text-slate-800">{credentials.username}</span>
+            </div>
+            <div className="flex justify-between items-center text-sm">
+              <span className="text-slate-500 font-medium">Temporary Password</span>
+              <span className="font-mono text-slate-800 font-semibold">{credentials.temporary_password}</span>
+            </div>
+          </div>
+          <p className="text-xs text-amber-600 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
+            {credentials.note}
+          </p>
+          <div className="flex gap-3 justify-center pt-1">
+            <button onClick={handleCopy} className="flex items-center gap-2 bg-slate-800 hover:bg-slate-700 text-white font-medium px-5 py-2.5 rounded-lg text-sm transition">
+              {copied ? <CheckCircle className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
+              {copied ? "Copied!" : "Copy Credentials"}
+            </button>
+            <button onClick={() => navigate("/patients")} className="bg-white hover:bg-slate-50 text-slate-700 border border-slate-200 font-medium px-5 py-2.5 rounded-lg text-sm transition">
+              Go to Patients
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="max-w-4xl mx-auto">

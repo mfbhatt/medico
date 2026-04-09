@@ -13,7 +13,10 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.database import get_db
 from app.core.dependencies import get_current_user, CurrentUser, require_perm
 from app.core.exceptions import BadRequestException, NotFoundException, ForbiddenException
-from app.models.accounting import AccountGroup, Account, Voucher, VoucherLine
+from app.models.accounting import (
+    AccountGroup, Account, Voucher, VoucherLine,
+    FiscalYear, BankReconciliation, Budget, BudgetLine,
+)
 
 router = APIRouter()
 
@@ -1507,3 +1510,805 @@ async def post_payment_voucher(
         narration=f"Invoice {invoice_number} cleared",
         created_by=user_id,
     ))
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+# FISCAL YEAR ENDPOINTS
+# ═══════════════════════════════════════════════════════════════════════════
+
+@router.get("/fiscal-years")
+async def list_fiscal_years(
+    db: AsyncSession = Depends(get_db),
+    current_user: CurrentUser = Depends(get_current_user),
+):
+    _require_admin(current_user)
+    rows = (await db.execute(
+        select(FiscalYear)
+        .where(FiscalYear.tenant_id == current_user.tenant_id, FiscalYear.is_deleted == False)
+        .order_by(FiscalYear.start_date.desc())
+    )).scalars().all()
+    return _success([{
+        "id": fy.id, "name": fy.name,
+        "start_date": fy.start_date, "end_date": fy.end_date,
+        "is_active": fy.is_active, "is_closed": fy.is_closed,
+        "created_at": fy.created_at.isoformat() if fy.created_at else None,
+    } for fy in rows])
+
+
+@router.post("/fiscal-years")
+async def create_fiscal_year(
+    body: dict,
+    db: AsyncSession = Depends(get_db),
+    current_user: CurrentUser = Depends(get_current_user),
+):
+    _require_admin(current_user)
+    for f in ("name", "start_date", "end_date"):
+        if not body.get(f):
+            raise BadRequestException(detail=f"Missing field: {f}")
+    fy = FiscalYear(
+        id=str(uuid.uuid4()),
+        tenant_id=current_user.tenant_id,
+        name=body["name"],
+        start_date=body["start_date"],
+        end_date=body["end_date"],
+        is_active=body.get("is_active", True),
+        created_by=current_user.user_id,
+    )
+    db.add(fy)
+    await db.commit()
+    return _success({"id": fy.id, "name": fy.name}, message="Fiscal year created")
+
+
+@router.put("/fiscal-years/{fy_id}")
+async def update_fiscal_year(
+    fy_id: str,
+    body: dict,
+    db: AsyncSession = Depends(get_db),
+    current_user: CurrentUser = Depends(get_current_user),
+):
+    _require_admin(current_user)
+    fy = (await db.execute(
+        select(FiscalYear).where(
+            FiscalYear.id == fy_id,
+            FiscalYear.tenant_id == current_user.tenant_id,
+            FiscalYear.is_deleted == False,
+        )
+    )).scalar_one_or_none()
+    if not fy:
+        raise NotFoundException(detail="Fiscal year not found")
+    if fy.is_closed:
+        raise BadRequestException(detail="Cannot modify a closed fiscal year")
+    for field in ("name", "start_date", "end_date", "is_active"):
+        if field in body:
+            setattr(fy, field, body[field])
+    fy.updated_by = current_user.user_id
+    await db.commit()
+    return _success({"id": fy.id}, message="Fiscal year updated")
+
+
+@router.post("/fiscal-years/{fy_id}/close")
+async def close_fiscal_year(
+    fy_id: str,
+    db: AsyncSession = Depends(get_db),
+    current_user: CurrentUser = Depends(get_current_user),
+):
+    """Mark the fiscal year as closed (no further vouchers can be posted to it)."""
+    _require_admin(current_user)
+    fy = (await db.execute(
+        select(FiscalYear).where(
+            FiscalYear.id == fy_id,
+            FiscalYear.tenant_id == current_user.tenant_id,
+            FiscalYear.is_deleted == False,
+        )
+    )).scalar_one_or_none()
+    if not fy:
+        raise NotFoundException(detail="Fiscal year not found")
+    fy.is_closed = True
+    fy.is_active = False
+    fy.updated_by = current_user.user_id
+    await db.commit()
+    return _success({"id": fy.id}, message="Fiscal year closed")
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+# GST REPORTS
+# ═══════════════════════════════════════════════════════════════════════════
+
+@router.get("/reports/gstr1")
+async def gstr1_report(
+    date_from: str,
+    date_to: str,
+    db: AsyncSession = Depends(get_db),
+    current_user: CurrentUser = Depends(get_current_user),
+):
+    """GSTR-1: Outward supplies (Sales vouchers with GST) by HSN/rate."""
+    _require_admin(current_user)
+    rows = (await db.execute(text("""
+        SELECT
+            v.voucher_number,
+            v.voucher_date,
+            v.party_gstin,
+            v.place_of_supply,
+            v.is_reverse_charge,
+            v.total_taxable_amount,
+            v.total_cgst,
+            v.total_sgst,
+            v.total_igst,
+            v.total_cess,
+            (v.total_taxable_amount + v.total_cgst + v.total_sgst + v.total_igst + v.total_cess) AS invoice_value,
+            vl.hsn_sac_code,
+            vl.gst_rate,
+            SUM(vl.taxable_amount) AS line_taxable,
+            SUM(vl.cgst_amount) AS line_cgst,
+            SUM(vl.sgst_amount) AS line_sgst,
+            SUM(vl.igst_amount) AS line_igst,
+            SUM(vl.cess_amount) AS line_cess
+        FROM vouchers v
+        JOIN voucher_lines vl ON vl.voucher_id = v.id AND vl.is_deleted = FALSE
+        WHERE v.tenant_id = :tid
+          AND v.voucher_type IN ('sales', 'credit_note', 'debit_note')
+          AND v.voucher_date >= :df
+          AND v.voucher_date <= :dt
+          AND v.is_deleted = FALSE
+          AND v.is_posted = TRUE
+        GROUP BY v.id, v.voucher_number, v.voucher_date, v.party_gstin,
+                 v.place_of_supply, v.is_reverse_charge,
+                 v.total_taxable_amount, v.total_cgst, v.total_sgst, v.total_igst, v.total_cess,
+                 vl.hsn_sac_code, vl.gst_rate
+        ORDER BY v.voucher_date, v.voucher_number
+    """), {"tid": current_user.tenant_id, "df": date_from, "dt": date_to})).mappings().all()
+
+    invoices = {}
+    for r in rows:
+        key = r["voucher_number"]
+        if key not in invoices:
+            invoices[key] = {
+                "voucher_number": r["voucher_number"],
+                "voucher_date": r["voucher_date"],
+                "party_gstin": r["party_gstin"],
+                "place_of_supply": r["place_of_supply"],
+                "is_reverse_charge": r["is_reverse_charge"],
+                "taxable_amount": float(r["total_taxable_amount"] or 0),
+                "cgst": float(r["total_cgst"] or 0),
+                "sgst": float(r["total_sgst"] or 0),
+                "igst": float(r["total_igst"] or 0),
+                "cess": float(r["total_cess"] or 0),
+                "invoice_value": float(r["invoice_value"] or 0),
+                "hsn_lines": [],
+            }
+        if r["hsn_sac_code"]:
+            invoices[key]["hsn_lines"].append({
+                "hsn_sac": r["hsn_sac_code"],
+                "gst_rate": float(r["gst_rate"] or 0),
+                "taxable": float(r["line_taxable"] or 0),
+                "cgst": float(r["line_cgst"] or 0),
+                "sgst": float(r["line_sgst"] or 0),
+                "igst": float(r["line_igst"] or 0),
+                "cess": float(r["line_cess"] or 0),
+            })
+
+    result_list = list(invoices.values())
+    totals = {
+        "taxable_amount": sum(i["taxable_amount"] for i in result_list),
+        "cgst": sum(i["cgst"] for i in result_list),
+        "sgst": sum(i["sgst"] for i in result_list),
+        "igst": sum(i["igst"] for i in result_list),
+        "cess": sum(i["cess"] for i in result_list),
+        "invoice_value": sum(i["invoice_value"] for i in result_list),
+        "invoice_count": len(result_list),
+    }
+    return _success({"invoices": result_list, "totals": totals,
+                     "period": {"from": date_from, "to": date_to}})
+
+
+@router.get("/reports/gstr3b")
+async def gstr3b_report(
+    date_from: str,
+    date_to: str,
+    db: AsyncSession = Depends(get_db),
+    current_user: CurrentUser = Depends(get_current_user),
+):
+    """GSTR-3B: Consolidated GST summary — outward supplies, ITC, and net liability."""
+    _require_admin(current_user)
+
+    # Outward supplies (sales)
+    outward = (await db.execute(text("""
+        SELECT
+            SUM(total_taxable_amount) AS taxable,
+            SUM(total_cgst) AS cgst,
+            SUM(total_sgst) AS sgst,
+            SUM(total_igst) AS igst,
+            SUM(total_cess) AS cess
+        FROM vouchers
+        WHERE tenant_id = :tid
+          AND voucher_type IN ('sales', 'debit_note')
+          AND voucher_date >= :df AND voucher_date <= :dt
+          AND is_deleted = FALSE AND is_posted = TRUE
+    """), {"tid": current_user.tenant_id, "df": date_from, "dt": date_to})).mappings().one()
+
+    # Credit notes (reduce outward)
+    credit = (await db.execute(text("""
+        SELECT
+            SUM(total_taxable_amount) AS taxable,
+            SUM(total_cgst) AS cgst,
+            SUM(total_sgst) AS sgst,
+            SUM(total_igst) AS igst,
+            SUM(total_cess) AS cess
+        FROM vouchers
+        WHERE tenant_id = :tid
+          AND voucher_type = 'credit_note'
+          AND voucher_date >= :df AND voucher_date <= :dt
+          AND is_deleted = FALSE AND is_posted = TRUE
+    """), {"tid": current_user.tenant_id, "df": date_from, "dt": date_to})).mappings().one()
+
+    # Input Tax Credit (from purchase vouchers)
+    itc = (await db.execute(text("""
+        SELECT
+            SUM(total_taxable_amount) AS taxable,
+            SUM(total_cgst) AS cgst,
+            SUM(total_sgst) AS sgst,
+            SUM(total_igst) AS igst,
+            SUM(total_cess) AS cess
+        FROM vouchers
+        WHERE tenant_id = :tid
+          AND voucher_type IN ('purchase', 'debit_note')
+          AND voucher_date >= :df AND voucher_date <= :dt
+          AND is_deleted = FALSE AND is_posted = TRUE
+    """), {"tid": current_user.tenant_id, "df": date_from, "dt": date_to})).mappings().one()
+
+    def _f(v): return float(v or 0)
+
+    out_taxable = _f(outward["taxable"]) - _f(credit["taxable"])
+    out_cgst = _f(outward["cgst"]) - _f(credit["cgst"])
+    out_sgst = _f(outward["sgst"]) - _f(credit["sgst"])
+    out_igst = _f(outward["igst"]) - _f(credit["igst"])
+    out_cess = _f(outward["cess"]) - _f(credit["cess"])
+
+    itc_cgst = _f(itc["cgst"])
+    itc_sgst = _f(itc["sgst"])
+    itc_igst = _f(itc["igst"])
+    itc_cess = _f(itc["cess"])
+
+    net_cgst = max(0, out_cgst - itc_cgst)
+    net_sgst = max(0, out_sgst - itc_sgst)
+    net_igst = max(0, out_igst - itc_igst)
+    net_cess = max(0, out_cess - itc_cess)
+
+    return _success({
+        "period": {"from": date_from, "to": date_to},
+        "outward_supplies": {
+            "taxable_amount": round(out_taxable, 2),
+            "cgst": round(out_cgst, 2),
+            "sgst": round(out_sgst, 2),
+            "igst": round(out_igst, 2),
+            "cess": round(out_cess, 2),
+            "total_tax": round(out_cgst + out_sgst + out_igst + out_cess, 2),
+        },
+        "input_tax_credit": {
+            "taxable_amount": round(_f(itc["taxable"]), 2),
+            "cgst": round(itc_cgst, 2),
+            "sgst": round(itc_sgst, 2),
+            "igst": round(itc_igst, 2),
+            "cess": round(itc_cess, 2),
+            "total_itc": round(itc_cgst + itc_sgst + itc_igst + itc_cess, 2),
+        },
+        "net_tax_liability": {
+            "cgst": round(net_cgst, 2),
+            "sgst": round(net_sgst, 2),
+            "igst": round(net_igst, 2),
+            "cess": round(net_cess, 2),
+            "total": round(net_cgst + net_sgst + net_igst + net_cess, 2),
+        },
+    })
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+# BANK RECONCILIATION ENDPOINTS
+# ═══════════════════════════════════════════════════════════════════════════
+
+@router.get("/reconciliation")
+async def list_reconciliation_lines(
+    account_id: str,
+    date_from: Optional[str] = None,
+    date_to: Optional[str] = None,
+    status: Optional[str] = None,
+    db: AsyncSession = Depends(get_db),
+    current_user: CurrentUser = Depends(get_current_user),
+):
+    """List bank statement lines for a given bank account."""
+    _require_admin(current_user)
+    q = select(BankReconciliation).where(
+        BankReconciliation.tenant_id == current_user.tenant_id,
+        BankReconciliation.account_id == account_id,
+        BankReconciliation.is_deleted == False,
+    )
+    if date_from:
+        q = q.where(BankReconciliation.statement_date >= date_from)
+    if date_to:
+        q = q.where(BankReconciliation.statement_date <= date_to)
+    if status:
+        q = q.where(BankReconciliation.status == status)
+    q = q.order_by(BankReconciliation.statement_date.desc())
+    rows = (await db.execute(q)).scalars().all()
+
+    # Fetch matched voucher lines for each recon line
+    result = []
+    for r in rows:
+        matched = (await db.execute(
+            select(VoucherLine).where(
+                VoucherLine.reconciliation_id == r.id,
+                VoucherLine.is_deleted == False,
+            )
+        )).scalars().all()
+        result.append({
+            "id": r.id,
+            "statement_date": r.statement_date,
+            "value_date": r.value_date,
+            "description": r.description,
+            "ref_number": r.ref_number,
+            "debit_amount": r.debit_amount,
+            "credit_amount": r.credit_amount,
+            "balance": r.balance,
+            "status": r.status,
+            "matched_lines": [{"voucher_line_id": ml.id, "voucher_id": ml.voucher_id,
+                                "debit_amount": ml.debit_amount, "credit_amount": ml.credit_amount}
+                               for ml in matched],
+        })
+    return _success(result)
+
+
+@router.post("/reconciliation/import")
+async def import_bank_statement(
+    body: dict,
+    db: AsyncSession = Depends(get_db),
+    current_user: CurrentUser = Depends(get_current_user),
+):
+    """Bulk-import bank statement lines (parsed CSV/JSON from frontend).
+    body: { account_id, lines: [{statement_date, description, ref_number, debit_amount, credit_amount, balance, value_date}] }
+    """
+    _require_admin(current_user)
+    account_id = body.get("account_id")
+    lines = body.get("lines", [])
+    if not account_id or not lines:
+        raise BadRequestException(detail="account_id and lines are required")
+
+    # Verify account belongs to tenant
+    acct = (await db.execute(
+        select(Account).where(Account.id == account_id, Account.tenant_id == current_user.tenant_id,
+                              Account.is_deleted == False)
+    )).scalar_one_or_none()
+    if not acct:
+        raise NotFoundException(detail="Account not found")
+
+    created = 0
+    skipped = 0
+    for line in lines:
+        # Skip duplicates (same account + date + ref)
+        ref = line.get("ref_number") or line.get("description", "")[:50]
+        existing = (await db.execute(
+            select(BankReconciliation).where(
+                BankReconciliation.tenant_id == current_user.tenant_id,
+                BankReconciliation.account_id == account_id,
+                BankReconciliation.statement_date == line.get("statement_date"),
+                BankReconciliation.ref_number == ref,
+                BankReconciliation.is_deleted == False,
+            )
+        )).scalar_one_or_none()
+        if existing:
+            skipped += 1
+            continue
+
+        recon = BankReconciliation(
+            id=str(uuid.uuid4()),
+            tenant_id=current_user.tenant_id,
+            account_id=account_id,
+            statement_date=line["statement_date"],
+            value_date=line.get("value_date"),
+            description=line.get("description", ""),
+            ref_number=ref,
+            debit_amount=float(line.get("debit_amount") or 0),
+            credit_amount=float(line.get("credit_amount") or 0),
+            balance=float(line["balance"]) if line.get("balance") is not None else None,
+            status="unmatched",
+            created_by=current_user.user_id,
+        )
+        db.add(recon)
+        created += 1
+
+    await db.commit()
+    return _success({"created": created, "skipped": skipped},
+                    message=f"Imported {created} lines, skipped {skipped} duplicates")
+
+
+@router.post("/reconciliation/{recon_id}/match")
+async def match_reconciliation_line(
+    recon_id: str,
+    body: dict,
+    db: AsyncSession = Depends(get_db),
+    current_user: CurrentUser = Depends(get_current_user),
+):
+    """Match a bank statement line to one or more voucher lines."""
+    _require_admin(current_user)
+    voucher_line_ids: list = body.get("voucher_line_ids", [])
+    if not voucher_line_ids:
+        raise BadRequestException(detail="voucher_line_ids required")
+
+    recon = (await db.execute(
+        select(BankReconciliation).where(
+            BankReconciliation.id == recon_id,
+            BankReconciliation.tenant_id == current_user.tenant_id,
+            BankReconciliation.is_deleted == False,
+        )
+    )).scalar_one_or_none()
+    if not recon:
+        raise NotFoundException(detail="Reconciliation line not found")
+
+    today = str(date_type.today())
+    for vl_id in voucher_line_ids:
+        vl = (await db.execute(
+            select(VoucherLine).where(
+                VoucherLine.id == vl_id,
+                VoucherLine.tenant_id == current_user.tenant_id,
+                VoucherLine.is_deleted == False,
+            )
+        )).scalar_one_or_none()
+        if vl:
+            vl.reconciliation_id = recon_id
+            vl.is_reconciled = True
+            vl.reconciled_date = today
+
+    recon.status = "matched"
+    recon.updated_by = current_user.user_id
+    await db.commit()
+    return _success({"recon_id": recon_id}, message="Lines matched successfully")
+
+
+@router.post("/reconciliation/{recon_id}/unmatch")
+async def unmatch_reconciliation_line(
+    recon_id: str,
+    db: AsyncSession = Depends(get_db),
+    current_user: CurrentUser = Depends(get_current_user),
+):
+    """Remove match from a reconciliation line."""
+    _require_admin(current_user)
+    recon = (await db.execute(
+        select(BankReconciliation).where(
+            BankReconciliation.id == recon_id,
+            BankReconciliation.tenant_id == current_user.tenant_id,
+            BankReconciliation.is_deleted == False,
+        )
+    )).scalar_one_or_none()
+    if not recon:
+        raise NotFoundException(detail="Not found")
+
+    # Clear matched lines
+    vlines = (await db.execute(
+        select(VoucherLine).where(
+            VoucherLine.reconciliation_id == recon_id,
+            VoucherLine.is_deleted == False,
+        )
+    )).scalars().all()
+    for vl in vlines:
+        vl.reconciliation_id = None
+        vl.is_reconciled = False
+        vl.reconciled_date = None
+
+    recon.status = "unmatched"
+    recon.updated_by = current_user.user_id
+    await db.commit()
+    return _success({"recon_id": recon_id}, message="Unmatched")
+
+
+@router.get("/reconciliation/summary")
+async def reconciliation_summary(
+    account_id: str,
+    date_from: str,
+    date_to: str,
+    db: AsyncSession = Depends(get_db),
+    current_user: CurrentUser = Depends(get_current_user),
+):
+    """Compare bank statement balance vs book balance for reconciliation."""
+    _require_admin(current_user)
+
+    # Bank statement totals
+    stmt = (await db.execute(text("""
+        SELECT
+            COUNT(*) AS total_lines,
+            SUM(CASE WHEN status != 'unmatched' THEN 1 ELSE 0 END) AS matched_lines,
+            SUM(debit_amount) AS stmt_debits,
+            SUM(credit_amount) AS stmt_credits,
+            MAX(balance) AS closing_balance
+        FROM bank_reconciliations
+        WHERE tenant_id = :tid AND account_id = :aid
+          AND statement_date >= :df AND statement_date <= :dt
+          AND is_deleted = FALSE
+    """), {"tid": current_user.tenant_id, "aid": account_id, "df": date_from, "dt": date_to})).mappings().one()
+
+    # Book (ledger) totals for same period
+    book = (await db.execute(text("""
+        SELECT
+            SUM(vl.debit_amount) AS book_debits,
+            SUM(vl.credit_amount) AS book_credits,
+            SUM(CASE WHEN vl.is_reconciled THEN vl.debit_amount ELSE 0 END) AS recon_debits,
+            SUM(CASE WHEN vl.is_reconciled THEN vl.credit_amount ELSE 0 END) AS recon_credits
+        FROM voucher_lines vl
+        JOIN vouchers v ON v.id = vl.voucher_id
+        WHERE vl.tenant_id = :tid AND vl.account_id = :aid
+          AND v.voucher_date >= :df AND v.voucher_date <= :dt
+          AND vl.is_deleted = FALSE AND v.is_deleted = FALSE AND v.is_posted = TRUE
+    """), {"tid": current_user.tenant_id, "aid": account_id, "df": date_from, "dt": date_to})).mappings().one()
+
+    def _f(v): return float(v or 0)
+
+    return _success({
+        "period": {"from": date_from, "to": date_to},
+        "statement": {
+            "total_lines": int(stmt["total_lines"] or 0),
+            "matched_lines": int(stmt["matched_lines"] or 0),
+            "unmatched_lines": int(stmt["total_lines"] or 0) - int(stmt["matched_lines"] or 0),
+            "debits": round(_f(stmt["stmt_debits"]), 2),
+            "credits": round(_f(stmt["stmt_credits"]), 2),
+            "closing_balance": round(_f(stmt["closing_balance"]), 2),
+        },
+        "book": {
+            "debits": round(_f(book["book_debits"]), 2),
+            "credits": round(_f(book["book_credits"]), 2),
+            "reconciled_debits": round(_f(book["recon_debits"]), 2),
+            "reconciled_credits": round(_f(book["recon_credits"]), 2),
+        },
+        "difference": round(
+            _f(stmt["stmt_credits"]) - _f(stmt["stmt_debits"]) -
+            (_f(book["book_credits"]) - _f(book["book_debits"])), 2
+        ),
+    })
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+# BUDGET ENDPOINTS
+# ═══════════════════════════════════════════════════════════════════════════
+
+@router.get("/budgets")
+async def list_budgets(
+    fiscal_year_id: Optional[str] = None,
+    db: AsyncSession = Depends(get_db),
+    current_user: CurrentUser = Depends(get_current_user),
+):
+    _require_admin(current_user)
+    q = select(Budget).where(
+        Budget.tenant_id == current_user.tenant_id,
+        Budget.is_deleted == False,
+    )
+    if fiscal_year_id:
+        q = q.where(Budget.fiscal_year_id == fiscal_year_id)
+    budgets = (await db.execute(q.order_by(Budget.created_at.desc()))).scalars().all()
+    result = []
+    for b in budgets:
+        fy = (await db.execute(
+            select(FiscalYear).where(FiscalYear.id == b.fiscal_year_id)
+        )).scalar_one_or_none()
+        result.append({
+            "id": b.id, "name": b.name,
+            "fiscal_year_id": b.fiscal_year_id,
+            "fiscal_year_name": fy.name if fy else None,
+            "is_active": b.is_active, "notes": b.notes,
+            "created_at": b.created_at.isoformat() if b.created_at else None,
+        })
+    return _success(result)
+
+
+@router.post("/budgets")
+async def create_budget(
+    body: dict,
+    db: AsyncSession = Depends(get_db),
+    current_user: CurrentUser = Depends(get_current_user),
+):
+    _require_admin(current_user)
+    for f in ("name", "fiscal_year_id"):
+        if not body.get(f):
+            raise BadRequestException(detail=f"Missing: {f}")
+    budget = Budget(
+        id=str(uuid.uuid4()),
+        tenant_id=current_user.tenant_id,
+        name=body["name"],
+        fiscal_year_id=body["fiscal_year_id"],
+        notes=body.get("notes"),
+        is_active=body.get("is_active", True),
+        created_by=current_user.user_id,
+    )
+    db.add(budget)
+    await db.flush()
+
+    # Create budget lines from body.lines: [{account_id, period_month, period_year, budgeted_amount}]
+    for line in body.get("lines", []):
+        db.add(BudgetLine(
+            id=str(uuid.uuid4()),
+            tenant_id=current_user.tenant_id,
+            budget_id=budget.id,
+            account_id=line["account_id"],
+            period_month=int(line["period_month"]),
+            period_year=int(line["period_year"]),
+            budgeted_amount=float(line.get("budgeted_amount", 0)),
+            notes=line.get("notes"),
+            created_by=current_user.user_id,
+        ))
+
+    await db.commit()
+    return _success({"id": budget.id}, message="Budget created")
+
+
+@router.get("/budgets/{budget_id}")
+async def get_budget(
+    budget_id: str,
+    db: AsyncSession = Depends(get_db),
+    current_user: CurrentUser = Depends(get_current_user),
+):
+    _require_admin(current_user)
+    budget = (await db.execute(
+        select(Budget).where(
+            Budget.id == budget_id,
+            Budget.tenant_id == current_user.tenant_id,
+            Budget.is_deleted == False,
+        )
+    )).scalar_one_or_none()
+    if not budget:
+        raise NotFoundException(detail="Budget not found")
+
+    lines = (await db.execute(
+        select(BudgetLine, Account).join(Account, Account.id == BudgetLine.account_id).where(
+            BudgetLine.budget_id == budget_id,
+            BudgetLine.is_deleted == False,
+        ).order_by(BudgetLine.period_year, BudgetLine.period_month)
+    )).all()
+
+    return _success({
+        "id": budget.id, "name": budget.name,
+        "fiscal_year_id": budget.fiscal_year_id,
+        "is_active": budget.is_active, "notes": budget.notes,
+        "lines": [{
+            "id": bl.id,
+            "account_id": bl.account_id,
+            "account_name": acct.name,
+            "account_code": acct.code,
+            "period_month": bl.period_month,
+            "period_year": bl.period_year,
+            "budgeted_amount": bl.budgeted_amount,
+            "notes": bl.notes,
+        } for bl, acct in lines],
+    })
+
+
+@router.put("/budgets/{budget_id}/lines")
+async def upsert_budget_lines(
+    budget_id: str,
+    body: dict,
+    db: AsyncSession = Depends(get_db),
+    current_user: CurrentUser = Depends(get_current_user),
+):
+    """Upsert budget lines for a budget. body: {lines: [{account_id, period_month, period_year, budgeted_amount}]}"""
+    _require_admin(current_user)
+    budget = (await db.execute(
+        select(Budget).where(
+            Budget.id == budget_id,
+            Budget.tenant_id == current_user.tenant_id,
+            Budget.is_deleted == False,
+        )
+    )).scalar_one_or_none()
+    if not budget:
+        raise NotFoundException(detail="Budget not found")
+
+    for line in body.get("lines", []):
+        existing = (await db.execute(
+            select(BudgetLine).where(
+                BudgetLine.budget_id == budget_id,
+                BudgetLine.account_id == line["account_id"],
+                BudgetLine.period_month == int(line["period_month"]),
+                BudgetLine.period_year == int(line["period_year"]),
+                BudgetLine.is_deleted == False,
+            )
+        )).scalar_one_or_none()
+        if existing:
+            existing.budgeted_amount = float(line.get("budgeted_amount", 0))
+            existing.notes = line.get("notes", existing.notes)
+            existing.updated_by = current_user.user_id
+        else:
+            db.add(BudgetLine(
+                id=str(uuid.uuid4()),
+                tenant_id=current_user.tenant_id,
+                budget_id=budget_id,
+                account_id=line["account_id"],
+                period_month=int(line["period_month"]),
+                period_year=int(line["period_year"]),
+                budgeted_amount=float(line.get("budgeted_amount", 0)),
+                notes=line.get("notes"),
+                created_by=current_user.user_id,
+            ))
+
+    await db.commit()
+    return _success({}, message="Budget lines saved")
+
+
+@router.get("/reports/budget-variance")
+async def budget_variance_report(
+    budget_id: str,
+    db: AsyncSession = Depends(get_db),
+    current_user: CurrentUser = Depends(get_current_user),
+):
+    """Compare actual spending vs budget for each account and month."""
+    _require_admin(current_user)
+    budget = (await db.execute(
+        select(Budget).where(
+            Budget.id == budget_id,
+            Budget.tenant_id == current_user.tenant_id,
+            Budget.is_deleted == False,
+        )
+    )).scalar_one_or_none()
+    if not budget:
+        raise NotFoundException(detail="Budget not found")
+
+    fy = (await db.execute(
+        select(FiscalYear).where(FiscalYear.id == budget.fiscal_year_id)
+    )).scalar_one_or_none()
+
+    # Get all budget lines
+    blines = (await db.execute(
+        select(BudgetLine, Account)
+        .join(Account, Account.id == BudgetLine.account_id)
+        .where(BudgetLine.budget_id == budget_id, BudgetLine.is_deleted == False)
+        .order_by(Account.name, BudgetLine.period_year, BudgetLine.period_month)
+    )).all()
+
+    # Get actuals for the fiscal year period
+    actuals_raw = (await db.execute(text("""
+        SELECT
+            vl.account_id,
+            EXTRACT(MONTH FROM TO_DATE(v.voucher_date, 'YYYY-MM-DD')) AS period_month,
+            EXTRACT(YEAR FROM TO_DATE(v.voucher_date, 'YYYY-MM-DD')) AS period_year,
+            SUM(vl.debit_amount - vl.credit_amount) AS net_amount
+        FROM voucher_lines vl
+        JOIN vouchers v ON v.id = vl.voucher_id
+        WHERE vl.tenant_id = :tid
+          AND v.voucher_date >= :sd AND v.voucher_date <= :ed
+          AND v.is_deleted = FALSE AND v.is_posted = TRUE
+          AND vl.is_deleted = FALSE
+        GROUP BY vl.account_id, period_month, period_year
+    """), {
+        "tid": current_user.tenant_id,
+        "sd": fy.start_date if fy else "2024-01-01",
+        "ed": fy.end_date if fy else "2024-12-31",
+    })).mappings().all()
+
+    # Index actuals by (account_id, month, year)
+    actuals = {}
+    for a in actuals_raw:
+        key = (str(a["account_id"]), int(a["period_month"]), int(a["period_year"]))
+        actuals[key] = float(a["net_amount"] or 0)
+
+    rows = []
+    for bl, acct in blines:
+        key = (bl.account_id, bl.period_month, bl.period_year)
+        actual = actuals.get(key, 0.0)
+        variance = actual - bl.budgeted_amount
+        rows.append({
+            "account_id": bl.account_id,
+            "account_name": acct.name,
+            "account_code": acct.code,
+            "account_type": acct.account_type,
+            "period_month": bl.period_month,
+            "period_year": bl.period_year,
+            "budgeted": round(bl.budgeted_amount, 2),
+            "actual": round(actual, 2),
+            "variance": round(variance, 2),
+            "variance_pct": round((variance / bl.budgeted_amount * 100) if bl.budgeted_amount else 0, 1),
+        })
+
+    totals = {
+        "budgeted": round(sum(r["budgeted"] for r in rows), 2),
+        "actual": round(sum(r["actual"] for r in rows), 2),
+        "variance": round(sum(r["variance"] for r in rows), 2),
+    }
+    return _success({
+        "budget_name": budget.name,
+        "fiscal_year": fy.name if fy else None,
+        "rows": rows,
+        "totals": totals,
+    })

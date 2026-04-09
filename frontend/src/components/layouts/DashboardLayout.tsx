@@ -155,6 +155,10 @@ const ACCOUNTING_SUB_NAV = [
   { name: "Balance Sheet", href: "/accounting/reports/balance-sheet" },
   { name: "Cash / Bank Book", href: "/accounting/reports/cash-book" },
   { name: "AR Aging", href: "/accounting/reports/ar-aging" },
+  { name: "GST Reports", href: "/accounting/gst-reports" },
+  { name: "Bank Reconciliation", href: "/accounting/bank-reconciliation" },
+  { name: "Budgets", href: "/accounting/budgets" },
+  { name: "Fiscal Years", href: "/accounting/fiscal-years" },
 ];
 
 function AccountingSubNav({ collapsed }: { collapsed: boolean }) {

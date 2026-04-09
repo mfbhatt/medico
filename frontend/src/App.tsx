@@ -83,6 +83,10 @@ import ProfitLossPage from "./pages/accounting/ProfitLossPage";
 import BalanceSheetPage from "./pages/accounting/BalanceSheetPage";
 import CashBankBookPage from "./pages/accounting/CashBankBookPage";
 import ARAgingPage from "./pages/accounting/ARAgingPage";
+import FiscalYearPage from "./pages/accounting/FiscalYearPage";
+import GSTReportsPage from "./pages/accounting/GSTReportsPage";
+import BankReconciliationPage from "./pages/accounting/BankReconciliationPage";
+import BudgetPage from "./pages/accounting/BudgetPage";
 
 /**
  * After login, redirect to role-appropriate home.
@@ -182,6 +186,10 @@ export default function App() {
             <Route path="/accounting/reports/balance-sheet" element={<BalanceSheetPage />} />
             <Route path="/accounting/reports/cash-book" element={<CashBankBookPage />} />
             <Route path="/accounting/reports/ar-aging" element={<ARAgingPage />} />
+            <Route path="/accounting/fiscal-years" element={<FiscalYearPage />} />
+            <Route path="/accounting/gst-reports" element={<GSTReportsPage />} />
+            <Route path="/accounting/bank-reconciliation" element={<BankReconciliationPage />} />
+            <Route path="/accounting/budgets" element={<BudgetPage />} />
           </Route>
 
           {/* ── Super-admin only ─────────────────────────────────────────── */}
