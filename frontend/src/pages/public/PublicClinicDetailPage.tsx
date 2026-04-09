@@ -38,6 +38,7 @@ interface ClinicDetail {
   name: string;
   city: string;
   state: string;
+  country: string;
   address_line1: string;
   address_line2?: string;
   phone?: string;
