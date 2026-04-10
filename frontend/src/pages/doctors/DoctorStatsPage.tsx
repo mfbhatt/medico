@@ -6,6 +6,7 @@ import {
   Download, TrendingUp, DollarSign, Calendar,
 } from 'lucide-react';
 import api from '@/services/api';
+import { useCurrency } from '@/hooks/useCurrency';
 
 interface StatsSummary {
   total_appointments: number;
@@ -74,6 +75,7 @@ function StatCard({ icon: Icon, label, value, color }: {
 }
 
 export default function DoctorStatsPage() {
+  const fmt = useCurrency();
   const { id: doctorId } = useParams<{ id: string }>();
   const [tab, setTab] = useState<TabKey>('stats');
   const [clinicFilter, setClinicFilter] = useState('');
@@ -330,19 +332,19 @@ export default function DoctorStatsPage() {
                   <StatCard
                     icon={DollarSign}
                     label="Total Billed"
-                    value={`$${settlement.summary.total_billed.toFixed(2)}`}
+                    value={fmt(settlement.summary.total_billed)}
                     color="bg-slate-50 text-slate-600"
                   />
                   <StatCard
                     icon={DollarSign}
                     label="Total Collected"
-                    value={`$${settlement.summary.total_paid.toFixed(2)}`}
+                    value={fmt(settlement.summary.total_paid)}
                     color="bg-green-50 text-green-600"
                   />
                   <StatCard
                     icon={DollarSign}
                     label="Outstanding"
-                    value={`$${settlement.summary.total_outstanding.toFixed(2)}`}
+                    value={fmt(settlement.summary.total_outstanding)}
                     color={settlement.summary.total_outstanding > 0 ? 'bg-red-50 text-red-600' : 'bg-slate-50 text-slate-400'}
                   />
                 </div>
@@ -406,13 +408,13 @@ export default function DoctorStatsPage() {
                                 <span className="text-xs text-slate-400">—</span>
                               )}
                             </td>
-                            <td className="px-4 py-3 text-right text-slate-900">${row.total_amount.toFixed(2)}</td>
+                            <td className="px-4 py-3 text-right text-slate-900">{fmt(row.total_amount)}</td>
                             <td className="px-4 py-3 text-right text-amber-700">
-                              {row.discount_amount > 0 ? `-$${row.discount_amount.toFixed(2)}` : '—'}
+                              {row.discount_amount > 0 ? `-${fmt(row.discount_amount)}` : '—'}
                             </td>
-                            <td className="px-4 py-3 text-right text-green-700">${row.paid_amount.toFixed(2)}</td>
+                            <td className="px-4 py-3 text-right text-green-700">{fmt(row.paid_amount)}</td>
                             <td className={`px-4 py-3 text-right font-semibold ${row.balance_due > 0 ? 'text-red-600' : 'text-slate-400'}`}>
-                              ${row.balance_due.toFixed(2)}
+                              {fmt(row.balance_due)}
                             </td>
                           </tr>
                         ))}

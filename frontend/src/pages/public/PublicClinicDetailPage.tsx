@@ -3,6 +3,7 @@ import { useParams, Link, useNavigate } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { useSelector } from "react-redux";
 import axios from "axios";
+import { useCurrency } from "@/hooks/useCurrency";
 import { ALL_COUNTRIES } from "@/utils/addressData";
 
 function resolveStateName(countryCode: string, stateCode: string): string {
@@ -87,6 +88,7 @@ function maxDateStr(days = 30) {
 }
 
 export default function PublicClinicDetailPage() {
+  const fmt = useCurrency();
   const { id: clinicId } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const { isAuthenticated } = useSelector((s: RootState) => s.auth);
@@ -317,7 +319,7 @@ export default function PublicClinicDetailPage() {
                           )}
                           {doc.consultation_fee !== undefined && (
                             <span className="text-xs text-green-700 font-medium">
-                              ${doc.consultation_fee}
+                              {fmt(doc.consultation_fee)}
                             </span>
                           )}
                         </div>

@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
+import { useCurrency } from '@/hooks/useCurrency';
 import {
   Chart as ChartJS,
   CategoryScale, LinearScale, BarElement, LineElement,
@@ -19,6 +20,7 @@ const PERIODS = [
 ];
 
 export default function AnalyticsPage() {
+  const fmt = useCurrency();
   const [days, setDays] = useState('30');
 
   const { data: dashboard } = useQuery({
@@ -108,7 +110,7 @@ export default function AnalyticsPage() {
       <div className="grid grid-cols-2 xl:grid-cols-4 gap-4 mb-8">
         {[
           { label: 'Total Appointments', value: dashboard?.total_appointments?.toLocaleString() ?? '—', color: 'text-blue-600' },
-          { label: 'Total Revenue', value: dashboard?.total_revenue ? `$${dashboard.total_revenue.toLocaleString()}` : '—', color: 'text-purple-600' },
+          { label: 'Total Revenue', value: dashboard?.total_revenue ? fmt(dashboard.total_revenue) : '—', color: 'text-purple-600' },
           { label: 'New Patients', value: dashboard?.new_patients?.toLocaleString() ?? '—', color: 'text-green-600' },
           { label: 'No-show Rate', value: dashboard?.no_show_rate ? `${dashboard.no_show_rate}%` : '—', color: 'text-red-600' },
         ].map((kpi) => (
@@ -168,7 +170,7 @@ export default function AnalyticsPage() {
                   <td className="py-2.5 font-medium text-gray-900">{d.doctor_name}</td>
                   <td className="py-2.5 text-right text-gray-600">{d.total_appointments}</td>
                   <td className="py-2.5 text-right text-green-600">{d.completed_appointments}</td>
-                  <td className="py-2.5 text-right text-gray-900">${d.total_revenue?.toLocaleString()}</td>
+                  <td className="py-2.5 text-right text-gray-900">{d.total_revenue != null ? fmt(d.total_revenue) : '—'}</td>
                   <td className="py-2.5 text-right">
                     <span className="text-yellow-500">★</span> {d.average_rating?.toFixed(1)}
                   </td>

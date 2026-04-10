@@ -6,6 +6,7 @@ import doctorsReducer from "./slices/doctorsSlice";
 import labReducer from "./slices/labSlice";
 import billingReducer from "./slices/billingSlice";
 import uiReducer from "./slices/uiSlice";
+import tenantReducer from "./slices/tenantSlice";
 
 export const store = configureStore({
   reducer: {
@@ -16,6 +17,7 @@ export const store = configureStore({
     lab: labReducer,
     billing: billingReducer,
     ui: uiReducer,
+    tenant: tenantReducer,
   },
 });
 

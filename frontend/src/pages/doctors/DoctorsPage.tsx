@@ -5,6 +5,7 @@ import { X, Search } from 'lucide-react';
 import api from '@/services/api';
 import Pagination from '@/components/ui/Pagination';
 import { useDebounce } from '@/hooks/useDebounce';
+import { useCurrency } from '@/hooks/useCurrency';
 
 const PAGE_SIZE = 20;
 
@@ -27,6 +28,7 @@ const INITIAL_FORM: AddDoctorForm = {
 };
 
 export default function DoctorsPage() {
+  const fmt = useCurrency();
   const [search, setSearch] = useState('');
   const debouncedSearch = useDebounce(search, 300);
   const [specializationFilter, setSpecializationFilter] = useState('');
@@ -66,7 +68,7 @@ export default function DoctorsPage() {
 
   const createMutation = useMutation({
     mutationFn: (form: AddDoctorForm) =>
-      api.post('/users', {
+      api.post('/users/', {
         first_name: form.first_name,
         last_name: form.last_name,
         email: form.email,
@@ -191,7 +193,7 @@ export default function DoctorsPage() {
                 <div>
                   <p className="text-gray-500 text-xs">Consultation Fee</p>
                   <p className="font-medium text-gray-900">
-                    {doctor.consultation_fee ? `$${doctor.consultation_fee}` : '—'}
+                    {doctor.consultation_fee ? fmt(doctor.consultation_fee) : '—'}
                   </p>
                 </div>
                 <div className="col-span-2">

@@ -7,6 +7,7 @@ interface TenantState {
   plan: string | null;
   features: Record<string, boolean>;
   logoUrl: string | null;
+  currency: string;
 }
 
 const getStoredTenant = (): Partial<TenantState> => {
@@ -25,6 +26,7 @@ const initialState: TenantState = {
   plan: null,
   features: {},
   logoUrl: null,
+  currency: 'USD',
   ...getStoredTenant(),
 };
 
@@ -46,8 +48,16 @@ const tenantSlice = createSlice({
           plan: state.plan,
           features: state.features,
           logoUrl: state.logoUrl,
+          currency: state.currency,
         }),
       );
+    },
+    setCurrency(state, action: PayloadAction<string>) {
+      state.currency = action.payload;
+      try {
+        const stored = JSON.parse(localStorage.getItem('tenant') ?? '{}');
+        localStorage.setItem('tenant', JSON.stringify({ ...stored, currency: action.payload }));
+      } catch { /* ignore */ }
     },
     clearTenant(state) {
       state.tenantId = null;
@@ -56,6 +66,7 @@ const tenantSlice = createSlice({
       state.plan = null;
       state.features = {};
       state.logoUrl = null;
+      state.currency = 'USD';
       localStorage.removeItem('tenant');
     },
     setFeatureFlags(state, action: PayloadAction<Record<string, boolean>>) {
@@ -64,5 +75,5 @@ const tenantSlice = createSlice({
   },
 });
 
-export const { setTenant, clearTenant, setFeatureFlags } = tenantSlice.actions;
+export const { setTenant, setCurrency, clearTenant, setFeatureFlags } = tenantSlice.actions;
 export default tenantSlice.reducer;

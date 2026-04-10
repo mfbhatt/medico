@@ -5,6 +5,7 @@ import { ArrowLeft, Plus, X, Building2, ToggleLeft, ToggleRight, Trash2 } from '
 import api from '@/services/api';
 import { useSelector } from 'react-redux';
 import { RootState } from '@/store';
+import { useCurrency } from '@/hooks/useCurrency';
 
 interface ClinicAssignment {
   id: string;
@@ -24,6 +25,7 @@ interface Clinic {
 }
 
 export default function DoctorClinicsPage() {
+  const fmt = useCurrency();
   const { id: doctorId } = useParams<{ id: string }>();
   const qc = useQueryClient();
   const role = useSelector((s: RootState) => s.auth.user?.role);
@@ -185,7 +187,7 @@ export default function DoctorClinicsPage() {
                 <div>
                   <p className="text-slate-500 text-xs">Fee Override</p>
                   <p className="font-medium text-slate-900">
-                    {a.consultation_fee_override != null ? `$${a.consultation_fee_override}` : 'Default fee'}
+                    {a.consultation_fee_override != null ? fmt(a.consultation_fee_override) : 'Default fee'}
                   </p>
                 </div>
                 {a.start_date && (

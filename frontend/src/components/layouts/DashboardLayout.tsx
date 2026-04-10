@@ -38,6 +38,7 @@ import {
 } from "lucide-react";
 import { RootState, AppDispatch } from "../../store";
 import { logout } from "../../store/slices/authSlice";
+import { setCurrency } from "../../store/slices/tenantSlice";
 
 // ─── Navigation configs per role ────────────────────────────────────────────
 
@@ -298,6 +299,21 @@ export default function DashboardLayout() {
     dispatch(setActivePatient(profile));
     setProfileMenuOpen(false);
   };
+
+  // Fetch effective tenant settings to populate currency (and other future prefs) in Redux
+  useQuery({
+    queryKey: ["tenant-me-settings", user?.tenant_id],
+    queryFn: () =>
+      api.get("/tenants/me").then((r) => {
+        const settings = r.data.data?.settings ?? {};
+        const c = settings.currency;
+        if (c) dispatch(setCurrency(c));
+        return r.data.data;
+      }),
+    enabled: !!user && role !== "super_admin",
+    staleTime: 5 * 60 * 1000,
+    retry: false,
+  });
 
   // Live notification count — poll every 30 s
   const { data: unreadData } = useQuery({
