@@ -98,11 +98,27 @@ export default function VoucherDetailPage() {
         </div>
 
         {/* Actions */}
-        <div className="print:hidden px-6 py-4 bg-gray-50 border-t border-slate-100 flex gap-3">
+        <div className="print:hidden px-6 py-4 bg-gray-50 border-t border-slate-100 flex gap-3 flex-wrap">
           <button onClick={() => window.print()} className="btn-secondary text-sm">Print</button>
           {!data.source_type && (
             <Link to={`/accounting/vouchers/${data.id}/edit`} className="btn-primary text-sm">Edit</Link>
           )}
+          <Link
+            to={`/accounting/vouchers/${data.id}/edit`}
+            state={{ clone: true }}
+            onClick={async (e) => {
+              e.preventDefault();
+              try {
+                const res = await import('@/services/api').then(m => m.default.post(`/accounting/vouchers/${data.id}/clone`));
+                const newId = res.data?.data?.id;
+                if (newId) window.location.href = `/accounting/vouchers/${newId}/edit`;
+              } catch { alert('Clone failed'); }
+            }}
+            className="btn-secondary text-sm"
+          >
+            Clone Voucher
+          </Link>
+          <Link to="/accounting/vouchers" className="btn-secondary text-sm ml-auto">← All Vouchers</Link>
         </div>
       </div>
     </div>

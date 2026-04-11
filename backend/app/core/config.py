@@ -91,10 +91,11 @@ class Settings(BaseSettings):
     EMAIL_SENDER_ADDRESS: Optional[str] = None
     EMAIL_SENDER_NAME: Optional[str] = None
 
-    # ── SMS ─────────────────────────────────────────────────────
+    # ── SMS / WhatsApp (Twilio) ──────────────────────────────────
     TWILIO_ACCOUNT_SID: Optional[str] = None
     TWILIO_AUTH_TOKEN: Optional[str] = None
     TWILIO_FROM_NUMBER: Optional[str] = None
+    TWILIO_WHATSAPP_NUMBER: Optional[str] = None  # e.g. whatsapp:+14155238886
 
     # ── Firebase (Push Notifications) ────────────────────────────
     FIREBASE_PROJECT_ID: Optional[str] = None

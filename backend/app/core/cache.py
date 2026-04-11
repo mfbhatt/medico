@@ -73,6 +73,16 @@ def make_cache_key(*parts: str) -> str:
     return ":".join(str(p) for p in parts)
 
 
+async def publish_notification_event(user_id: str) -> None:
+    """Signal that a user's in-app notification count has changed.
+    Consumed by the /notifications/stream SSE endpoint.
+    """
+    try:
+        await redis_client.publish(f"notif:{user_id}", "update")
+    except Exception:
+        pass
+
+
 # ── Distributed Lock ─────────────────────────────────────────────
 class DistributedLock:
     """

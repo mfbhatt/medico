@@ -257,6 +257,34 @@ def notify_expiring_insurance():
     asyncio.get_event_loop().run_until_complete(_run())
 
 
+@celery_app.task(
+    bind=True,
+    max_retries=3,
+    default_retry_delay=30,
+    name="app.tasks.notification_tasks.send_patient_welcome_whatsapp",
+)
+def send_patient_welcome_whatsapp(self, phone: str, patient_name: str, username: str, temporary_password: str):
+    """Send new patient account credentials via WhatsApp."""
+    import asyncio
+
+    message = (
+        f"Welcome to our clinic, {patient_name}!\n\n"
+        f"Your patient portal account has been created.\n"
+        f"Username: {username}\n"
+        f"Temporary Password: {temporary_password}\n\n"
+        f"Please log in and change your password at first login.\n"
+        f"Keep these credentials safe and do not share them."
+    )
+
+    async def _run():
+        await _send_whatsapp(phone, message)
+
+    try:
+        asyncio.get_event_loop().run_until_complete(_run())
+    except Exception as exc:
+        raise self.retry(exc=exc)
+
+
 # ── Internal helpers ─────────────────────────────────────────────
 async def _send_sms(phone: str, message: str) -> None:
     from app.core.config import settings
@@ -269,6 +297,24 @@ async def _send_sms(phone: str, message: str) -> None:
             body=message,
             from_=settings.TWILIO_FROM_NUMBER,
             to=phone,
+        )
+    except Exception:
+        pass
+
+
+async def _send_whatsapp(phone: str, message: str) -> None:
+    from app.core.config import settings
+    if not settings.TWILIO_ACCOUNT_SID or not settings.TWILIO_WHATSAPP_NUMBER:
+        return
+    try:
+        from twilio.rest import Client
+        client = Client(settings.TWILIO_ACCOUNT_SID, settings.TWILIO_AUTH_TOKEN)
+        # Ensure phone is in whatsapp: format
+        to = phone if phone.startswith("whatsapp:") else f"whatsapp:{phone}"
+        client.messages.create(
+            body=message,
+            from_=settings.TWILIO_WHATSAPP_NUMBER,
+            to=to,
         )
     except Exception:
         pass

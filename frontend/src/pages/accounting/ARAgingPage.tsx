@@ -39,6 +39,7 @@ export default function ARAgingPage() {
             <label className="label">As of</label>
             <input type="date" className="input" value={asOf} onChange={e => setAsOf(e.target.value)} />
           </div>
+          <button className="btn-secondary mt-5" onClick={() => window.open(`/api/v1/accounting/reports/ar-aging/export?as_of=${asOf}`, '_blank')}>Export CSV</button>
           <button className="print:hidden btn-secondary mt-5" onClick={() => window.print()}>Print</button>
         </div>
       </div>

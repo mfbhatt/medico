@@ -30,6 +30,7 @@ export default function ProfitLossPage() {
             <label className="label">To</label>
             <input type="date" className="input" value={dateTo} onChange={e => setDateTo(e.target.value)} />
           </div>
+          <button className="btn-secondary mt-5" onClick={() => window.open(`/api/v1/accounting/reports/profit-loss/export?date_from=${dateFrom}&date_to=${dateTo}`, '_blank')}>Export CSV</button>
           <button className="print:hidden btn-secondary mt-5" onClick={() => window.print()}>Print</button>
         </div>
       </div>

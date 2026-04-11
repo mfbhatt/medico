@@ -1,7 +1,10 @@
 """Notification endpoints — read/mark notifications, manage preferences."""
+import asyncio
+import json
 from typing import Optional
 
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi.responses import StreamingResponse
 from sqlalchemy import select, func, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -97,6 +100,8 @@ async def mark_as_read(
         notification.read_at = datetime.now(timezone.utc).isoformat()
         notification.status = NotificationStatus.READ
         await db.commit()
+        from app.core.cache import publish_notification_event
+        await publish_notification_event(current_user.user_id)
 
     return _success({"read": True})
 
@@ -120,6 +125,8 @@ async def mark_all_read(
         .values(read_at=now, status=NotificationStatus.READ)
     )
     await db.commit()
+    from app.core.cache import publish_notification_event
+    await publish_notification_event(current_user.user_id)
     return _success({}, message="All notifications marked as read")
 
 
@@ -138,6 +145,106 @@ async def get_unread_count(
         )
     )).scalar()
     return _success({"unread_count": count})
+
+
+@router.get("/stream")
+async def notification_stream(
+    token: str = Query(..., description="JWT access token"),
+):
+    """Server-Sent Events endpoint for real-time unread notification count.
+    Uses Redis pub/sub; falls back to keepalives-only if Redis is unavailable.
+    Clients reconnect automatically via EventSource — they get a fresh count on reconnect.
+    """
+    from app.core.security import decode_token
+    from app.core.exceptions import UnauthorizedException
+
+    try:
+        payload = decode_token(token)
+    except UnauthorizedException:
+        raise HTTPException(status_code=401, detail="Invalid token")
+
+    if payload.get("type") != "access":
+        raise HTTPException(status_code=401, detail="Invalid token type")
+
+    user_id: Optional[str] = payload.get("sub")
+    if not user_id:
+        raise HTTPException(status_code=401, detail="Malformed token")
+
+    async def event_generator():
+        from app.core.database import async_session_factory
+        from app.core.cache import redis_client
+
+        async def _unread_count() -> int:
+            async with async_session_factory() as session:
+                return (await session.execute(
+                    select(func.count(Notification.id)).where(
+                        Notification.recipient_id == user_id,
+                        Notification.channel == "in_app",
+                        Notification.read_at == None,
+                        Notification.is_deleted == False,
+                    )
+                )).scalar() or 0
+
+        # Send initial count immediately upon connection
+        try:
+            count = await _unread_count()
+            yield f"data: {json.dumps({'count': count})}\n\n"
+        except Exception:
+            yield f"data: {json.dumps({'count': 0})}\n\n"
+
+        # Subscribe to Redis pub/sub channel for this user
+        pubsub = None
+        try:
+            pubsub = redis_client.pubsub()
+            await pubsub.subscribe(f"notif:{user_id}")
+
+            ticks = 0
+            while True:
+                # Poll for a message every 1s; send keepalive every ~25s of silence
+                try:
+                    msg = await pubsub.get_message(
+                        ignore_subscribe_messages=True, timeout=1.0
+                    )
+                except Exception:
+                    break
+
+                if msg and msg.get("type") == "message":
+                    count = await _unread_count()
+                    yield f"data: {json.dumps({'count': count})}\n\n"
+                    ticks = 0
+                else:
+                    ticks += 1
+                    if ticks >= 25:
+                        yield ": ping\n\n"
+                        ticks = 0
+
+        except (GeneratorExit, asyncio.CancelledError):
+            pass
+        except Exception:
+            # Redis unavailable — send keepalives so the connection stays alive
+            try:
+                while True:
+                    await asyncio.sleep(25)
+                    yield ": ping\n\n"
+            except (GeneratorExit, asyncio.CancelledError):
+                pass
+        finally:
+            if pubsub:
+                try:
+                    await pubsub.unsubscribe()
+                    await pubsub.aclose()
+                except Exception:
+                    pass
+
+    return StreamingResponse(
+        event_generator(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+            "X-Accel-Buffering": "no",  # Disable nginx/proxy buffering
+        },
+    )
 
 
 @router.patch("/preferences")

@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useDispatch } from 'react-redux';
+import { Link } from 'react-router-dom';
 import { addToast } from '@/store/slices/uiSlice';
 import api from '@/services/api';
 
@@ -75,7 +76,10 @@ export default function FiscalYearPage() {
           <h1 className="page-title">Fiscal Years</h1>
           <p className="text-sm text-slate-500 mt-0.5">Manage financial years for your organisation</p>
         </div>
-        <button className="btn-primary" onClick={openNew}>+ New Fiscal Year</button>
+        <div className="flex gap-2">
+          <Link to="/accounting/closing-entry" className="btn-secondary text-sm">Year-End Closing</Link>
+          <button className="btn-primary" onClick={openNew}>+ New Fiscal Year</button>
+        </div>
       </div>
 
       {isLoading ? (

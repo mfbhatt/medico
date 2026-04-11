@@ -30,6 +30,9 @@ celery_app.conf.update(
     task_soft_time_limit=300,   # 5 minutes
     task_time_limit=600,         # 10 minutes hard limit
     result_expires=86400,        # Results kept for 24 hours
+    # Do not raise if broker/backend is unavailable — fire-and-forget tasks
+    # (notifications, reminders) must never break HTTP request handlers
+    task_ignore_result=not bool(settings.CELERY_RESULT_BACKEND),
 )
 
 # ── Periodic Tasks (Beat Scheduler) ──────────────────────────────

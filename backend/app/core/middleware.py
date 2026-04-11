@@ -245,12 +245,19 @@ class TenantMiddleware(BaseHTTPMiddleware):
         if tenant := request.headers.get("X-Tenant-ID"):
             return tenant
 
-        # 2. JWT claim
+        # 2. JWT claim — from Authorization header or ?token= query param
+        #    (EventSource cannot send custom headers, so SSE endpoints pass JWT as ?token=)
+        token: Optional[str] = None
         auth_header = request.headers.get("Authorization", "")
         if auth_header.startswith("Bearer "):
+            token = auth_header[7:]
+        elif qp_token := request.query_params.get("token"):
+            token = qp_token
+
+        if token:
             try:
                 from app.core.security import decode_token
-                payload = decode_token(auth_header[7:])
+                payload = decode_token(token)
                 jwt_tenant = payload.get("tenant_id")
                 if jwt_tenant:
                     return str(jwt_tenant)

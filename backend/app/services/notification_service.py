@@ -139,4 +139,8 @@ async def create_in_app_notification(
     )
     db.add(notification)
     await db.flush()
-    return notification.id
+    notification_id = notification.id
+    await db.commit()
+    from app.core.cache import publish_notification_event
+    await publish_notification_event(recipient_id)
+    return notification_id

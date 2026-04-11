@@ -5,7 +5,7 @@ import { X, Search } from 'lucide-react';
 import api from '@/services/api';
 import Pagination from '@/components/ui/Pagination';
 import { useDebounce } from '@/hooks/useDebounce';
-import { useCurrency } from '@/hooks/useCurrency';
+import { useCurrency, useCurrencySymbol } from '@/hooks/useCurrency';
 
 const PAGE_SIZE = 20;
 
@@ -29,6 +29,7 @@ const INITIAL_FORM: AddDoctorForm = {
 
 export default function DoctorsPage() {
   const fmt = useCurrency();
+  const currencySymbol = useCurrencySymbol();
   const [search, setSearch] = useState('');
   const debouncedSearch = useDebounce(search, 300);
   const [specializationFilter, setSpecializationFilter] = useState('');
@@ -314,7 +315,7 @@ export default function DoctorsPage() {
                   )}
                 </div>
                 <div>
-                  <label className="label">Consultation Fee ($)</label>
+                  <label className="label">Consultation Fee ({currencySymbol})</label>
                   <input className="input" type="number" min={0} value={addForm.consultation_fee} onChange={setField('consultation_fee')} />
                 </div>
                 <div>

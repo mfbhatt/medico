@@ -191,14 +191,18 @@ export default function AccountingDashboard() {
           <h2 className="font-semibold text-gray-800 mb-4">Quick Access</h2>
           <div className="grid grid-cols-2 gap-3">
             {[
-              { label: 'Chart of Accounts', href: '/accounting/chart-of-accounts', color: 'bg-blue-50 text-blue-700 hover:bg-blue-100' },
-              { label: 'Voucher Entry', href: '/accounting/vouchers/new', color: 'bg-green-50 text-green-700 hover:bg-green-100' },
+              { label: '+ New Ledger Account', href: '/accounting/chart-of-accounts', color: 'bg-blue-600 text-white hover:bg-blue-700', bold: true },
+              { label: '+ New Voucher', href: '/accounting/vouchers/new', color: 'bg-green-600 text-white hover:bg-green-700', bold: true },
               { label: 'Day Book', href: '/accounting/day-book', color: 'bg-purple-50 text-purple-700 hover:bg-purple-100' },
               { label: 'Ledger', href: '/accounting/ledger', color: 'bg-orange-50 text-orange-700 hover:bg-orange-100' },
               { label: 'Trial Balance', href: '/accounting/reports/trial-balance', color: 'bg-teal-50 text-teal-700 hover:bg-teal-100' },
               { label: 'Balance Sheet', href: '/accounting/reports/balance-sheet', color: 'bg-indigo-50 text-indigo-700 hover:bg-indigo-100' },
-              { label: 'Cash Book', href: '/accounting/reports/cash-book', color: 'bg-emerald-50 text-emerald-700 hover:bg-emerald-100' },
+              { label: 'Cash Flow', href: '/accounting/reports/cash-flow', color: 'bg-cyan-50 text-cyan-700 hover:bg-cyan-100' },
+              { label: 'Outstanding', href: '/accounting/reports/outstanding', color: 'bg-amber-50 text-amber-700 hover:bg-amber-100' },
               { label: 'AR Aging', href: '/accounting/reports/ar-aging', color: 'bg-red-50 text-red-700 hover:bg-red-100' },
+              { label: 'AP Aging', href: '/accounting/reports/ap-aging', color: 'bg-rose-50 text-rose-700 hover:bg-rose-100' },
+              { label: 'Year-End Closing', href: '/accounting/closing-entry', color: 'bg-slate-100 text-slate-700 hover:bg-slate-200' },
+              { label: 'GST Reports', href: '/accounting/gst-reports', color: 'bg-emerald-50 text-emerald-700 hover:bg-emerald-100' },
             ].map(({ label, href, color }) => (
               <Link key={href} to={href} className={`${color} rounded-lg p-3 text-sm font-medium text-center transition-colors`}>
                 {label}

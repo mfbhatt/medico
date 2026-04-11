@@ -289,11 +289,24 @@ async def create_patient(
 
     response_data = _patient_response(patient)
     if temp_password is not None:
+        username = body.get("email") or body.get("phone")
         response_data["login_credentials"] = {
-            "username": body.get("email") or body.get("phone"),
+            "username": username,
             "temporary_password": temp_password,
             "note": "Share these credentials with the patient. They should change their password on first login.",
         }
+        # Send credentials via WhatsApp if patient has a phone number
+        if patient.phone:
+            try:
+                from app.tasks.notification_tasks import send_patient_welcome_whatsapp
+                send_patient_welcome_whatsapp.delay(
+                    phone=patient.phone,
+                    patient_name=f"{patient.first_name} {patient.last_name}",
+                    username=username,
+                    temporary_password=temp_password,
+                )
+            except Exception:
+                pass  # WhatsApp delivery failure must not block registration
 
     return _success(response_data, message="Patient registered successfully")
 

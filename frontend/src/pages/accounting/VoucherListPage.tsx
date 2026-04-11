@@ -66,7 +66,18 @@ export default function VoucherListPage() {
   const deleteMutation = useMutation({
     mutationFn: (id: string) => api.delete(`/accounting/vouchers/${id}`),
     onSuccess: () => { qc.invalidateQueries({ queryKey: ['accounting', 'vouchers'] }); toast.success('Voucher deleted'); },
-    onError: (e: any) => toast.error(e?.response?.data?.message ?? 'Cannot delete auto-posted vouchers'),
+    onError: (e: any) => toast.error(e?.response?.data?.message ?? 'Cannot delete this voucher'),
+  });
+
+  const cloneMutation = useMutation({
+    mutationFn: (id: string) => api.post(`/accounting/vouchers/${id}/clone`),
+    onSuccess: (res) => {
+      qc.invalidateQueries({ queryKey: ['accounting'] });
+      toast.success(`Cloned as ${res.data?.data?.voucher_number}`);
+      const newId = res.data?.data?.id;
+      if (newId) navigate(`/accounting/vouchers/${newId}/edit`);
+    },
+    onError: (e: any) => toast.error(e?.response?.data?.message ?? 'Clone failed'),
   });
 
   const fmt = (n: number) => `₹${n.toLocaleString('en-IN', { minimumFractionDigits: 2 })}`;
@@ -135,7 +146,7 @@ export default function VoucherListPage() {
                     )}
                     {v.source_type && <span className="ml-1 text-xs text-gray-400">auto</span>}
                   </td>
-                  <td className="px-4 py-3 text-right space-x-2">
+                  <td className="px-4 py-3 text-right space-x-2 whitespace-nowrap">
                     <Link to={`/accounting/vouchers/${v.id}`} className="text-primary-600 hover:text-primary-800 text-sm font-medium">View</Link>
                     {!v.source_type && (
                       <>
@@ -143,6 +154,14 @@ export default function VoucherListPage() {
                         <button onClick={() => { if (confirm('Delete this voucher?')) deleteMutation.mutate(v.id); }} className="text-red-500 hover:text-red-700 text-sm font-medium">Delete</button>
                       </>
                     )}
+                    <button
+                      onClick={() => cloneMutation.mutate(v.id)}
+                      disabled={cloneMutation.isPending}
+                      className="text-gray-500 hover:text-gray-700 text-sm font-medium"
+                      title="Clone this voucher with today's date"
+                    >
+                      Clone
+                    </button>
                   </td>
                 </tr>
               ))

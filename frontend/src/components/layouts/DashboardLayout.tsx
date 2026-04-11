@@ -1,6 +1,7 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Outlet, NavLink, Link, useNavigate } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { STORAGE_KEYS, API_BASE_URL } from "../../utils/constants";
 import api from "../../services/api";
 import { useDispatch, useSelector } from "react-redux";
 import { switchTenantThunk, setActivePatient, ActivePatient } from "../../store/slices/authSlice";
@@ -145,26 +146,50 @@ const ROLE_META: Record<string, { label: string; badgeClass: string; sidebarAcce
 // ─── Accounting sub-nav items ────────────────────────────────────────────────
 
 const ACCOUNTING_SUB_NAV = [
-  { name: "Dashboard", href: "/accounting" },
-  { name: "Chart of Accounts", href: "/accounting/chart-of-accounts" },
-  { name: "Voucher Entry", href: "/accounting/vouchers/new" },
-  { name: "All Vouchers", href: "/accounting/vouchers" },
-  { name: "Day Book", href: "/accounting/day-book" },
-  { name: "Ledger", href: "/accounting/ledger" },
-  { name: "Trial Balance", href: "/accounting/reports/trial-balance" },
-  { name: "Profit & Loss", href: "/accounting/reports/profit-loss" },
-  { name: "Balance Sheet", href: "/accounting/reports/balance-sheet" },
-  { name: "Cash / Bank Book", href: "/accounting/reports/cash-book" },
-  { name: "AR Aging", href: "/accounting/reports/ar-aging" },
-  { name: "GST Reports", href: "/accounting/gst-reports" },
-  { name: "Bank Reconciliation", href: "/accounting/bank-reconciliation" },
-  { name: "Budgets", href: "/accounting/budgets" },
-  { name: "Fiscal Years", href: "/accounting/fiscal-years" },
+  { name: "Dashboard", href: "/accounting", group: "" },
+  // ── Entry
+  { name: "Chart of Accounts", href: "/accounting/chart-of-accounts", group: "Entry" },
+  { name: "New Voucher", href: "/accounting/vouchers/new", group: "Entry" },
+  { name: "All Vouchers", href: "/accounting/vouchers", group: "Entry" },
+  // ── Reports
+  { name: "Day Book", href: "/accounting/day-book", group: "Reports" },
+  { name: "Ledger", href: "/accounting/ledger", group: "Reports" },
+  { name: "Trial Balance", href: "/accounting/reports/trial-balance", group: "Reports" },
+  { name: "Profit & Loss", href: "/accounting/reports/profit-loss", group: "Reports" },
+  { name: "Balance Sheet", href: "/accounting/reports/balance-sheet", group: "Reports" },
+  { name: "Cash Flow", href: "/accounting/reports/cash-flow", group: "Reports" },
+  { name: "Cash / Bank Book", href: "/accounting/reports/cash-book", group: "Reports" },
+  // ── Receivables / Payables
+  { name: "AR Aging", href: "/accounting/reports/ar-aging", group: "Receivables/Payables" },
+  { name: "AP Aging", href: "/accounting/reports/ap-aging", group: "Receivables/Payables" },
+  { name: "Outstanding", href: "/accounting/reports/outstanding", group: "Receivables/Payables" },
+  // ── Tax & Compliance
+  { name: "GST Reports", href: "/accounting/gst-reports", group: "Tax" },
+  { name: "Bank Reconciliation", href: "/accounting/bank-reconciliation", group: "Tax" },
+  // ── Configuration
+  { name: "Budgets", href: "/accounting/budgets", group: "Config" },
+  { name: "Fiscal Years", href: "/accounting/fiscal-years", group: "Config" },
+  { name: "Year-End Closing", href: "/accounting/closing-entry", group: "Config" },
 ];
 
 function AccountingSubNav({ collapsed }: { collapsed: boolean }) {
   const [open, setOpen] = useState(true);
   if (collapsed) return null;
+
+  // Group items for section headers
+  const groups: string[] = [];
+  for (const item of ACCOUNTING_SUB_NAV) {
+    if (item.group && !groups.includes(item.group)) groups.push(item.group);
+  }
+
+  const groupLabels: Record<string, string> = {
+    "Entry": "Entry",
+    "Reports": "Reports",
+    "Receivables/Payables": "Receivables / Payables",
+    "Tax": "Tax & Compliance",
+    "Config": "Setup",
+  };
+
   return (
     <div>
       <button
@@ -175,12 +200,13 @@ function AccountingSubNav({ collapsed }: { collapsed: boolean }) {
         <ChevronDown className={`h-3.5 w-3.5 transition-transform ${open ? 'rotate-180' : ''}`} />
       </button>
       {open && (
-        <div className="ml-3 space-y-0.5 border-l border-slate-700 pl-3 mt-0.5">
-          {ACCOUNTING_SUB_NAV.map(item => (
+        <div className="ml-3 border-l border-slate-700 pl-3 mt-0.5">
+          {/* Dashboard (no group) */}
+          {ACCOUNTING_SUB_NAV.filter(i => !i.group).map(item => (
             <NavLink
               key={item.href}
               to={item.href}
-              end={item.href === '/accounting'}
+              end
               className={({ isActive }) =>
                 `block px-2 py-1.5 rounded text-xs font-medium transition-colors ${
                   isActive ? 'text-white bg-slate-700' : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800'
@@ -189,6 +215,28 @@ function AccountingSubNav({ collapsed }: { collapsed: boolean }) {
             >
               {item.name}
             </NavLink>
+          ))}
+          {/* Grouped items */}
+          {groups.map(grp => (
+            <div key={grp} className="mt-2">
+              <p className="px-2 py-1 text-[10px] uppercase tracking-widest text-slate-600 font-semibold">
+                {groupLabels[grp] ?? grp}
+              </p>
+              {ACCOUNTING_SUB_NAV.filter(i => i.group === grp).map(item => (
+                <NavLink
+                  key={item.href}
+                  to={item.href}
+                  end={item.href === '/accounting'}
+                  className={({ isActive }) =>
+                    `block px-2 py-1.5 rounded text-xs font-medium transition-colors ${
+                      isActive ? 'text-white bg-slate-700' : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800'
+                    }`
+                  }
+                >
+                  {item.name}
+                </NavLink>
+              ))}
+            </div>
           ))}
         </div>
       )}
@@ -315,14 +363,26 @@ export default function DashboardLayout() {
     retry: false,
   });
 
-  // Live notification count — poll every 30 s
-  const { data: unreadData } = useQuery({
-    queryKey: ["notification-unread-count"],
-    queryFn: () => api.get("/notifications/unread-count").then((r) => r.data.data),
-    refetchInterval: 30_000,
-    retry: false,
-  });
-  const unreadCount: number = unreadData?.count ?? 0;
+  // Live notification count — pushed via SSE (Server-Sent Events)
+  const [unreadCount, setUnreadCount] = useState(0);
+  useEffect(() => {
+    if (!user) return;
+    const token = localStorage.getItem(STORAGE_KEYS.AUTH_TOKEN);
+    if (!token) return;
+
+    const url = `${API_BASE_URL}/notifications/stream?token=${encodeURIComponent(token)}`;
+    const es = new EventSource(url);
+
+    es.onmessage = (e) => {
+      try {
+        const payload = JSON.parse(e.data);
+        if (typeof payload.count === "number") setUnreadCount(payload.count);
+      } catch {}
+    };
+
+    // EventSource auto-reconnects on error; no special handling needed
+    return () => es.close();
+  }, [user?.id]);
 
   // Build navigation list for the current role
   const navItems = (() => {

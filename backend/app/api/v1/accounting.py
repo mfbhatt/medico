@@ -641,6 +641,30 @@ async def list_vouchers(
     )
 
 
+async def _validate_voucher_date(voucher_date: str, tenant_id: str, db: AsyncSession) -> Optional[str]:
+    """Return fiscal_year_id for the given date, or raise if the period is closed."""
+    active_fy = (await db.execute(
+        select(FiscalYear).where(
+            FiscalYear.tenant_id == tenant_id,
+            FiscalYear.start_date <= voucher_date,
+            FiscalYear.end_date >= voucher_date,
+            FiscalYear.is_deleted == False,
+        )
+    )).scalars().first()
+
+    if active_fy is None:
+        # No fiscal year defined for this date — allow (lenient: tenant may not use FY)
+        return None
+
+    if active_fy.is_closed:
+        raise BadRequestException(
+            detail=f"Cannot post to a closed fiscal year: {active_fy.name} "
+                   f"({active_fy.start_date} to {active_fy.end_date}). "
+                   "Create a new fiscal year or reopen this one."
+        )
+    return active_fy.id
+
+
 @router.post("/vouchers")
 async def create_voucher(
     body: dict,
@@ -661,19 +685,22 @@ async def create_voucher(
         )
 
     v_type = body.get("voucher_type", "journal")
+    v_date = body.get("voucher_date", date_type.today().isoformat())
+    fy_id = await _validate_voucher_date(v_date, current_user.tenant_id, db)
     v_number = await _next_voucher_number(current_user.tenant_id, v_type, db)
 
     voucher = Voucher(
         tenant_id=current_user.tenant_id,
         voucher_number=v_number,
         voucher_type=v_type,
-        voucher_date=body.get("voucher_date", date_type.today().isoformat()),
+        voucher_date=v_date,
         narration=body.get("narration"),
         reference=body.get("reference"),
         total_amount=total_dr,
         is_posted=body.get("is_posted", True),
         source_type=body.get("source_type"),
         source_id=body.get("source_id"),
+        fiscal_year_id=fy_id,
         created_by=current_user.user_id,
     )
     db.add(voucher)
@@ -804,7 +831,9 @@ async def update_voucher(
     if body.get("narration") is not None:
         v.narration = body["narration"]
     if body.get("voucher_date"):
-        v.voucher_date = body["voucher_date"]
+        new_date = body["voucher_date"]
+        await _validate_voucher_date(new_date, current_user.tenant_id, db)
+        v.voucher_date = new_date
     if body.get("reference") is not None:
         v.reference = body["reference"]
     v.updated_by = current_user.user_id
@@ -830,6 +859,8 @@ async def delete_voucher(
         raise NotFoundException(detail="Voucher not found")
     if v.source_type:
         raise ForbiddenException(detail="Auto-posted vouchers cannot be deleted")
+    # Block deletion if voucher is in a closed fiscal year
+    await _validate_voucher_date(v.voucher_date, current_user.tenant_id, db)
     v.soft_delete(current_user.user_id)
     await db.commit()
     return _success({}, message="Voucher deleted")
@@ -2312,3 +2343,758 @@ async def budget_variance_report(
         "rows": rows,
         "totals": totals,
     })
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+# ACCOUNT SEARCH (typeahead)
+# ═══════════════════════════════════════════════════════════════════════════
+
+@router.get("/accounts/search")
+async def search_accounts(
+    q: str = "",
+    account_type: Optional[str] = None,
+    active_only: bool = True,
+    limit: int = 20,
+    db: AsyncSession = Depends(get_db),
+    current_user: CurrentUser = Depends(get_current_user),
+):
+    """Typeahead search for accounts by name or code."""
+    _require_admin(current_user)
+    query = select(Account, AccountGroup.name.label("group_name")).join(
+        AccountGroup, Account.account_group_id == AccountGroup.id
+    ).where(
+        Account.tenant_id == current_user.tenant_id,
+        Account.is_deleted == False,
+    )
+    if active_only:
+        query = query.where(Account.is_active == True)
+    if account_type:
+        query = query.where(Account.account_type == account_type)
+    if q.strip():
+        like = f"%{q.strip()}%"
+        query = query.where(
+            or_(Account.name.ilike(like), Account.code.ilike(like))
+        )
+    query = query.order_by(Account.code, Account.name).limit(limit)
+    rows = (await db.execute(query)).all()
+    return _success([
+        {
+            "id": r.Account.id,
+            "name": r.Account.name,
+            "code": r.Account.code,
+            "account_type": r.Account.account_type,
+            "group_name": r.group_name,
+            "is_system": r.Account.is_system,
+            "label": f"{r.Account.code + ' – ' if r.Account.code else ''}{r.Account.name}",
+        }
+        for r in rows
+    ])
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+# VOUCHER CLONE
+# ═══════════════════════════════════════════════════════════════════════════
+
+@router.post("/vouchers/{voucher_id}/clone")
+async def clone_voucher(
+    voucher_id: str,
+    body: dict = {},
+    db: AsyncSession = Depends(get_db),
+    current_user: CurrentUser = Depends(get_current_user),
+):
+    """Clone an existing voucher (same type + lines) with today's date. Returns new voucher id."""
+    _require_admin(current_user)
+    src = (await db.execute(
+        select(Voucher).where(
+            Voucher.id == voucher_id,
+            Voucher.tenant_id == current_user.tenant_id,
+            Voucher.is_deleted == False,
+        )
+    )).scalar_one_or_none()
+    if not src:
+        raise NotFoundException(detail="Source voucher not found")
+
+    old_lines = (await db.execute(
+        select(VoucherLine).where(
+            VoucherLine.voucher_id == voucher_id,
+            VoucherLine.is_deleted == False,
+        )
+    )).scalars().all()
+
+    new_date = body.get("voucher_date", date_type.today().isoformat())
+    new_number = await _next_voucher_number(current_user.tenant_id, src.voucher_type, db)
+
+    new_voucher = Voucher(
+        tenant_id=current_user.tenant_id,
+        voucher_number=new_number,
+        voucher_type=src.voucher_type,
+        voucher_date=new_date,
+        narration=body.get("narration", src.narration),
+        reference=body.get("reference", src.reference),
+        total_amount=src.total_amount,
+        is_posted=True,
+        created_by=current_user.user_id,
+    )
+    db.add(new_voucher)
+    await db.flush()
+
+    for ol in old_lines:
+        db.add(VoucherLine(
+            tenant_id=current_user.tenant_id,
+            voucher_id=new_voucher.id,
+            account_id=ol.account_id,
+            debit_amount=ol.debit_amount,
+            credit_amount=ol.credit_amount,
+            narration=ol.narration,
+            created_by=current_user.user_id,
+        ))
+
+    await db.commit()
+    return _success({"id": new_voucher.id, "voucher_number": new_number}, message="Voucher cloned")
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+# AP AGING REPORT
+# ═══════════════════════════════════════════════════════════════════════════
+
+@router.get("/reports/ap-aging")
+async def ap_aging(
+    as_of: Optional[str] = None,
+    db: AsyncSession = Depends(get_db),
+    current_user: CurrentUser = Depends(get_current_user),
+):
+    """Accounts Payable aging — outstanding balances in payable accounts bucketed by age.
+
+    Since purchases are tracked as voucher lines (not separate purchase invoices in this
+    system), AP aging is derived from Accounts Payable ledger transactions that haven't
+    been cleared by a payment voucher.  For each un-cleared credit entry in AP we compute
+    the age from the voucher_date.
+    """
+    _require_admin(current_user)
+    as_of_date = as_of or date_type.today().isoformat()
+
+    # Find the system "Accounts Payable" account (and any user-created liability accounts)
+    ap_accounts = (await db.execute(
+        select(Account).where(
+            Account.tenant_id == current_user.tenant_id,
+            Account.account_type == "liability",
+            Account.is_deleted == False,
+            Account.is_active == True,
+        )
+    )).scalars().all()
+
+    if not ap_accounts:
+        return _success({"rows": [], "summary": {
+            "0_30_days": 0, "31_60_days": 0, "61_90_days": 0,
+            "over_90_days": 0, "total_outstanding": 0,
+        }})
+
+    ap_ids = [a.id for a in ap_accounts]
+    ap_map = {a.id: a.name for a in ap_accounts}
+
+    # Get all voucher lines against AP accounts up to as_of, grouped per voucher
+    lines = (await db.execute(
+        select(
+            VoucherLine.account_id,
+            Voucher.voucher_number,
+            Voucher.voucher_date,
+            Voucher.voucher_type,
+            Voucher.narration,
+            Voucher.reference,
+            func.sum(VoucherLine.credit_amount - VoucherLine.debit_amount).label("net_credit"),
+        )
+        .join(Voucher, VoucherLine.voucher_id == Voucher.id)
+        .where(
+            VoucherLine.tenant_id == current_user.tenant_id,
+            VoucherLine.account_id.in_(ap_ids),
+            Voucher.is_deleted == False,
+            Voucher.is_posted == True,
+            VoucherLine.is_deleted == False,
+            Voucher.voucher_date <= as_of_date,
+        )
+        .group_by(
+            VoucherLine.account_id,
+            Voucher.id,
+            Voucher.voucher_number,
+            Voucher.voucher_date,
+            Voucher.voucher_type,
+            Voucher.narration,
+            Voucher.reference,
+        )
+        .having(func.sum(VoucherLine.credit_amount - VoucherLine.debit_amount) > 0.005)
+        .order_by(Voucher.voucher_date)
+    )).all()
+
+    rows = []
+    buckets = {"0_30": 0.0, "31_60": 0.0, "61_90": 0.0, "over_90": 0.0}
+    total_outstanding = 0.0
+
+    today = date_type.fromisoformat(as_of_date)
+    for r in lines:
+        days_old = (today - date_type.fromisoformat(r.voucher_date)).days
+        amount = round(float(r.net_credit), 2)
+        if days_old <= 30:
+            bucket = "0_30_days"
+            buckets["0_30"] += amount
+        elif days_old <= 60:
+            bucket = "31_60_days"
+            buckets["31_60"] += amount
+        elif days_old <= 90:
+            bucket = "61_90_days"
+            buckets["61_90"] += amount
+        else:
+            bucket = "over_90_days"
+            buckets["over_90"] += amount
+        total_outstanding += amount
+        rows.append({
+            "account_name": ap_map.get(r.account_id, "Unknown"),
+            "voucher_number": r.voucher_number,
+            "voucher_date": r.voucher_date,
+            "voucher_type": r.voucher_type,
+            "narration": r.narration,
+            "reference": r.reference,
+            "amount": amount,
+            "days_old": days_old,
+            "bucket": bucket,
+        })
+
+    return _success({
+        "as_of": as_of_date,
+        "rows": rows,
+        "summary": {
+            "0_30_days": round(buckets["0_30"], 2),
+            "31_60_days": round(buckets["31_60"], 2),
+            "61_90_days": round(buckets["61_90"], 2),
+            "over_90_days": round(buckets["over_90"], 2),
+            "total_outstanding": round(total_outstanding, 2),
+        },
+    })
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+# CASH FLOW STATEMENT (indirect method)
+# ═══════════════════════════════════════════════════════════════════════════
+
+@router.get("/reports/cash-flow")
+async def cash_flow_statement(
+    date_from: Optional[str] = None,
+    date_to: Optional[str] = None,
+    db: AsyncSession = Depends(get_db),
+    current_user: CurrentUser = Depends(get_current_user),
+):
+    """Indirect method cash flow: Net Profit ± working capital changes = Operating CF.
+    Investing CF = net movement in fixed assets.
+    Financing CF = net movement in equity/long-term liabilities.
+    """
+    _require_admin(current_user)
+    today = date_type.today().isoformat()
+    date_to = date_to or today
+    date_from = date_from or date_type.today().replace(month=1, day=1).isoformat()
+
+    # Aggregate all voucher lines in the period by account type
+    agg = (await db.execute(
+        select(
+            Account.id.label("account_id"),
+            Account.name,
+            Account.code,
+            Account.account_type,
+            AccountGroup.name.label("group_name"),
+            func.sum(VoucherLine.debit_amount).label("total_dr"),
+            func.sum(VoucherLine.credit_amount).label("total_cr"),
+        )
+        .join(VoucherLine, VoucherLine.account_id == Account.id)
+        .join(Voucher, VoucherLine.voucher_id == Voucher.id)
+        .join(AccountGroup, Account.account_group_id == AccountGroup.id)
+        .where(
+            Account.tenant_id == current_user.tenant_id,
+            Voucher.is_deleted == False,
+            Voucher.is_posted == True,
+            VoucherLine.is_deleted == False,
+            Voucher.voucher_date >= date_from,
+            Voucher.voucher_date <= date_to,
+        )
+        .group_by(Account.id, Account.name, Account.code, Account.account_type, AccountGroup.name)
+    )).all()
+
+    income_items, expense_items = [], []
+    asset_items, liability_items, equity_items = [], [], []
+    net_income = 0.0
+
+    for r in agg:
+        dr = float(r.total_dr or 0)
+        cr = float(r.total_cr or 0)
+        if r.account_type == "income":
+            net = round(cr - dr, 2)
+            net_income += net
+            income_items.append({"name": r.name, "amount": net})
+        elif r.account_type == "expense":
+            net = round(dr - cr, 2)
+            net_income -= net
+            expense_items.append({"name": r.name, "amount": net})
+        elif r.account_type == "asset":
+            # Increase in assets = use of cash (negative)
+            net = round(dr - cr, 2)
+            asset_items.append({"name": r.name, "code": r.code, "group": r.group_name, "net_change": net})
+        elif r.account_type == "liability":
+            # Increase in liabilities = source of cash (positive)
+            net = round(cr - dr, 2)
+            liability_items.append({"name": r.name, "code": r.code, "group": r.group_name, "net_change": net})
+        elif r.account_type == "equity":
+            net = round(cr - dr, 2)
+            equity_items.append({"name": r.name, "code": r.code, "group": r.group_name, "net_change": net})
+
+    # Split assets: current (working capital) vs fixed (investing)
+    fixed_asset_keywords = ["fixed", "equipment", "furniture", "building", "land", "vehicle", "machinery"]
+    current_assets = [a for a in asset_items if not any(k in a["name"].lower() or k in a.get("group", "").lower() for k in fixed_asset_keywords)]
+    fixed_assets = [a for a in asset_items if any(k in a["name"].lower() or k in a.get("group", "").lower() for k in fixed_asset_keywords)]
+
+    # Split liabilities: current (operating) vs long-term (financing)
+    longterm_keywords = ["loan", "long", "term", "mortgage", "debenture", "bond"]
+    current_liabilities = [l for l in liability_items if not any(k in l["name"].lower() for k in longterm_keywords)]
+    longterm_liabilities = [l for l in liability_items if any(k in l["name"].lower() for k in longterm_keywords)]
+
+    # Working capital adjustments for operating CF
+    wc_adjustments = []
+    for a in current_assets:
+        if "cash" not in a["name"].lower() and "bank" not in a["name"].lower():
+            wc_adjustments.append({"name": f"(Increase)/Decrease in {a['name']}", "amount": -a["net_change"]})
+    for l in current_liabilities:
+        wc_adjustments.append({"name": f"Increase/(Decrease) in {l['name']}", "amount": l["net_change"]})
+
+    # Cash accounts — direct net change
+    cash_accounts = [a for a in current_assets if "cash" in a["name"].lower() or "bank" in a["name"].lower()]
+    net_cash_change = sum(a["net_change"] for a in cash_accounts)
+
+    operating_cf = round(net_income + sum(adj["amount"] for adj in wc_adjustments), 2)
+    investing_cf = round(-sum(a["net_change"] for a in fixed_assets), 2)
+    financing_cf = round(
+        sum(l["net_change"] for l in longterm_liabilities) +
+        sum(e["net_change"] for e in equity_items), 2
+    )
+    net_cf = round(operating_cf + investing_cf + financing_cf, 2)
+
+    return _success({
+        "date_from": date_from,
+        "date_to": date_to,
+        "operating_activities": {
+            "net_profit": round(net_income, 2),
+            "working_capital_adjustments": wc_adjustments,
+            "total": operating_cf,
+        },
+        "investing_activities": {
+            "items": [{"name": f"Purchase/(Sale) of {a['name']}", "amount": -a["net_change"]} for a in fixed_assets],
+            "total": investing_cf,
+        },
+        "financing_activities": {
+            "items": (
+                [{"name": f"Proceeds from {l['name']}", "amount": l["net_change"]} for l in longterm_liabilities] +
+                [{"name": e["name"], "amount": e["net_change"]} for e in equity_items]
+            ),
+            "total": financing_cf,
+        },
+        "net_change_in_cash": net_cf,
+    })
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+# OUTSTANDING REPORT (party-wise receivables + payables)
+# ═══════════════════════════════════════════════════════════════════════════
+
+@router.get("/reports/outstanding")
+async def outstanding_report(
+    report_type: str = "receivables",   # "receivables" | "payables"
+    as_of: Optional[str] = None,
+    db: AsyncSession = Depends(get_db),
+    current_user: CurrentUser = Depends(get_current_user),
+):
+    """Party-wise outstanding balances.
+    For receivables: patients with unpaid invoices.
+    For payables: voucher-based AP account balances by narration/reference.
+    """
+    _require_admin(current_user)
+    as_of_date = as_of or date_type.today().isoformat()
+
+    if report_type == "receivables":
+        from app.models.billing import Invoice, InvoiceStatus
+        from app.models.patient import Patient
+
+        invoices = (await db.execute(
+            select(
+                Patient.id.label("patient_id"),
+                Patient.first_name,
+                Patient.last_name,
+                Patient.phone,
+                func.count(Invoice.id).label("invoice_count"),
+                func.sum(Invoice.balance_due).label("total_outstanding"),
+                func.min(Invoice.due_date).label("oldest_due"),
+            )
+            .join(Patient, Invoice.patient_id == Patient.id)
+            .where(
+                Invoice.tenant_id == current_user.tenant_id,
+                Invoice.is_deleted == False,
+                Invoice.status.in_([
+                    InvoiceStatus.ISSUED,
+                    InvoiceStatus.PARTIALLY_PAID,
+                    InvoiceStatus.OVERDUE,
+                ]),
+                Invoice.balance_due > 0,
+                Invoice.due_date <= as_of_date,
+            )
+            .group_by(Patient.id, Patient.first_name, Patient.last_name, Patient.phone)
+            .order_by(func.sum(Invoice.balance_due).desc())
+        )).all()
+
+        rows = [
+            {
+                "party_id": str(r.patient_id),
+                "party_name": f"{r.first_name} {r.last_name}",
+                "phone": r.phone,
+                "invoice_count": r.invoice_count,
+                "total_outstanding": round(float(r.total_outstanding or 0), 2),
+                "oldest_due": r.oldest_due,
+            }
+            for r in invoices
+        ]
+    else:
+        # Payables: group AP ledger credits by reference/narration
+        ap_accounts = (await db.execute(
+            select(Account.id, Account.name).where(
+                Account.tenant_id == current_user.tenant_id,
+                Account.account_type == "liability",
+                Account.is_deleted == False,
+                Account.is_active == True,
+            )
+        )).all()
+        ap_ids = [a.id for a in ap_accounts]
+        ap_name_map = {a.id: a.name for a in ap_accounts}
+
+        if not ap_ids:
+            rows = []
+        else:
+            lines = (await db.execute(
+                select(
+                    VoucherLine.account_id,
+                    Voucher.reference,
+                    Voucher.narration,
+                    func.count(Voucher.id).label("voucher_count"),
+                    func.sum(VoucherLine.credit_amount - VoucherLine.debit_amount).label("net_balance"),
+                    func.min(Voucher.voucher_date).label("oldest_date"),
+                )
+                .join(Voucher, VoucherLine.voucher_id == Voucher.id)
+                .where(
+                    VoucherLine.tenant_id == current_user.tenant_id,
+                    VoucherLine.account_id.in_(ap_ids),
+                    Voucher.is_deleted == False,
+                    Voucher.is_posted == True,
+                    VoucherLine.is_deleted == False,
+                    Voucher.voucher_date <= as_of_date,
+                )
+                .group_by(VoucherLine.account_id, Voucher.reference, Voucher.narration)
+                .having(func.sum(VoucherLine.credit_amount - VoucherLine.debit_amount) > 0.005)
+                .order_by(func.sum(VoucherLine.credit_amount - VoucherLine.debit_amount).desc())
+            )).all()
+
+            rows = [
+                {
+                    "party_id": r.account_id,
+                    "party_name": ap_name_map.get(r.account_id, "Unknown"),
+                    "reference": r.reference,
+                    "narration": r.narration,
+                    "voucher_count": r.voucher_count,
+                    "total_outstanding": round(float(r.net_balance or 0), 2),
+                    "oldest_date": r.oldest_date,
+                }
+                for r in lines
+            ]
+
+    total = round(sum(r["total_outstanding"] for r in rows), 2)
+    return _success({
+        "report_type": report_type,
+        "as_of": as_of_date,
+        "rows": rows,
+        "total": total,
+    })
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+# FISCAL YEAR CLOSING ENTRY
+# ═══════════════════════════════════════════════════════════════════════════
+
+@router.post("/fiscal-years/{fy_id}/closing-entry")
+async def create_closing_entry(
+    fy_id: str,
+    db: AsyncSession = Depends(get_db),
+    current_user: CurrentUser = Depends(get_current_user),
+):
+    """Generate closing journal entry: transfer net P&L to Retained Earnings / Owner's Equity.
+    Debits all income accounts, credits all expense accounts, and posts the difference
+    to Owner's Equity.  Idempotent — skips if closing entry already exists for this FY.
+    """
+    _require_admin(current_user)
+
+    fy = (await db.execute(
+        select(FiscalYear).where(
+            FiscalYear.id == fy_id,
+            FiscalYear.tenant_id == current_user.tenant_id,
+            FiscalYear.is_deleted == False,
+        )
+    )).scalar_one_or_none()
+    if not fy:
+        raise NotFoundException(detail="Fiscal year not found")
+
+    # Idempotency: check existing closing entry
+    existing_ce = (await db.execute(
+        select(Voucher).where(
+            Voucher.tenant_id == current_user.tenant_id,
+            Voucher.source_type == "closing_entry",
+            Voucher.source_id == fy_id,
+            Voucher.is_deleted == False,
+        )
+    )).scalar_one_or_none()
+    if existing_ce:
+        return _success(
+            {"id": existing_ce.id, "voucher_number": existing_ce.voucher_number},
+            message="Closing entry already exists for this fiscal year",
+        )
+
+    # Sum income and expense accounts for the FY period
+    agg = (await db.execute(
+        select(
+            Account.id.label("account_id"),
+            Account.name,
+            Account.account_type,
+            func.sum(VoucherLine.debit_amount).label("total_dr"),
+            func.sum(VoucherLine.credit_amount).label("total_cr"),
+        )
+        .join(VoucherLine, VoucherLine.account_id == Account.id)
+        .join(Voucher, VoucherLine.voucher_id == Voucher.id)
+        .where(
+            Account.tenant_id == current_user.tenant_id,
+            Account.account_type.in_(["income", "expense"]),
+            Voucher.is_deleted == False,
+            Voucher.is_posted == True,
+            VoucherLine.is_deleted == False,
+            Voucher.voucher_date >= fy.start_date,
+            Voucher.voucher_date <= fy.end_date,
+            Voucher.source_type != "closing_entry",  # exclude previous closing entries
+        )
+        .group_by(Account.id, Account.name, Account.account_type)
+    )).all()
+
+    # Find retained earnings / owner's equity account
+    equity_account = await _get_system_account(current_user.tenant_id, "Owner's Equity", db)
+    if not equity_account:
+        # Fall back to first equity account
+        equity_account = (await db.execute(
+            select(Account).where(
+                Account.tenant_id == current_user.tenant_id,
+                Account.account_type == "equity",
+                Account.is_deleted == False,
+                Account.is_active == True,
+            )
+        )).scalars().first()
+    if not equity_account:
+        raise BadRequestException(detail="No equity account found. Please create an Owner's Equity account first.")
+
+    ce_lines = []
+    net_profit = 0.0
+
+    for r in agg:
+        dr = float(r.total_dr or 0)
+        cr = float(r.total_cr or 0)
+        if r.account_type == "income":
+            # Close income: DR income account (to zero it), CR equity
+            net = round(cr - dr, 2)
+            if net > 0:
+                ce_lines.append({
+                    "account_id": r.account_id,
+                    "debit_amount": net,
+                    "credit_amount": 0.0,
+                    "narration": f"Closing entry — {r.name}",
+                })
+            net_profit += net
+        else:  # expense
+            net = round(dr - cr, 2)
+            if net > 0:
+                ce_lines.append({
+                    "account_id": r.account_id,
+                    "debit_amount": 0.0,
+                    "credit_amount": net,
+                    "narration": f"Closing entry — {r.name}",
+                })
+            net_profit -= net
+
+    if not ce_lines:
+        return _success({}, message="No income/expense activity found for this fiscal year")
+
+    # Balancing entry to equity
+    if net_profit >= 0:
+        ce_lines.append({
+            "account_id": equity_account.id,
+            "debit_amount": 0.0,
+            "credit_amount": round(net_profit, 2),
+            "narration": f"Net Profit transferred — {fy.name}",
+        })
+    else:
+        ce_lines.append({
+            "account_id": equity_account.id,
+            "debit_amount": round(abs(net_profit), 2),
+            "credit_amount": 0.0,
+            "narration": f"Net Loss transferred — {fy.name}",
+        })
+
+    ce_number = await _next_voucher_number(current_user.tenant_id, "journal", db)
+    ce_voucher = Voucher(
+        tenant_id=current_user.tenant_id,
+        voucher_number=ce_number,
+        voucher_type="journal",
+        voucher_date=fy.end_date,
+        narration=f"Closing Entry — {fy.name}",
+        total_amount=round(abs(net_profit), 2),
+        is_posted=True,
+        source_type="closing_entry",
+        source_id=fy_id,
+        created_by=current_user.user_id,
+    )
+    db.add(ce_voucher)
+    await db.flush()
+
+    for l in ce_lines:
+        db.add(VoucherLine(
+            tenant_id=current_user.tenant_id,
+            voucher_id=ce_voucher.id,
+            account_id=l["account_id"],
+            debit_amount=l["debit_amount"],
+            credit_amount=l["credit_amount"],
+            narration=l.get("narration"),
+            created_by=current_user.user_id,
+        ))
+
+    # Mark FY as closed
+    fy.is_closed = True
+    fy.is_active = False
+    fy.updated_by = current_user.user_id
+
+    await db.commit()
+    return _success(
+        {"id": ce_voucher.id, "voucher_number": ce_number, "net_profit": round(net_profit, 2)},
+        message=f"Closing entry created and fiscal year '{fy.name}' closed",
+    )
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+# REPORT EXPORT (CSV)
+# ═══════════════════════════════════════════════════════════════════════════
+
+@router.get("/reports/{report_type}/export")
+async def export_report(
+    report_type: str,
+    date_from: Optional[str] = None,
+    date_to: Optional[str] = None,
+    as_of: Optional[str] = None,
+    account_id: Optional[str] = None,
+    db: AsyncSession = Depends(get_db),
+    current_user: CurrentUser = Depends(get_current_user),
+):
+    """Export a report as CSV. Supported: trial-balance, profit-loss, balance-sheet,
+    ar-aging, ap-aging, ledger, day-book, outstanding."""
+    import csv
+    import io
+    from fastapi.responses import StreamingResponse as _StreamingResponse
+
+    _require_admin(current_user)
+    today = date_type.today().isoformat()
+
+    output = io.StringIO()
+    writer = csv.writer(output)
+
+    if report_type == "trial-balance":
+        data = (await trial_balance(as_of or today, db, current_user)).get("data", {})
+        writer.writerow(["Account", "Code", "Group", "Opening Dr", "Opening Cr",
+                         "Period Dr", "Period Cr", "Closing Dr", "Closing Cr"])
+        for row in data.get("rows", []):
+            writer.writerow([row["account_name"], row.get("account_code", ""),
+                             row.get("group_name", ""), row["opening_dr"], row["opening_cr"],
+                             row["period_dr"], row["period_cr"], row["closing_dr"], row["closing_cr"]])
+        writer.writerow(["Grand Total", "", "", "", "", "", "",
+                         data.get("grand_total_dr", 0), data.get("grand_total_cr", 0)])
+
+    elif report_type == "profit-loss":
+        data = (await profit_loss(date_from or today[:7] + "-01", date_to or today, db, current_user)).get("data", {})
+        writer.writerow(["Type", "Account", "Group", "Amount"])
+        for row in data.get("income", []):
+            writer.writerow(["Income", row["account_name"], row.get("group_name", ""), row["amount"]])
+        writer.writerow(["", "Total Income", "", data.get("total_income", 0)])
+        for row in data.get("expenses", []):
+            writer.writerow(["Expense", row["account_name"], row.get("group_name", ""), row["amount"]])
+        writer.writerow(["", "Total Expenses", "", data.get("total_expenses", 0)])
+        writer.writerow(["", "Net Profit / (Loss)", "", data.get("net_profit", 0)])
+
+    elif report_type == "balance-sheet":
+        data = (await balance_sheet(as_of or today, db, current_user)).get("data", {})
+        writer.writerow(["Type", "Account", "Code", "Group", "Amount"])
+        for row in data.get("assets", []):
+            writer.writerow(["Asset", row["account_name"], row.get("account_code", ""),
+                             row.get("group_name", ""), row["amount"]])
+        writer.writerow(["", "Total Assets", "", "", data.get("total_assets", 0)])
+        for row in data.get("liabilities", []):
+            writer.writerow(["Liability", row["account_name"], row.get("account_code", ""),
+                             row.get("group_name", ""), row["amount"]])
+        for row in data.get("equity", []):
+            writer.writerow(["Equity", row["account_name"], row.get("account_code", ""),
+                             row.get("group_name", ""), row["amount"]])
+        writer.writerow(["", "Total Liabilities + Equity", "", "",
+                         data.get("total_liab_equity", 0)])
+
+    elif report_type == "ar-aging":
+        data = (await ar_aging(as_of or today, db, current_user)).get("data", {})
+        writer.writerow(["Patient", "Invoice", "Due Date", "Days Overdue", "Amount", "Bucket"])
+        for row in data.get("rows", []):
+            writer.writerow([row.get("patient_name", ""), row.get("invoice_number", ""),
+                             row.get("due_date", ""), row.get("days_overdue", 0),
+                             row.get("balance_due", 0), row.get("bucket", "")])
+        s = data.get("summary", {})
+        writer.writerow(["", "", "", "", ""])
+        writer.writerow(["Summary", "0–30 days", "31–60 days", "61–90 days", "90+ days", "Total"])
+        writer.writerow(["", s.get("0_30_days", 0), s.get("31_60_days", 0),
+                         s.get("61_90_days", 0), s.get("over_90_days", 0),
+                         s.get("total_outstanding", 0)])
+
+    elif report_type == "ap-aging":
+        data = (await ap_aging(as_of or today, db, current_user)).get("data", {})
+        writer.writerow(["Account", "Voucher", "Date", "Type", "Narration", "Amount", "Days Old", "Bucket"])
+        for row in data.get("rows", []):
+            writer.writerow([row["account_name"], row["voucher_number"], row["voucher_date"],
+                             row["voucher_type"], row.get("narration", ""),
+                             row["amount"], row["days_old"], row["bucket"]])
+        s = data.get("summary", {})
+        writer.writerow(["Summary", s.get("0_30_days", 0), s.get("31_60_days", 0),
+                         s.get("61_90_days", 0), s.get("over_90_days", 0),
+                         s.get("total_outstanding", 0)])
+
+    elif report_type == "day-book":
+        data = (await day_book(date_from or today, db, current_user)).get("data", {})
+        writer.writerow(["Voucher Number", "Type", "Narration", "Total Dr", "Total Cr"])
+        for v in data.get("vouchers", []):
+            writer.writerow([v["voucher_number"], v["voucher_type"], v.get("narration", ""),
+                             v.get("total_debit", 0), v.get("total_credit", 0)])
+        writer.writerow(["Totals", "", "", data.get("total_debit", 0), data.get("total_credit", 0)])
+
+    elif report_type == "outstanding":
+        data = (await outstanding_report("receivables", as_of or today, db, current_user)).get("data", {})
+        writer.writerow(["Party", "Phone", "Invoice Count", "Total Outstanding", "Oldest Due"])
+        for row in data.get("rows", []):
+            writer.writerow([row["party_name"], row.get("phone", ""),
+                             row["invoice_count"], row["total_outstanding"], row.get("oldest_due", "")])
+        writer.writerow(["Total", "", "", data.get("total", 0), ""])
+
+    else:
+        raise BadRequestException(detail=f"Unsupported report type for export: {report_type}")
+
+    output.seek(0)
+    filename = f"{report_type}_{(date_from or as_of or today)}.csv"
+    return _StreamingResponse(
+        iter([output.getvalue()]),
+        media_type="text/csv",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
