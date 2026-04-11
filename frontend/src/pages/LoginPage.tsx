@@ -63,12 +63,18 @@ export default function LoginPage() {
   const handlePostLogin = async () => {
     const resp = await api.get("/auth/my-tenants");
     const myTenants: any[] = resp.data.data ?? [];
-    if (myTenants.length > 1) {
-      setTenants(myTenants);
+
+    // If the backend already selected a preferred tenant (is_current=true) or
+    // the user only belongs to one tenant, go straight to the dashboard.
+    const hasCurrent = myTenants.some((t) => t.is_current);
+    if (myTenants.length <= 1 || hasCurrent) {
+      dispatch(addToast({ id: `t-${Date.now()}`, type: "success", message: "Login successful!" }));
+      navigate(from, { replace: true });
       return;
     }
-    dispatch(addToast({ id: `t-${Date.now()}`, type: "success", message: "Login successful!" }));
-    navigate(from, { replace: true });
+
+    // No preferred tenant set yet — show the picker once so the user can choose.
+    setTenants(myTenants);
   };
 
   // ── Social login shared handler ───────────────────────────────

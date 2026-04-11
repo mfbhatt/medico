@@ -9,9 +9,11 @@ interface ProtectedRouteProps {
 
 export default function ProtectedRoute({ allowedRoles, redirectTo = "/403" }: ProtectedRouteProps) {
   const location = useLocation();
-  const { user, token, loading } = useAppSelector((s) => s.auth);
+  const { user, token, loading, refreshPending } = useAppSelector((s) => s.auth);
 
-  if (loading) {
+  // Show spinner while initial silent token refresh is in progress so the user
+  // isn't redirected to login just because their access token expired while idle.
+  if (loading || refreshPending) {
     return <LoadingSpinner fullscreen />;
   }
 

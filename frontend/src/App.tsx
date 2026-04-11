@@ -1,6 +1,7 @@
 import { Navigate, Routes, Route } from "react-router-dom";
 import { useSelector } from "react-redux";
 import { RootState } from "./store";
+import { useTokenRefresh } from "./hooks/useTokenRefresh";
 
 import ProtectedRoute from "./components/auth/ProtectedRoute";
 import AuthLayout from "./components/layouts/AuthLayout";
@@ -104,6 +105,9 @@ function RoleBasedHome() {
 }
 
 export default function App() {
+  // Silently refresh the access token before it expires and on tab focus.
+  useTokenRefresh();
+
   return (
     <Routes>
       {/* ── Public routes (no auth required) ────────────────────────────── */}

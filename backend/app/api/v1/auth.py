@@ -137,14 +137,21 @@ async def login(
     if not memberships:
         raise UnauthorizedException(detail="No tenant access found for this account")
 
-    # If a specific tenant was requested, use it; otherwise pick first active one
+    # If a specific tenant was requested, use it;
+    # otherwise prefer the membership the user last explicitly switched to (is_current=True),
+    # falling back to the first active membership.
     requested_tenant_id = getattr(body, "tenant_id", None)
     if requested_tenant_id:
         ut = next((m for m in memberships if m.tenant_id == requested_tenant_id), None)
         if not ut:
             raise ForbiddenException(detail="You do not have access to this tenant")
     else:
-        ut = next((m for m in memberships if m.status == UserStatus.ACTIVE), memberships[0])
+        active = [m for m in memberships if m.status == UserStatus.ACTIVE]
+        ut = (
+            next((m for m in active if m.is_current), None)
+            or next(iter(active), None)
+            or memberships[0]
+        )
 
     # Status check for the selected membership
     if ut.status == UserStatus.LOCKED:
@@ -158,6 +165,10 @@ async def login(
 
     access_token, refresh_token = _issue_tokens(user, ut)
     ut.refresh_token_hash = hash_password(refresh_token)
+    # Persist that this is the user's active tenant so future logins auto-select it
+    if not ut.is_current:
+        for m in memberships:
+            m.is_current = m.tenant_id == ut.tenant_id
     await db.commit()
 
     user_dict: dict = {
@@ -592,7 +603,7 @@ async def list_my_tenants(
             "tenant_name": tenants_map[m.tenant_id].name if m.tenant_id in tenants_map else "Unknown",
             "tenant_slug": tenants_map[m.tenant_id].slug if m.tenant_id in tenants_map else "",
             "role": m.role,
-            "is_current": m.tenant_id == current_user.tenant_id,
+            "is_current": m.is_current,
         }
         for m in memberships
         if m.tenant_id in tenants_map
@@ -640,6 +651,17 @@ async def switch_tenant(
     access_token, refresh_token = _issue_tokens(user, ut)
     ut.refresh_token_hash = hash_password(refresh_token)
     user.last_login_at = datetime.now(timezone.utc)
+
+    # Update is_current so the next login auto-selects this tenant
+    all_memberships = (await db.execute(
+        select(UserTenant).where(
+            UserTenant.user_id == current_user.user_id,
+            UserTenant.is_deleted.isnot(True),
+        )
+    )).scalars().all()
+    for m in all_memberships:
+        m.is_current = m.tenant_id == target_tenant_id
+
     await db.commit()
 
     return _success(

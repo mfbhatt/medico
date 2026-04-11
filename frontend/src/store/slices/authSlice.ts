@@ -18,6 +18,7 @@ interface AuthState {
   error: string | null;
   isAuthenticated: boolean;
   activePatient: ActivePatient | null; // null = self
+  refreshPending: boolean; // true while a silent token refresh is in flight
 }
 
 function isTokenExpired(token: string): boolean {
@@ -37,11 +38,10 @@ function loadAuthFromStorage(): Pick<AuthState, "user" | "token" | "refreshToken
     const user: User | null = userJson ? JSON.parse(userJson) : null;
 
     if (token && isTokenExpired(token)) {
+      // Access token expired — clear it but keep refresh token so the app
+      // can silently obtain a new access token on load instead of forcing a login.
       localStorage.removeItem(STORAGE_KEYS.AUTH_TOKEN);
-      localStorage.removeItem(STORAGE_KEYS.REFRESH_TOKEN);
-      localStorage.removeItem(STORAGE_KEYS.USER);
-      localStorage.removeItem(STORAGE_KEYS.TENANT_ID);
-      return { token: null, refreshToken: null, user: null, isAuthenticated: false };
+      return { token: null, refreshToken, user, isAuthenticated: false };
     }
 
     return {
@@ -60,7 +60,48 @@ const initialState: AuthState = {
   loading: false,
   error: null,
   activePatient: null,
+  refreshPending: false,
 };
+
+interface RefreshResponse {
+  access_token: string;
+  refresh_token: string;
+}
+
+export const refreshAuthThunk = createAsyncThunk<RefreshResponse, void, { rejectValue: string }>(
+  "auth/refresh",
+  async (_, { rejectWithValue }) => {
+    const refreshToken = localStorage.getItem(STORAGE_KEYS.REFRESH_TOKEN);
+    if (!refreshToken) return rejectWithValue("No refresh token");
+    try {
+      // Use raw axios to avoid the response interceptor creating a refresh loop
+      const { default: axios } = await import("axios");
+      const API_BASE_URL = (import.meta as any).env?.VITE_API_URL ?? "http://localhost:8000/api/v1";
+      const tenantId = localStorage.getItem(STORAGE_KEYS.TENANT_ID);
+      const { data } = await axios.post(
+        `${API_BASE_URL}/auth/refresh`,
+        { refresh_token: refreshToken },
+        {
+          headers: {
+            "Content-Type": "application/json",
+            ...(tenantId ? { "X-Tenant-ID": tenantId } : {}),
+          },
+        }
+      );
+      const { access_token, refresh_token: newRefreshToken } = data.data as RefreshResponse;
+      localStorage.setItem(STORAGE_KEYS.AUTH_TOKEN, access_token);
+      localStorage.setItem(STORAGE_KEYS.REFRESH_TOKEN, newRefreshToken);
+      return { access_token, refresh_token: newRefreshToken };
+    } catch (err: any) {
+      // Clear storage so the user is redirected to login
+      localStorage.removeItem(STORAGE_KEYS.AUTH_TOKEN);
+      localStorage.removeItem(STORAGE_KEYS.REFRESH_TOKEN);
+      localStorage.removeItem(STORAGE_KEYS.USER);
+      localStorage.removeItem(STORAGE_KEYS.TENANT_ID);
+      return rejectWithValue(err?.response?.data?.message ?? "Session expired");
+    }
+  }
+);
 
 interface LoginPayload {
   email: string;
@@ -182,6 +223,22 @@ export const authSlice = createSlice({
       .addCase(switchTenantThunk.rejected, (state, action) => {
         state.loading = false;
         state.error = action.payload || "Failed to switch tenant";
+      })
+      .addCase(refreshAuthThunk.pending, (state) => {
+        state.refreshPending = true;
+      })
+      .addCase(refreshAuthThunk.fulfilled, (state, action) => {
+        state.refreshPending = false;
+        state.token = action.payload.access_token;
+        state.refreshToken = action.payload.refresh_token;
+        state.isAuthenticated = true;
+      })
+      .addCase(refreshAuthThunk.rejected, (state) => {
+        state.refreshPending = false;
+        state.token = null;
+        state.refreshToken = null;
+        state.user = null;
+        state.isAuthenticated = false;
       });
   },
 });
