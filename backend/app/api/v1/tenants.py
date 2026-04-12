@@ -15,6 +15,12 @@ def _success(data, message="Success", meta=None):
     return {"success": True, "message": message, "data": data, "meta": meta}
 
 
+VALID_MODULES = {
+    "appointments", "patients", "doctors", "medical_records",
+    "prescriptions", "lab", "billing", "pharmacy", "accounting", "analytics",
+}
+
+
 def _tenant_response(t: Tenant, clinics_count: int = 0, users_count: int = 0) -> dict:
     settings = t.settings or {}
     return {
@@ -35,6 +41,7 @@ def _tenant_response(t: Tenant, clinics_count: int = 0, users_count: int = 0) ->
         "admin_user_id": settings.get("_admin_user_id"),
         "admin_name": settings.get("_admin_name"),
         "admin_email": settings.get("_admin_email"),
+        "features": t.features or {},
         "settings": {k: v for k, v in settings.items() if not k.startswith("_")},
         "created_at": t.created_at.isoformat() if t.created_at else None,
     }
@@ -229,10 +236,21 @@ async def get_my_tenant(
     if not tenant:
         raise NotFoundException(detail="Tenant not found")
 
+    from app.models.user_tenant import UserTenant
+    ut = (await db.execute(
+        select(UserTenant).where(
+            UserTenant.user_id == current_user.user_id,
+            UserTenant.tenant_id == current_user.tenant_id,
+            UserTenant.is_deleted.isnot(True),
+        )
+    )).scalar_one_or_none()
+
     data = _tenant_response(tenant)
     # Merge: platform defaults first, then tenant overrides on top
     data["settings"] = {**platform_settings, **(tenant.settings or {})}
     data["platform_settings"] = platform_settings
+    # Per-user module access overrides (None means inherit all tenant-enabled modules)
+    data["user_features"] = ut.features if ut and ut.features else {}
     return _success(data)
 
 
@@ -404,3 +422,30 @@ async def suspend_tenant(
     tenant.status = TenantStatus.SUSPENDED
     await db.commit()
     return _success(_tenant_response(tenant), message="Tenant suspended")
+
+
+@router.patch("/{tenant_id}/modules")
+async def update_tenant_modules(
+    tenant_id: str,
+    body: dict,
+    db: AsyncSession = Depends(get_db),
+    current_user: CurrentUser = Depends(require_roles("super_admin")),
+):
+    """
+    Enable or disable modules for a tenant (super admin only).
+    Body: { "modules": { "pharmacy": true, "lab": false, ... } }
+    Unknown module keys are silently ignored.
+    """
+    tenant = (await db.execute(select(Tenant).where(Tenant.id == tenant_id))).scalar_one_or_none()
+    if not tenant:
+        raise NotFoundException(detail="Tenant not found")
+
+    modules: dict = body.get("modules", {})
+    current_features = dict(tenant.features or {})
+    for key, value in modules.items():
+        if key in VALID_MODULES:
+            current_features[key] = bool(value)
+
+    tenant.features = current_features
+    await db.commit()
+    return _success({"features": tenant.features}, message="Module access updated")

@@ -3,7 +3,22 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Plus, Search, Edit2, Trash2, X, ArrowUpDown, ArrowUp, ArrowDown } from "lucide-react";
 import api from "@/services/api";
 import { useAppSelector } from "@/store/hooks";
+import { useSelector } from "react-redux";
+import { RootState } from "@/store";
 import Pagination from "@/components/ui/Pagination";
+
+const MODULES = [
+  { key: "appointments",    label: "Appointments" },
+  { key: "patients",        label: "Patients" },
+  { key: "doctors",         label: "Doctors" },
+  { key: "medical_records", label: "Medical Records" },
+  { key: "prescriptions",   label: "Prescriptions" },
+  { key: "lab",             label: "Lab Reports" },
+  { key: "billing",         label: "Billing" },
+  { key: "pharmacy",        label: "Pharmacy" },
+  { key: "accounting",      label: "Accounting" },
+  { key: "analytics",       label: "Analytics" },
+];
 
 const ROLE_COLORS: Record<string, string> = {
   super_admin: "bg-red-100 text-red-700",
@@ -396,6 +411,11 @@ function UserFormModal({
   onSuccess: () => void;
 }) {
   const isEdit = !!user;
+  const tenantFeatures = useSelector((state: RootState) => state.tenant?.features ?? {});
+
+  // Modules enabled at tenant level — these are the only ones the tenant admin can toggle per user
+  const enabledModules = MODULES.filter(({ key }) => tenantFeatures[key] !== false);
+
   const [form, setForm] = useState({
     first_name: user?.first_name ?? "",
     last_name: user?.last_name ?? "",
@@ -405,6 +425,15 @@ function UserFormModal({
     phone: user?.phone ?? "",
   });
 
+  // Per-user module access: default all tenant-enabled modules to ON, respect saved user.features
+  const [userModules, setUserModules] = useState<Record<string, boolean>>(() => {
+    const saved: Record<string, boolean> = user?.features ?? {};
+    return Object.fromEntries(enabledModules.map(({ key }) => [key, saved[key] !== false]));
+  });
+
+  const toggleUserModule = (key: string) =>
+    setUserModules((prev) => ({ ...prev, [key]: !prev[key] }));
+
   const mutation = useMutation({
     mutationFn: () => {
       if (isEdit) {
@@ -412,6 +441,7 @@ function UserFormModal({
           first_name: form.first_name,
           last_name: form.last_name,
           phone: form.phone || undefined,
+          features: userModules,
         };
         if (form.password) body.new_password = form.password;
         return api.patch(`/users/${user.id}`, body);
@@ -425,7 +455,7 @@ function UserFormModal({
 
   return (
     <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-      <div className="bg-white rounded-xl w-full max-w-md p-6">
+      <div className="bg-white rounded-xl w-full max-w-md p-6 max-h-[90vh] overflow-y-auto">
         <div className="flex items-center justify-between mb-5">
           <h3 className="text-base font-semibold text-slate-900">{isEdit ? "Edit User" : "Add User"}</h3>
           <button onClick={onClose}><X className="h-5 w-5 text-slate-400 hover:text-slate-600" /></button>
@@ -459,6 +489,30 @@ function UserFormModal({
             className={cls}
           />
         </div>
+
+        {/* Module access — only shown when editing, and only for tenant admins */}
+        {isEdit && !isSuperAdmin && enabledModules.length > 0 && (
+          <div className="mt-5">
+            <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">Module Access</p>
+            <div className="grid grid-cols-2 gap-2">
+              {enabledModules.map(({ key, label }) => (
+                <button
+                  key={key}
+                  type="button"
+                  onClick={() => toggleUserModule(key)}
+                  className={`flex items-center gap-2 px-3 py-2 rounded-lg border text-sm font-medium transition-colors ${
+                    userModules[key]
+                      ? "bg-blue-50 border-blue-300 text-blue-800"
+                      : "bg-slate-50 border-slate-200 text-slate-400 line-through"
+                  }`}
+                >
+                  <span className={`w-3.5 h-3.5 rounded-full flex-shrink-0 ${userModules[key] ? "bg-blue-500" : "bg-slate-300"}`} />
+                  {label}
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
 
         <div className="flex gap-3 mt-5">
           <button

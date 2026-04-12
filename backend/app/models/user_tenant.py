@@ -6,7 +6,7 @@ the per-session refresh token hash.
 """
 from typing import Optional
 
-from sqlalchemy import Boolean, ForeignKey, String, UniqueConstraint
+from sqlalchemy import Boolean, ForeignKey, JSON, String, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.models.base import BaseModel
@@ -54,6 +54,11 @@ class UserTenant(BaseModel):
     # Marks the tenant the user last explicitly switched to (or the first active one).
     # On login, the membership with is_current=True is auto-selected.
     is_current: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False, server_default="false")
+
+    # Per-user module overrides within this tenant.
+    # None/missing = inherit all tenant-enabled modules.
+    # { "pharmacy": false } = pharmacy disabled for this user only.
+    features: Mapped[Optional[dict]] = mapped_column(JSON, nullable=True)
 
     # Relationships
     user: Mapped["User"] = relationship("User", back_populates="tenant_memberships")

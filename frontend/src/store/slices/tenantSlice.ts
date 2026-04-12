@@ -6,6 +6,7 @@ interface TenantState {
   slug: string | null;
   plan: string | null;
   features: Record<string, boolean>;
+  userFeatures: Record<string, boolean>;
   logoUrl: string | null;
   currency: string;
 }
@@ -25,6 +26,7 @@ const initialState: TenantState = {
   slug: null,
   plan: null,
   features: {},
+  userFeatures: {},
   logoUrl: null,
   currency: 'USD',
   ...getStoredTenant(),
@@ -72,8 +74,11 @@ const tenantSlice = createSlice({
     setFeatureFlags(state, action: PayloadAction<Record<string, boolean>>) {
       state.features = action.payload;
     },
+    setUserFeatureFlags(state, action: PayloadAction<Record<string, boolean>>) {
+      state.userFeatures = action.payload;
+    },
   },
 });
 
-export const { setTenant, setCurrency, clearTenant, setFeatureFlags } = tenantSlice.actions;
+export const { setTenant, setCurrency, clearTenant, setFeatureFlags, setUserFeatureFlags } = tenantSlice.actions;
 export default tenantSlice.reducer;

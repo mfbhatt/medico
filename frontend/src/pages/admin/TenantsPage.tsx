@@ -4,6 +4,19 @@ import { Plus, Search, X, Building2, AlertTriangle, UserCircle, UserPlus, Eye, E
 import api from "@/services/api";
 import Pagination from "@/components/ui/Pagination";
 
+const MODULES = [
+  { key: "appointments",    label: "Appointments" },
+  { key: "patients",        label: "Patients" },
+  { key: "doctors",         label: "Doctors" },
+  { key: "medical_records", label: "Medical Records" },
+  { key: "prescriptions",   label: "Prescriptions" },
+  { key: "lab",             label: "Lab Reports" },
+  { key: "billing",         label: "Billing" },
+  { key: "pharmacy",        label: "Pharmacy" },
+  { key: "accounting",      label: "Accounting" },
+  { key: "analytics",       label: "Analytics" },
+];
+
 const PAGE_SIZE = 20;
 
 const STATUS_COLORS: Record<string, string> = {
@@ -500,6 +513,13 @@ function EditTenantModal({ tenant, onClose, onSuccess }: { tenant: any; onClose:
   const [plan, setPlan] = useState(tenant.plan ?? "basic");
   const [status, setStatus] = useState(tenant.status ?? "active");
   const [newAdminId, setNewAdminId] = useState("");
+  // Module access: default all ON when features is empty/undefined
+  const [modules, setModules] = useState<Record<string, boolean>>(() => {
+    const f: Record<string, boolean> = tenant.features ?? {};
+    return Object.fromEntries(MODULES.map(({ key }) => [key, f[key] !== false]));
+  });
+  const toggleModule = (key: string) =>
+    setModules((prev) => ({ ...prev, [key]: !prev[key] }));
 
   const { data: usersData, isLoading: usersLoading, isError: usersError } = useQuery({
     queryKey: ["all-users-for-admin"],
@@ -523,6 +543,7 @@ function EditTenantModal({ tenant, onClose, onSuccess }: { tenant: any; onClose:
       if (newAdminId && newAdminId !== currentAdmin?.id) {
         await api.patch(`/tenants/${tenant.id}/admin`, { user_id: newAdminId });
       }
+      await api.patch(`/tenants/${tenant.id}/modules`, { modules });
     },
     onSuccess,
   });
@@ -615,6 +636,27 @@ function EditTenantModal({ tenant, onClose, onSuccess }: { tenant: any; onClose:
               <option value="cancelled">Cancelled</option>
             </select>
           </div>
+        </div>
+
+        {/* Module Access */}
+        <hr className="border-slate-100 my-5" />
+        <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-3">Module Access</p>
+        <div className="grid grid-cols-2 gap-2">
+          {MODULES.map(({ key, label }) => (
+            <button
+              key={key}
+              type="button"
+              onClick={() => toggleModule(key)}
+              className={`flex items-center gap-2 px-3 py-2 rounded-lg border text-sm font-medium transition-colors ${
+                modules[key]
+                  ? "bg-blue-50 border-blue-300 text-blue-800"
+                  : "bg-slate-50 border-slate-200 text-slate-400 line-through"
+              }`}
+            >
+              <span className={`w-3.5 h-3.5 rounded-full flex-shrink-0 ${modules[key] ? "bg-blue-500" : "bg-slate-300"}`} />
+              {label}
+            </button>
+          ))}
         </div>
 
         {/* Tenant Admin */}

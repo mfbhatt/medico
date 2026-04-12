@@ -39,7 +39,7 @@ import {
 } from "lucide-react";
 import { RootState, AppDispatch } from "../../store";
 import { logout } from "../../store/slices/authSlice";
-import { setCurrency } from "../../store/slices/tenantSlice";
+import { setCurrency, setFeatureFlags, setUserFeatureFlags } from "../../store/slices/tenantSlice";
 
 // ─── Navigation configs per role ────────────────────────────────────────────
 
@@ -57,29 +57,29 @@ const SUPER_ADMIN_NAV = [
 const TENANT_ADMIN_NAV = [
   { name: "Dashboard", href: "/dashboard", icon: Home },
   { name: "My Clinics", href: "/admin/clinics", icon: Building2 },
-  { name: "Doctors", href: "/doctors", icon: UserCog },
-  { name: "Patients", href: "/patients", icon: Users },
-  { name: "Appointments", href: "/appointments", icon: Calendar },
+  { name: "Doctors", href: "/doctors", icon: UserCog, module: "doctors" },
+  { name: "Patients", href: "/patients", icon: Users, module: "patients" },
+  { name: "Appointments", href: "/appointments", icon: Calendar, module: "appointments" },
   { name: "Staff & Users", href: "/admin/users", icon: UserCheck },
-  { name: "Billing", href: "/billing", icon: CreditCard },
-  { name: "Pharmacy", href: "/pharmacy", icon: Package },
-  { name: "Accounting", href: "/accounting", icon: BookOpen },
-  { name: "Analytics", href: "/analytics", icon: BarChart3 },
+  { name: "Billing", href: "/billing", icon: CreditCard, module: "billing" },
+  { name: "Pharmacy", href: "/pharmacy", icon: Package, module: "pharmacy" },
+  { name: "Accounting", href: "/accounting", icon: BookOpen, module: "accounting" },
+  { name: "Analytics", href: "/analytics", icon: BarChart3, module: "analytics" },
   { name: "Settings", href: "/settings", icon: Settings },
 ];
 
 const OPERATIONAL_NAV = [
   { name: "Dashboard", href: "/dashboard", icon: Home, roles: ["*"] },
-  { name: "Appointments", href: "/appointments", icon: Calendar, roles: ["*"] },
-  { name: "Patients", href: "/patients", icon: Users, roles: ["clinic_admin", "doctor", "nurse", "receptionist"] },
-  { name: "Doctors", href: "/doctors", icon: UserCog, roles: ["clinic_admin", "receptionist"] },
-  { name: "Medical Records", href: "/medical-records", icon: FileText, roles: ["doctor", "nurse", "clinic_admin"] },
-  { name: "Prescriptions", href: "/prescriptions", icon: Pill, roles: ["doctor", "pharmacist", "nurse"] },
-  { name: "Lab Reports", href: "/lab", icon: FlaskConical, roles: ["doctor", "lab_technician", "nurse"] },
-  { name: "Billing", href: "/billing", icon: CreditCard, roles: ["receptionist", "clinic_admin"] },
-  { name: "Pharmacy", href: "/pharmacy", icon: Package, roles: ["pharmacist", "clinic_admin"] },
-  { name: "Accounting", href: "/accounting", icon: BookOpen, roles: ["clinic_admin"] },
-  { name: "Analytics", href: "/analytics", icon: BarChart3, roles: ["clinic_admin"] },
+  { name: "Appointments", href: "/appointments", icon: Calendar, roles: ["*"], module: "appointments" },
+  { name: "Patients", href: "/patients", icon: Users, roles: ["clinic_admin", "doctor", "nurse", "receptionist"], module: "patients" },
+  { name: "Doctors", href: "/doctors", icon: UserCog, roles: ["clinic_admin", "receptionist"], module: "doctors" },
+  { name: "Medical Records", href: "/medical-records", icon: FileText, roles: ["doctor", "nurse", "clinic_admin"], module: "medical_records" },
+  { name: "Prescriptions", href: "/prescriptions", icon: Pill, roles: ["doctor", "pharmacist", "nurse"], module: "prescriptions" },
+  { name: "Lab Reports", href: "/lab", icon: FlaskConical, roles: ["doctor", "lab_technician", "nurse"], module: "lab" },
+  { name: "Billing", href: "/billing", icon: CreditCard, roles: ["receptionist", "clinic_admin"], module: "billing" },
+  { name: "Pharmacy", href: "/pharmacy", icon: Package, roles: ["pharmacist", "clinic_admin"], module: "pharmacy" },
+  { name: "Accounting", href: "/accounting", icon: BookOpen, roles: ["clinic_admin"], module: "accounting" },
+  { name: "Analytics", href: "/analytics", icon: BarChart3, roles: ["clinic_admin"], module: "analytics" },
 ];
 
 const PATIENT_NAV = [
@@ -285,6 +285,8 @@ export default function DashboardLayout() {
   const [switchingTenant, setSwitchingTenant] = useState<string | null>(null);
 
   const { user, activePatient } = useSelector((state: RootState) => state.auth);
+  const tenantFeatures = useSelector((state: RootState) => state.tenant?.features ?? {});
+  const userFeatures = useSelector((state: RootState) => state.tenant?.userFeatures ?? {});
   const dispatch = useDispatch<AppDispatch>();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
@@ -349,15 +351,18 @@ export default function DashboardLayout() {
     setProfileMenuOpen(false);
   };
 
-  // Fetch effective tenant settings to populate currency (and other future prefs) in Redux
+  // Fetch effective tenant settings to populate currency, features (module access) in Redux
   useQuery({
     queryKey: ["tenant-me-settings", user?.tenant_id],
     queryFn: () =>
       api.get("/tenants/me").then((r) => {
-        const settings = r.data.data?.settings ?? {};
+        const data = r.data.data;
+        const settings = data?.settings ?? {};
         const c = settings.currency;
         if (c) dispatch(setCurrency(c));
-        return r.data.data;
+        dispatch(setFeatureFlags(data?.features ?? {}));
+        dispatch(setUserFeatureFlags(data?.user_features ?? {}));
+        return data;
       }),
     enabled: !!user && role !== "super_admin",
     staleTime: 5 * 60 * 1000,
@@ -385,14 +390,20 @@ export default function DashboardLayout() {
     return () => es.close();
   }, [user?.id]);
 
-  // Build navigation list for the current role
+  // Returns true when a module is accessible.
+  // Default ON: only explicit `false` disables a module.
+  // Both tenant-level AND user-level must allow the module.
+  const isModuleEnabled = (module?: string) =>
+    !module || (tenantFeatures[module] !== false && userFeatures[module] !== false);
+
+  // Build navigation list for the current role, filtered by enabled modules
   const navItems = (() => {
     if (role === "super_admin") return SUPER_ADMIN_NAV;
-    if (role === "tenant_admin") return TENANT_ADMIN_NAV;
+    if (role === "tenant_admin") return TENANT_ADMIN_NAV.filter((i) => isModuleEnabled((i as any).module));
     if (role === "patient") return PATIENT_NAV;
-    // For other roles, filter operational nav
+    // For other roles, filter operational nav by role + module access
     const hasRole = (roles: string[]) => roles.includes("*") || roles.includes(role);
-    return OPERATIONAL_NAV.filter((item) => hasRole(item.roles));
+    return OPERATIONAL_NAV.filter((item) => hasRole(item.roles) && isModuleEnabled((item as any).module));
   })();
 
   // Extra admin section for clinic_admin
@@ -465,8 +476,8 @@ export default function DashboardLayout() {
             <NavItem key={item.href} item={item} collapsed={sidebarCollapsed} accentClass={meta.sidebarAccent} />
           ))}
 
-          {/* Accounting sub-nav for admin roles */}
-          {(role === "tenant_admin" || role === "clinic_admin" || role === "super_admin") && (
+          {/* Accounting sub-nav for admin roles (only when accounting module is enabled) */}
+          {(role === "tenant_admin" || role === "clinic_admin" || role === "super_admin") && isModuleEnabled("accounting") && (
             <div className="pt-2">
               <AccountingSubNav collapsed={sidebarCollapsed} />
             </div>

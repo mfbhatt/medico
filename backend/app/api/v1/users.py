@@ -30,6 +30,7 @@ def _user_response(u: User, ut: UserTenant) -> dict:
         "role": ut.role,
         "status": ut.status,
         "clinic_id": ut.clinic_id,
+        "features": ut.features,
         "is_email_verified": u.is_email_verified,
         "created_at": ut.created_at.isoformat() if ut.created_at else None,
     }
@@ -336,6 +337,10 @@ async def update_user(
     for field in ["role", "status", "clinic_id"]:
         if field in body:
             setattr(ut, field, body[field])
+
+    # Per-user module access overrides (tenant admin sets which modules this user can access)
+    if "features" in body and isinstance(body["features"], dict):
+        ut.features = {k: bool(v) for k, v in body["features"].items()}
 
     # Update global profile fields on User
     for field in ["first_name", "last_name", "middle_name", "phone", "gender", "fcm_token"]:
