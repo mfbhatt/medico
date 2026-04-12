@@ -143,3 +143,54 @@ class PurchaseOrderItem(BaseModel):
     line_total: Mapped[float] = mapped_column(Float, nullable=False)
 
     order: Mapped["PurchaseOrder"] = relationship("PurchaseOrder", back_populates="items")
+
+
+class PharmacySale(BaseModel):
+    """Point-of-sale dispensing record."""
+    __tablename__ = "pharmacy_sales"
+
+    sale_number: Mapped[str] = mapped_column(String(30), unique=True, nullable=False, index=True)
+    clinic_id: Mapped[str] = mapped_column(
+        String(36), ForeignKey("clinics.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    patient_id: Mapped[Optional[str]] = mapped_column(
+        String(36), ForeignKey("patients.id", ondelete="SET NULL"), nullable=True
+    )
+    patient_name: Mapped[Optional[str]] = mapped_column(String(200), nullable=True)
+    cashier_id: Mapped[str] = mapped_column(String(36), nullable=False)
+    payment_method: Mapped[str] = mapped_column(String(20), nullable=False, default="cash")
+    subtotal: Mapped[float] = mapped_column(Float, nullable=False, default=0.0)
+    discount_amount: Mapped[float] = mapped_column(Float, nullable=False, default=0.0)
+    tax_amount: Mapped[float] = mapped_column(Float, nullable=False, default=0.0)
+    total_amount: Mapped[float] = mapped_column(Float, nullable=False)
+    paid_amount: Mapped[float] = mapped_column(Float, nullable=False)
+    change_amount: Mapped[float] = mapped_column(Float, nullable=False, default=0.0)
+    status: Mapped[str] = mapped_column(String(20), nullable=False, default="completed")
+    # completed, voided, refunded
+    notes: Mapped[Optional[str]] = mapped_column(String(500), nullable=True)
+
+    items: Mapped[List["PharmacySaleItem"]] = relationship(
+        "PharmacySaleItem", back_populates="sale", cascade="all, delete-orphan"
+    )
+
+    def __repr__(self) -> str:
+        return f"<PharmacySale {self.sale_number} ${self.total_amount}>"
+
+
+class PharmacySaleItem(BaseModel):
+    """Line item within a pharmacy POS sale."""
+    __tablename__ = "pharmacy_sale_items"
+
+    sale_id: Mapped[str] = mapped_column(
+        String(36), ForeignKey("pharmacy_sales.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    drug_item_id: Mapped[str] = mapped_column(
+        String(36), ForeignKey("drug_items.id", ondelete="RESTRICT"), nullable=False
+    )
+    drug_name: Mapped[str] = mapped_column(String(200), nullable=False)
+    quantity: Mapped[int] = mapped_column(Integer, nullable=False)
+    unit_price: Mapped[float] = mapped_column(Float, nullable=False)
+    discount_percent: Mapped[float] = mapped_column(Float, nullable=False, default=0.0)
+    line_total: Mapped[float] = mapped_column(Float, nullable=False)
+
+    sale: Mapped["PharmacySale"] = relationship("PharmacySale", back_populates="items")

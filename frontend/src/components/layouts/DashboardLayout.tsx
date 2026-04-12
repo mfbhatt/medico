@@ -62,6 +62,7 @@ const TENANT_ADMIN_NAV = [
   { name: "Appointments", href: "/appointments", icon: Calendar },
   { name: "Staff & Users", href: "/admin/users", icon: UserCheck },
   { name: "Billing", href: "/billing", icon: CreditCard },
+  { name: "Pharmacy", href: "/pharmacy", icon: Package },
   { name: "Accounting", href: "/accounting", icon: BookOpen },
   { name: "Analytics", href: "/analytics", icon: BarChart3 },
   { name: "Settings", href: "/settings", icon: Settings },
