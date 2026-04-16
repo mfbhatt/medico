@@ -492,6 +492,7 @@ async def seed(session: AsyncSession) -> None:
                 tenant_id=DEMO_TENANT_ID,
                 role=role,
                 status=UserStatus.ACTIVE,
+                clinic_id=DEMO_CLINIC_ID if role in (UserRole.CLINIC_ADMIN, UserRole.RECEPTIONIST, UserRole.NURSE, UserRole.PHARMACIST, UserRole.LAB_TECHNICIAN) else None,
             ))
             print(f"  [+] UserTenant ({label}): {email} → {DEMO_TENANT_ID}")
 
@@ -559,6 +560,7 @@ async def seed(session: AsyncSession) -> None:
             tenant_id=DEMO_TENANT_ID,
             role=UserRole.DOCTOR,
             status=UserStatus.ACTIVE,
+            clinic_id=DEMO_CLINIC_ID,
         ))
         await session.flush()
 
