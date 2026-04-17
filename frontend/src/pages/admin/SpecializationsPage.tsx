@@ -64,7 +64,7 @@ export default function SpecializationsPage() {
       setForm(EMPTY_FORM);
       setFormError('');
     },
-    onError: (err: any) => setFormError(err.response?.data?.detail ?? 'Failed to create'),
+    onError: (err: any) => setFormError(err.response?.data?.message ?? 'Failed to create'),
   });
 
   const updateMutation = useMutation({
@@ -76,7 +76,7 @@ export default function SpecializationsPage() {
       setForm(EMPTY_FORM);
       setFormError('');
     },
-    onError: (err: any) => setFormError(err.response?.data?.detail ?? 'Failed to update'),
+    onError: (err: any) => setFormError(err.response?.data?.message ?? 'Failed to update'),
   });
 
   const deleteMutation = useMutation({

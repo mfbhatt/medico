@@ -6,6 +6,7 @@ import { useAppSelector } from "@/store/hooks";
 import { useSelector } from "react-redux";
 import { RootState } from "@/store";
 import Pagination from "@/components/ui/Pagination";
+import { useNotification } from "@/hooks/useNotification";
 
 const MODULES = [
   { key: "appointments", label: "Appointments" },
@@ -50,6 +51,7 @@ function SortIcon({ field, sortBy, sortOrder }: { field: SortField; sortBy: Sort
 
 export default function UsersPage() {
   const qc = useQueryClient();
+  const { success: notify } = useNotification();
   const role = useAppSelector((s) => s.auth.user?.role);
   const tenantId = useAppSelector((s) => s.auth.user?.tenant_id);
   const isSuperAdmin = role === "super_admin";
@@ -385,8 +387,9 @@ export default function UsersPage() {
         <UserFormModal
           clinics={isSuperAdmin ? tenantClinics : clinics}
           onClose={() => setShowNewModal(false)}
-          onSuccess={() => {
+          onSuccess={(msg) => {
             setShowNewModal(false);
+            notify(msg ?? "User created successfully");
             invalidate();
           }}
         />
@@ -398,8 +401,9 @@ export default function UsersPage() {
           isSuperAdmin={isSuperAdmin}
           clinics={isSuperAdmin ? tenantClinics : clinics}
           onClose={() => setEditTarget(null)}
-          onSuccess={() => {
+          onSuccess={(msg) => {
             setEditTarget(null);
+            notify(msg ?? "User updated successfully");
             invalidate();
           }}
         />
@@ -408,7 +412,7 @@ export default function UsersPage() {
   );
 }
 
-function UserFormModal({ user, isSuperAdmin, clinics, onClose, onSuccess }: { user?: any; isSuperAdmin?: boolean; clinics?: { id: string; name: string }[]; onClose: () => void; onSuccess: () => void }) {
+function UserFormModal({ user, isSuperAdmin, clinics, onClose, onSuccess }: { user?: any; isSuperAdmin?: boolean; clinics?: { id: string; name: string }[]; onClose: () => void; onSuccess: (message?: string) => void }) {
   const isEdit = !!user;
   const tenantFeatures = useSelector((state: RootState) => state.tenant?.features ?? {});
 
@@ -448,7 +452,7 @@ function UserFormModal({ user, isSuperAdmin, clinics, onClose, onSuccess }: { us
       }
       return api.post("/users/", { ...form, clinic_id: form.clinic_id || undefined });
     },
-    onSuccess,
+    onSuccess: (res) => onSuccess(res?.data?.message),
   });
 
   const cls = "w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500";

@@ -155,6 +155,7 @@ async def update_specialization(
 
     spec.updated_by = current_user.user_id
     await db.commit()
+    await db.refresh(spec)
     return _success(_spec_out(spec), message="Specialization updated")
 
 

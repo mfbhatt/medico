@@ -115,7 +115,7 @@ async def create_invoice(
     background_tasks.add_task(_generate_invoice_pdf, invoice.id)
 
     return _success(
-        {"invoice_id": invoice.id, "invoice_number": invoice_number, "total": round(total, 2)},
+        {"invoice_id": invoice.id, "invoice_number": invoice_number, "total": round(total, 2), "currency": invoice.currency},
         message="Invoice created",
     )
 
@@ -207,9 +207,15 @@ async def list_invoices(
     current_user: CurrentUser = Depends(get_current_user),
 ):
     """List invoices, optionally filtered by patient or status."""
-    query = select(Invoice).where(
-        Invoice.tenant_id == current_user.tenant_id,
-        Invoice.is_deleted == False,
+    from app.models.patient import Patient
+
+    query = (
+        select(Invoice, Patient)
+        .outerjoin(Patient, Invoice.patient_id == Patient.id)
+        .where(
+            Invoice.tenant_id == current_user.tenant_id,
+            Invoice.is_deleted == False,
+        )
     )
     if patient_id:
         query = query.where(Invoice.patient_id == patient_id)
@@ -217,9 +223,15 @@ async def list_invoices(
         query = query.where(Invoice.status == status)
 
     query = query.order_by(Invoice.issue_date.desc())
-    total = (await db.execute(select(func.count()).select_from(query.subquery()))).scalar()
-    query = query.offset((page - 1) * page_size).limit(page_size)
-    result = await db.execute(query)
+    total = (await db.execute(select(func.count()).select_from(
+        select(Invoice).where(
+            Invoice.tenant_id == current_user.tenant_id,
+            Invoice.is_deleted == False,
+            *([Invoice.patient_id == patient_id] if patient_id else []),
+            *([Invoice.status == status] if status else []),
+        ).subquery()
+    ))).scalar()
+    rows = (await db.execute(query.offset((page - 1) * page_size).limit(page_size))).all()
 
     return _success(
         [
@@ -227,6 +239,7 @@ async def list_invoices(
                 "id": inv.id,
                 "invoice_number": inv.invoice_number,
                 "patient_id": inv.patient_id,
+                "patient_name": f"{pat.first_name} {pat.last_name}" if pat else None,
                 "issue_date": inv.issue_date,
                 "due_date": inv.due_date,
                 "status": inv.status,
@@ -235,7 +248,7 @@ async def list_invoices(
                 "balance_due": inv.balance_due,
                 "currency": inv.currency,
             }
-            for inv in result.scalars()
+            for inv, pat in rows
         ],
         meta={"total": total, "page": page, "page_size": page_size},
     )
@@ -351,6 +364,138 @@ async def get_patient_invoices(
             for inv in result.scalars()
         ],
         meta={"total": total, "page": page, "page_size": page_size},
+    )
+
+
+@router.post("/razorpay/create-order")
+async def create_razorpay_order(
+    body: dict,
+    db: AsyncSession = Depends(get_db),
+    current_user: CurrentUser = Depends(require_perm("billing:create")),
+):
+    """Create a Razorpay order for an existing invoice."""
+    import razorpay
+    from app.core.config import settings
+
+    if not settings.RAZORPAY_KEY_ID or not settings.RAZORPAY_KEY_SECRET:
+        raise BadRequestException(detail="Razorpay is not configured on this server")
+
+    invoice_id = body.get("invoice_id")
+    if not invoice_id:
+        raise BadRequestException(detail="invoice_id is required")
+
+    invoice = (await db.execute(
+        select(Invoice).where(
+            Invoice.id == invoice_id,
+            Invoice.tenant_id == current_user.tenant_id,
+            Invoice.is_deleted == False,
+        )
+    )).scalar_one_or_none()
+    if not invoice:
+        raise NotFoundException(detail="Invoice not found")
+    if invoice.balance_due <= 0:
+        raise BadRequestException(detail="Invoice is already fully paid")
+
+    client = razorpay.Client(auth=(settings.RAZORPAY_KEY_ID, settings.RAZORPAY_KEY_SECRET))
+    order = client.order.create({
+        "amount": int(round(invoice.balance_due * 100)),  # smallest currency unit
+        "currency": invoice.currency or "INR",
+        "receipt": invoice.invoice_number,
+        "notes": {"invoice_id": invoice.id, "tenant_id": invoice.tenant_id},
+    })
+
+    return _success({
+        "razorpay_order_id": order["id"],
+        "amount": invoice.balance_due,
+        "currency": invoice.currency or "INR",
+        "key_id": settings.RAZORPAY_KEY_ID,
+        "invoice_number": invoice.invoice_number,
+    })
+
+
+@router.post("/razorpay/verify-payment")
+async def verify_razorpay_payment(
+    body: dict,
+    db: AsyncSession = Depends(get_db),
+    current_user: CurrentUser = Depends(require_perm("billing:create")),
+):
+    """Verify Razorpay signature and record the payment against the invoice."""
+    import hmac
+    import hashlib
+    from app.core.config import settings
+
+    if not settings.RAZORPAY_KEY_SECRET:
+        raise BadRequestException(detail="Razorpay is not configured on this server")
+
+    razorpay_order_id = body.get("razorpay_order_id", "")
+    razorpay_payment_id = body.get("razorpay_payment_id", "")
+    razorpay_signature = body.get("razorpay_signature", "")
+    invoice_id = body.get("invoice_id", "")
+
+    if not all([razorpay_order_id, razorpay_payment_id, razorpay_signature, invoice_id]):
+        raise BadRequestException(detail="Missing required payment verification fields")
+
+    # Verify HMAC-SHA256 signature
+    expected = hmac.new(
+        settings.RAZORPAY_KEY_SECRET.encode(),
+        f"{razorpay_order_id}|{razorpay_payment_id}".encode(),
+        hashlib.sha256,
+    ).hexdigest()
+    if expected != razorpay_signature:
+        raise BadRequestException(detail="Payment verification failed: signature mismatch")
+
+    invoice = (await db.execute(
+        select(Invoice).where(
+            Invoice.id == invoice_id,
+            Invoice.tenant_id == current_user.tenant_id,
+            Invoice.is_deleted == False,
+        )
+    )).scalar_one_or_none()
+    if not invoice:
+        raise NotFoundException(detail="Invoice not found")
+
+    amount = invoice.balance_due
+
+    payment = Payment(
+        tenant_id=current_user.tenant_id,
+        invoice_id=invoice.id,
+        patient_id=invoice.patient_id,
+        payment_date=date.today().isoformat(),
+        amount=amount,
+        payment_method="online",
+        currency=invoice.currency,
+        transaction_id=razorpay_payment_id,
+        gateway="razorpay",
+        status="completed",
+        notes=f"Razorpay Order: {razorpay_order_id}",
+        received_by=current_user.user_id,
+        created_by=current_user.user_id,
+    )
+    db.add(payment)
+
+    invoice.paid_amount = round(invoice.paid_amount + amount, 2)
+    invoice.balance_due = round(invoice.balance_due - amount, 2)
+    invoice.status = InvoiceStatus.PAID if invoice.balance_due <= 0 else InvoiceStatus.PARTIALLY_PAID
+
+    try:
+        from app.api.v1.accounting import post_payment_voucher
+        await post_payment_voucher(
+            tenant_id=current_user.tenant_id,
+            user_id=current_user.user_id,
+            payment_id=payment.id,
+            invoice_number=invoice.invoice_number,
+            amount=amount,
+            payment_method="online",
+            db=db,
+        )
+    except Exception:
+        pass
+
+    await db.commit()
+
+    return _success(
+        {"payment_id": payment.id, "invoice_status": invoice.status, "balance_due": invoice.balance_due},
+        message="Payment verified and recorded",
     )
 
 

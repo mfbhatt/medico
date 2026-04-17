@@ -56,7 +56,7 @@ async def create_user(
         if current_user.role not in (UserRole.SUPER_ADMIN, UserRole.TENANT_ADMIN):
             raise BadRequestException(detail="Insufficient privileges to create this role")
 
-    # Check if this email already has a membership in this tenant
+    # Check if this email already has an active membership in this tenant
     if email:
         existing_ut = (await db.execute(
             select(UserTenant)
@@ -73,12 +73,49 @@ async def create_user(
                 detail=f"A user with email {email} already exists in this tenant"
             )
 
-    # Find existing global User or create a new one
+    # Find any existing global User with this email (including soft-deleted)
     user = None
+    deleted_ut = None
     if email:
         user = (await db.execute(
-            select(User).where(User.email == email, User.is_deleted.isnot(True))
+            select(User).where(User.email == email)
         )).scalar_one_or_none()
+
+        if user:
+            # Check for a soft-deleted UserTenant membership for this user+tenant
+            deleted_ut = (await db.execute(
+                select(UserTenant).where(
+                    UserTenant.user_id == user.id,
+                    UserTenant.tenant_id == current_user.tenant_id,
+                    UserTenant.is_deleted == True,
+                )
+            )).scalar_one_or_none()
+
+    # Reactivate a previously deleted membership
+    if deleted_ut:
+        if user.is_deleted:
+            user.is_deleted = False
+            user.deleted_at = None
+            user.deleted_by = None
+            user.updated_by = current_user.user_id
+
+        deleted_ut.is_deleted = False
+        deleted_ut.deleted_at = None
+        deleted_ut.deleted_by = None
+        deleted_ut.role = role
+        deleted_ut.status = UserStatus.PENDING_VERIFICATION
+        deleted_ut.clinic_id = body.get("clinic_id") or current_user.clinic_id
+        deleted_ut.updated_by = current_user.user_id
+        await db.commit()
+        return _success(_user_response(user, deleted_ut), message="User account reactivated successfully")
+
+    # Reactivate a soft-deleted User who has no existing UserTenant here
+    if user and user.is_deleted:
+        user.is_deleted = False
+        user.deleted_at = None
+        user.deleted_by = None
+        user.updated_by = current_user.user_id
+        await db.flush()
 
     if not user:
         password = body.get("password", "")
@@ -179,6 +216,7 @@ async def list_users(
                     User.first_name.ilike(term)
                     | User.last_name.ilike(term)
                     | User.email.ilike(term)
+                    | func.concat(User.first_name, " ", User.last_name).ilike(term)
                 )
             sort_col_map = {
                 "first_name": User.first_name,
@@ -206,6 +244,7 @@ async def list_users(
                 User.first_name.ilike(term)
                 | User.last_name.ilike(term)
                 | User.email.ilike(term)
+                | func.concat(User.first_name, " ", User.last_name).ilike(term)
             )
         sort_col_map = {
             "first_name": User.first_name,
@@ -261,6 +300,7 @@ async def list_users(
             User.first_name.ilike(term)
             | User.last_name.ilike(term)
             | User.email.ilike(term)
+            | func.concat(User.first_name, " ", User.last_name).ilike(term)
         )
 
     sort_col_map = {
