@@ -5,26 +5,28 @@ python3 -m venv venv && source venv/bin/activate
 pip install -r requirements.txt
 uvicorn app.main:app --reload --port 8000
 
-## Front End 
+## Front End
+
 cd frontend
 npm install
-npm run dev     # http://localhost:5173
+npm run dev # http://localhost:5173
 
 ## Mobile
 
 # Install Node.js 20+ if not already installed
+
 # Install Expo CLI
+
 npm install -g expo-cli@latest
 
 # Install dependencies
+
 cd mobile
 npm install
 
-npm run ios        # Opens iOS Simulator (Mac only, requires Xcode)
-npm run android    # Opens Android Emulator (requires Android Studio)
-npm run web        # Opens in browser
-
-
+npm run ios # Opens iOS Simulator (Mac only, requires Xcode)
+npm run android # Opens Android Emulator (requires Android Studio)
+npm run web # Opens in browser
 
 # Android Build
 
@@ -34,10 +36,19 @@ cd android
 
 ./gradlew assembleDebug
 
-
-
-
-Email:    admin@demo.com
+Email: admin@demo.com
 Password: Admin1234!
 
-  
+## One-time setup each developer runs after pulling:
+
+# Backend (from repo root)
+
+pip install pre-commit
+pre-commit install
+
+# Frontend — install the Prettier VS Code extension and enable
+
+# "Format on Save" in settings, or just run manually:
+
+cd frontend && npm run format
+After pre-commit install, every git commit will auto-format staged files and reject the commit if anything changed, prompting the dev to stage the fixes and commit again.

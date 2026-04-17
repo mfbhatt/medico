@@ -1,0 +1,9 @@
+[tool.black]
+line-length = 180
+target-version = ["py311"]
+skip-string-normalization = false
+
+[tool.isort]
+profile = "black"
+line_length = 180
+known_first_party = ["app"]

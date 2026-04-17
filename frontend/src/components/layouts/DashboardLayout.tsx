@@ -49,7 +49,7 @@ const SUPER_ADMIN_NAV = [
   { name: "All Clinics", href: "/admin/clinics", icon: Globe },
   { name: "System Users", href: "/admin/users", icon: Shield },
   { name: "Specializations", href: "/admin/specializations", icon: Stethoscope },
-  { name: "Accounting", href: "/accounting", icon: BookOpen },
+  // { name: "Accounting", href: "/accounting", icon: BookOpen },
   { name: "Analytics", href: "/analytics", icon: BarChart3 },
   { name: "Settings", href: "/settings", icon: Settings },
 ];
@@ -63,7 +63,7 @@ const TENANT_ADMIN_NAV = [
   { name: "Staff & Users", href: "/admin/users", icon: UserCheck },
   { name: "Billing", href: "/billing", icon: CreditCard, module: "billing" },
   { name: "Pharmacy", href: "/pharmacy", icon: Package, module: "pharmacy" },
-  { name: "Accounting", href: "/accounting", icon: BookOpen, module: "accounting" },
+  // { name: "Accounting", href: "/accounting", icon: BookOpen, module: "accounting" },
   { name: "Analytics", href: "/analytics", icon: BarChart3, module: "analytics" },
   { name: "Settings", href: "/settings", icon: Settings },
 ];
@@ -78,7 +78,7 @@ const OPERATIONAL_NAV = [
   { name: "Lab Reports", href: "/lab", icon: FlaskConical, roles: ["doctor", "lab_technician", "nurse"], module: "lab" },
   { name: "Billing", href: "/billing", icon: CreditCard, roles: ["receptionist", "clinic_admin"], module: "billing" },
   { name: "Pharmacy", href: "/pharmacy", icon: Package, roles: ["pharmacist", "clinic_admin"], module: "pharmacy" },
-  { name: "Accounting", href: "/accounting", icon: BookOpen, roles: ["clinic_admin"], module: "accounting" },
+  // { name: "Accounting", href: "/accounting", icon: BookOpen, roles: ["clinic_admin"], module: "accounting" },
   { name: "Analytics", href: "/analytics", icon: BarChart3, roles: ["clinic_admin"], module: "analytics" },
 ];
 

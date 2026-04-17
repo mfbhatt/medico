@@ -98,28 +98,41 @@ async def list_clinics(
     current_user: CurrentUser = Depends(get_current_user),
 ):
     """List clinics. Super admin sees all (optionally filtered by tenant_id); others see their tenant."""
-    query = select(Clinic).where(Clinic.is_deleted == False)
+    from app.models.tenant import Tenant
 
+    base = select(Clinic).where(Clinic.is_deleted == False)
+    if current_user.role == "super_admin":
+        if tenant_id:
+            base = base.where(Clinic.tenant_id == tenant_id)
+    else:
+        base = base.where(Clinic.tenant_id == current_user.tenant_id)
+    if search:
+        term = f"%{search}%"
+        base = base.where(Clinic.name.ilike(term) | Clinic.city.ilike(term))
+
+    total = (await db.execute(
+        select(func.count()).select_from(base.subquery())
+    )).scalar()
+
+    query = (
+        select(Clinic, Tenant)
+        .outerjoin(Tenant, Clinic.tenant_id == Tenant.id)
+        .where(Clinic.is_deleted == False)
+    )
     if current_user.role == "super_admin":
         if tenant_id:
             query = query.where(Clinic.tenant_id == tenant_id)
     else:
         query = query.where(Clinic.tenant_id == current_user.tenant_id)
-
     if search:
         term = f"%{search}%"
         query = query.where(Clinic.name.ilike(term) | Clinic.city.ilike(term))
 
-    query = query.order_by(Clinic.name)
-    total = (await db.execute(
-        select(func.count()).select_from(query.subquery())
-    )).scalar()
-
-    query = query.offset((page - 1) * page_size).limit(page_size)
-    result = await db.execute(query)
+    query = query.order_by(Clinic.name).offset((page - 1) * page_size).limit(page_size)
+    rows = (await db.execute(query)).all()
 
     return _success(
-        [_clinic_response(c) for c in result.scalars()],
+        [{**_clinic_response(c), "tenant_name": t.name if t else None} for c, t in rows],
         meta={"total": total},
     )
 

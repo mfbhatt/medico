@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Plus, Search, MapPin, Phone, X, Building2, Pencil } from "lucide-react";
 import api from "@/services/api";
@@ -27,13 +27,20 @@ const STATUS_COLORS: Record<string, string> = {
 
 const SLOT_OPTIONS = [10, 15, 20, 25, 30];
 
-
 export default function ClinicsPage() {
   const qc = useQueryClient();
-  const [searchInput, setSearchInput] = useState("");
   const [search, setSearch] = useState("");
+  const [debouncedSearch, setDebouncedSearch] = useState("");
   const [filterTenantId, setFilterTenantId] = useState("");
   const [page, setPage] = useState(1);
+
+  useEffect(() => {
+    const t = setTimeout(() => {
+      setDebouncedSearch(search);
+      setPage(1);
+    }, 300);
+    return () => clearTimeout(t);
+  }, [search]);
   const [showNewModal, setShowNewModal] = useState(false);
   const [editClinic, setEditClinic] = useState<any | null>(null);
   const role = useAppSelector((s) => s.auth.user?.role);
@@ -49,23 +56,23 @@ export default function ClinicsPage() {
   const tenants: any[] = Array.isArray(tenantsData) ? tenantsData : [];
 
   const { data: clinicsRaw, isLoading } = useQuery({
-    queryKey: ["clinics", tenantId, filterTenantId, search, page],
+    queryKey: ["clinics", tenantId, filterTenantId, debouncedSearch, page],
     queryFn: () =>
-      api.get("/clinics/", {
-        params: {
-          page,
-          page_size: PAGE_SIZE,
-          search: search || undefined,
-          ...(isSuperAdmin && filterTenantId ? { tenant_id: filterTenantId } : {}),
-        },
-      }).then((r) => r.data),
+      api
+        .get("/clinics/", {
+          params: {
+            page,
+            page_size: PAGE_SIZE,
+            search: debouncedSearch || undefined,
+            ...(isSuperAdmin && filterTenantId ? { tenant_id: filterTenantId } : {}),
+          },
+        })
+        .then((r) => r.data),
     keepPreviousData: true,
   } as any);
 
   const filtered: any[] = Array.isArray((clinicsRaw as any)?.data) ? (clinicsRaw as any).data : [];
   const total: number = (clinicsRaw as any)?.meta?.total ?? 0;
-
-  const handleSearch = () => { setSearch(searchInput); setPage(1); };
 
   const invalidate = () => qc.invalidateQueries({ queryKey: ["clinics", tenantId] });
 
@@ -82,28 +89,36 @@ export default function ClinicsPage() {
       </div>
 
       <div className="bg-white rounded-xl border border-slate-200 p-4 mb-6">
-        <div className={`grid gap-3 ${isSuperAdmin ? "grid-cols-1 sm:grid-cols-2" : "grid-cols-1"}`}>
-          <div className="relative">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
+        <div className={`flex flex-wrap gap-3 ${isSuperAdmin ? "items-center" : ""}`}>
+          <div className="relative flex-1 min-w-[200px]">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400 pointer-events-none" />
             <input
-              type="text" placeholder="Search by name or city…" value={searchInput}
-              onChange={(e) => setSearchInput(e.target.value)}
-              onKeyDown={(e) => e.key === "Enter" && handleSearch()}
-              className="w-full pl-10 pr-4 py-2.5 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+              type="text"
+              placeholder="Search by name or city…"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              className="w-full pl-10 pr-8 py-2.5 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
             />
+            {search && (
+              <button onClick={() => setSearch("")} className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600">
+                <X className="h-4 w-4" />
+              </button>
+            )}
           </div>
-          <button onClick={handleSearch} className="px-4 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 text-sm font-medium rounded-lg whitespace-nowrap">
-            Search
-          </button>
           {isSuperAdmin && (
             <select
               value={filterTenantId}
-              onChange={(e) => { setFilterTenantId(e.target.value); setPage(1); }}
-              className="w-full px-3 py-2.5 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 text-slate-700"
+              onChange={(e) => {
+                setFilterTenantId(e.target.value);
+                setPage(1);
+              }}
+              className="px-3 py-2.5 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 text-slate-700"
             >
               <option value="">All tenants</option>
               {tenants.map((t: any) => (
-                <option key={t.id} value={t.id}>{t.name}</option>
+                <option key={t.id} value={t.id}>
+                  {t.name}
+                </option>
               ))}
             </select>
           )}
@@ -122,6 +137,7 @@ export default function ClinicsPage() {
                 </div>
                 <div>
                   <h3 className="font-semibold text-slate-900">{c.name}</h3>
+                  {isSuperAdmin && c.tenant_name && <p className="text-xs text-blue-600 font-medium mt-0.5">{c.tenant_name}</p>}
                   {c.code && <p className="text-xs text-slate-500">{c.code}</p>}
                 </div>
               </div>
@@ -129,11 +145,7 @@ export default function ClinicsPage() {
                 <span className={`text-xs font-semibold px-2.5 py-1 rounded-full capitalize ${STATUS_COLORS[c.status] ?? "bg-gray-100 text-gray-600"}`}>
                   {c.status?.replace(/_/g, " ")}
                 </span>
-                <button
-                  onClick={() => setEditClinic(c)}
-                  className="p-1.5 rounded-lg hover:bg-slate-100 text-slate-400 hover:text-slate-600 transition-colors"
-                  title="Edit clinic"
-                >
+                <button onClick={() => setEditClinic(c)} className="p-1.5 rounded-lg hover:bg-slate-100 text-slate-400 hover:text-slate-600 transition-colors" title="Edit clinic">
                   <Pencil className="h-4 w-4" />
                 </button>
               </div>
@@ -155,24 +167,13 @@ export default function ClinicsPage() {
 
             <div className="flex items-center justify-between text-xs text-slate-400">
               <span>Slot: {c.appointment_slot_duration ?? 15} min</span>
-              {isSuperAdmin && c.tenant_id && (
-                <span
-                  className="bg-blue-50 text-blue-600 px-2 py-0.5 rounded-full cursor-pointer hover:bg-blue-100 transition-colors"
-                  onClick={() => setFilterTenantId(c.tenant_id === filterTenantId ? "" : c.tenant_id)}
-                  title="Click to filter by this tenant"
-                >
-                  {tenants.find((t) => t.id === c.tenant_id)?.name ?? c.tenant_id.slice(0, 8) + "…"}
-                </span>
-              )}
-              {c.email && !isSuperAdmin && <span>{c.email}</span>}
+              {c.email && <span>{c.email}</span>}
             </div>
           </div>
         ))}
       </div>
 
-      {!isLoading && filtered.length === 0 && (
-        <div className="text-center py-16 text-slate-400 text-sm">No clinics found.</div>
-      )}
+      {!isLoading && filtered.length === 0 && <div className="text-center py-16 text-slate-400 text-sm">No clinics found.</div>}
 
       {total > PAGE_SIZE && (
         <div className="mt-4 bg-white rounded-xl border border-slate-200">
@@ -184,7 +185,10 @@ export default function ClinicsPage() {
         <ClinicModal
           isSuperAdmin={isSuperAdmin}
           onClose={() => setShowNewModal(false)}
-          onSuccess={() => { setShowNewModal(false); invalidate(); }}
+          onSuccess={() => {
+            setShowNewModal(false);
+            invalidate();
+          }}
         />
       )}
 
@@ -193,24 +197,17 @@ export default function ClinicsPage() {
           isSuperAdmin={isSuperAdmin}
           clinic={editClinic}
           onClose={() => setEditClinic(null)}
-          onSuccess={() => { setEditClinic(null); invalidate(); }}
+          onSuccess={() => {
+            setEditClinic(null);
+            invalidate();
+          }}
         />
       )}
     </div>
   );
 }
 
-function ClinicModal({
-  isSuperAdmin,
-  clinic,
-  onClose,
-  onSuccess,
-}: {
-  isSuperAdmin: boolean;
-  clinic?: any;
-  onClose: () => void;
-  onSuccess: () => void;
-}) {
+function ClinicModal({ isSuperAdmin, clinic, onClose, onSuccess }: { isSuperAdmin: boolean; clinic?: any; onClose: () => void; onSuccess: () => void }) {
   const isEdit = !!clinic;
 
   const [form, setForm] = useState({
@@ -267,27 +264,22 @@ function ClinicModal({
   });
 
   const cls = "w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500";
-  const f = (field: keyof typeof form) => (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) =>
-    setForm((p) => ({ ...p, [field]: e.target.value }));
+  const f = (field: keyof typeof form) => (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => setForm((p) => ({ ...p, [field]: e.target.value }));
 
-  const canSubmit =
-    form.name && form.address_line1 && address.country && address.city && address.postal_code &&
-    (!isSuperAdmin || isEdit || form.tenant_id);
+  const canSubmit = form.name && form.address_line1 && address.country && address.city && address.postal_code && (!isSuperAdmin || isEdit || form.tenant_id);
 
   return (
     <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
       <div className="bg-white rounded-xl w-full max-w-lg p-6 max-h-[90vh] overflow-y-auto">
         <div className="flex items-center justify-between mb-5">
-          <h3 className="text-base font-semibold text-slate-900">
-            {isEdit ? "Edit Clinic" : "Add New Clinic"}
-          </h3>
-          <button onClick={onClose}><X className="h-5 w-5 text-slate-400 hover:text-slate-600" /></button>
+          <h3 className="text-base font-semibold text-slate-900">{isEdit ? "Edit Clinic" : "Add New Clinic"}</h3>
+          <button onClick={onClose}>
+            <X className="h-5 w-5 text-slate-400 hover:text-slate-600" />
+          </button>
         </div>
 
         {mutation.isError && (
-          <div className="bg-red-50 text-red-700 text-sm px-3 py-2 rounded-lg mb-4">
-            {(mutation.error as any)?.response?.data?.message ?? "Failed to save clinic"}
-          </div>
+          <div className="bg-red-50 text-red-700 text-sm px-3 py-2 rounded-lg mb-4">{(mutation.error as any)?.response?.data?.message ?? "Failed to save clinic"}</div>
         )}
 
         <div className="space-y-3">
@@ -297,7 +289,9 @@ function ClinicModal({
               <select value={form.tenant_id} onChange={f("tenant_id")} className={cls} required>
                 <option value="">Select a tenant…</option>
                 {tenants.map((t: any) => (
-                  <option key={t.id} value={t.id}>{t.name}</option>
+                  <option key={t.id} value={t.id}>
+                    {t.name}
+                  </option>
                 ))}
               </select>
             </div>
@@ -319,13 +313,7 @@ function ClinicModal({
             <input placeholder="Street address" value={form.address_line1} onChange={f("address_line1")} required className={cls} />
           </div>
 
-          <AddressFields
-            value={address}
-            onChange={setAddress}
-            countries={countries}
-            required={{ country: true, city: true, postal_code: true }}
-            inputCls={cls}
-          />
+          <AddressFields value={address} onChange={setAddress} countries={countries} required={{ country: true, city: true, postal_code: true }} inputCls={cls} />
 
           <div className="grid grid-cols-2 gap-3">
             <div>
@@ -343,7 +331,9 @@ function ClinicModal({
               <label className="text-xs text-slate-500 mb-1 block">Appointment Slot Duration</label>
               <select value={form.appointment_slot_duration} onChange={f("appointment_slot_duration")} className={cls}>
                 {SLOT_OPTIONS.map((m) => (
-                  <option key={m} value={m}>{m} minutes</option>
+                  <option key={m} value={m}>
+                    {m} minutes
+                  </option>
                 ))}
               </select>
             </div>

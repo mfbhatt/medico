@@ -1,44 +1,50 @@
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { ChevronLeft, ChevronRight } from "lucide-react";
+import { ChevronLeft, ChevronRight, Clock, Plus, CalendarDays } from "lucide-react";
 import { Link as RouterLink } from "react-router-dom";
 import api from "@/services/api";
 
-const STATUS_COLORS: Record<string, string> = {
-  scheduled: "bg-blue-100 border-l-4 border-blue-500 text-blue-900",
-  checked_in: "bg-yellow-100 border-l-4 border-yellow-500 text-yellow-900",
-  in_progress: "bg-purple-100 border-l-4 border-purple-500 text-purple-900",
-  completed: "bg-green-100 border-l-4 border-green-500 text-green-900",
-  cancelled: "bg-gray-100 border-l-4 border-gray-400 text-gray-700",
-  no_show: "bg-red-100 border-l-4 border-red-500 text-red-900",
+const STATUS_META: Record<string, { dot: string; label: string; card: string; text: string }> = {
+  scheduled:   { dot: "bg-primary-500",  label: "Scheduled",   card: "bg-primary-50  border-l-[3px] border-primary-500",  text: "text-primary-700" },
+  checked_in:  { dot: "bg-amber-400",    label: "Checked In",  card: "bg-amber-50   border-l-[3px] border-amber-400",    text: "text-amber-700" },
+  in_progress: { dot: "bg-violet-500",   label: "In Progress", card: "bg-violet-50  border-l-[3px] border-violet-500",   text: "text-violet-700" },
+  completed:   { dot: "bg-emerald-500",  label: "Completed",   card: "bg-emerald-50 border-l-[3px] border-emerald-500",  text: "text-emerald-700" },
+  cancelled:   { dot: "bg-slate-400",    label: "Cancelled",   card: "bg-slate-50   border-l-[3px] border-slate-400",    text: "text-slate-500" },
+  no_show:     { dot: "bg-red-400",      label: "No Show",     card: "bg-red-50     border-l-[3px] border-red-400",      text: "text-red-600" },
 };
+
+const WEEKDAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+
+const pad = (n: number) => String(n).padStart(2, "0");
 
 export default function CalendarPage() {
   const today = new Date();
-  const [currentDate, setCurrentDate] = useState(new Date(today.getFullYear(), today.getMonth(), 1));
-  const [selectedDate, setSelectedDate] = useState<string | null>(today.toISOString().slice(0, 10));
+  const todayStr = today.toISOString().slice(0, 10);
+
+  const [currentDate, setCurrentDate] = useState(
+    new Date(today.getFullYear(), today.getMonth(), 1)
+  );
+  const [selectedDate, setSelectedDate] = useState<string>(todayStr);
 
   const year = currentDate.getFullYear();
   const month = currentDate.getMonth();
   const daysInMonth = new Date(year, month + 1, 0).getDate();
   const firstDay = new Date(year, month, 1).getDay();
-  const monthName = currentDate.toLocaleString("default", { month: "long", year: "numeric" });
 
-  const dateFrom = `${year}-${String(month + 1).padStart(2, "0")}-01`;
-  const dateTo = `${year}-${String(month + 1).padStart(2, "0")}-${String(daysInMonth).padStart(2, "0")}`;
+  const dateFrom = `${year}-${pad(month + 1)}-01`;
+  const dateTo = `${year}-${pad(month + 1)}-${pad(daysInMonth)}`;
 
   const { data: apptData } = useQuery({
     queryKey: ["appointments-calendar", year, month],
     queryFn: () =>
-      api.get("/appointments/", {
-        params: { date_from: dateFrom, date_to: dateTo, page_size: 200 },
-      }).then((r) => r.data),
+      api
+        .get("/appointments/", { params: { date_from: dateFrom, date_to: dateTo, page_size: 200 } })
+        .then((r) => r.data),
   });
 
   const appointments: any[] = apptData?.data ?? [];
 
-  const getDateStr = (day: number) =>
-    `${year}-${String(month + 1).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
+  const getDateStr = (day: number) => `${year}-${pad(month + 1)}-${pad(day)}`;
 
   const apptsByDate: Record<string, any[]> = {};
   for (const a of appointments) {
@@ -47,78 +53,150 @@ export default function CalendarPage() {
     apptsByDate[d].push(a);
   }
 
-  const selectedDateAppts = selectedDate ? (apptsByDate[selectedDate] ?? []) : [];
+  const selectedAppts = (apptsByDate[selectedDate] ?? [])
+    .slice()
+    .sort((a, b) => (a.start_time ?? "").localeCompare(b.start_time ?? ""));
+
+  const fmtSelectedDate = new Date(selectedDate + "T00:00:00").toLocaleDateString("default", {
+    weekday: "long",
+    month: "long",
+    day: "numeric",
+  });
+
+  const monthLabel = currentDate.toLocaleString("default", { month: "long" });
 
   return (
     <div className="max-w-6xl mx-auto">
-      <div className="mb-6">
-        <h1 className="text-2xl font-bold text-slate-900">Appointment Calendar</h1>
-        <p className="text-sm text-slate-500 mt-1">Monthly view of all scheduled appointments</p>
+      {/* Page header */}
+      <div className="mb-6 flex items-center justify-between">
+        <div>
+          <h1 className="text-2xl font-bold text-slate-900">Appointment Calendar</h1>
+          <p className="text-sm text-slate-500 mt-0.5">Monthly overview of scheduled appointments</p>
+        </div>
+        <RouterLink
+          to={`/appointments/new?date=${selectedDate}`}
+          className="flex items-center gap-2 px-4 py-2 bg-primary-600 hover:bg-primary-700 text-white text-sm font-semibold rounded-lg transition shadow-sm"
+        >
+          <Plus className="h-4 w-4" />
+          New Appointment
+        </RouterLink>
       </div>
 
-      <div className="grid grid-cols-3 gap-5">
-        {/* Calendar */}
-        <div className="col-span-2 bg-white rounded-xl border border-slate-200 p-5">
-          <div className="flex items-center justify-between mb-5">
-            <h2 className="text-lg font-semibold text-slate-900">{monthName}</h2>
-            <div className="flex gap-2">
+      <div className="grid grid-cols-3 gap-5 items-start">
+        {/* ── Calendar ── */}
+        <div className="col-span-2 bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+          {/* Month navigation */}
+          <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100">
+            <div className="flex items-baseline gap-2">
+              <span className="text-lg font-bold text-slate-900">{monthLabel}</span>
+              <span className="text-lg font-medium text-slate-400">{year}</span>
+            </div>
+            <div className="flex items-center gap-1">
               <button
                 onClick={() => setCurrentDate(new Date(year, month - 1, 1))}
-                className="p-2 hover:bg-slate-100 rounded-lg transition"
+                className="p-1.5 rounded-lg text-slate-500 hover:text-slate-900 hover:bg-slate-100 transition"
               >
-                <ChevronLeft className="h-5 w-5 text-slate-600" />
+                <ChevronLeft className="h-4 w-4" />
               </button>
               <button
-                onClick={() => setCurrentDate(new Date(today.getFullYear(), today.getMonth(), 1))}
-                className="text-xs font-medium text-blue-600 hover:text-blue-700 px-3 py-1.5 border border-blue-200 rounded-lg"
+                onClick={() => {
+                  setCurrentDate(new Date(today.getFullYear(), today.getMonth(), 1));
+                  setSelectedDate(todayStr);
+                }}
+                className="px-3 py-1 text-xs font-semibold text-primary-600 border border-primary-200 rounded-lg hover:bg-primary-50 transition"
               >
                 Today
               </button>
               <button
                 onClick={() => setCurrentDate(new Date(year, month + 1, 1))}
-                className="p-2 hover:bg-slate-100 rounded-lg transition"
+                className="p-1.5 rounded-lg text-slate-500 hover:text-slate-900 hover:bg-slate-100 transition"
               >
-                <ChevronRight className="h-5 w-5 text-slate-600" />
+                <ChevronRight className="h-4 w-4" />
               </button>
             </div>
           </div>
 
-          <div className="grid grid-cols-7 gap-1 mb-2">
-            {["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].map((d) => (
-              <div key={d} className="text-center text-xs font-medium text-slate-500 py-2">{d}</div>
+          {/* Weekday labels */}
+          <div className="grid grid-cols-7 bg-slate-50 border-b border-slate-100">
+            {WEEKDAYS.map((d) => (
+              <div
+                key={d}
+                className="py-2.5 text-center text-[11px] font-semibold text-slate-400 uppercase tracking-wider"
+              >
+                {d}
+              </div>
             ))}
           </div>
 
-          <div className="grid grid-cols-7 gap-1">
+          {/* Day grid — gap-px + bg-slate-100 renders 1 px lines between cells */}
+          <div className="grid grid-cols-7 gap-px bg-slate-100">
+            {/* Leading empty cells */}
             {Array.from({ length: firstDay }, (_, i) => (
-              <div key={`e-${i}`} />
+              <div key={`e-${i}`} className="h-[72px] bg-slate-50" />
             ))}
+
+            {/* Day cells */}
             {Array.from({ length: daysInMonth }, (_, i) => {
               const day = i + 1;
               const ds = getDateStr(day);
-              const count = apptsByDate[ds]?.length ?? 0;
-              const isToday = ds === today.toISOString().slice(0, 10);
+              const dayAppts = apptsByDate[ds] ?? [];
+              const count = dayAppts.length;
+              const isToday = ds === todayStr;
               const isSelected = selectedDate === ds;
 
               return (
                 <button
                   key={day}
                   onClick={() => setSelectedDate(ds)}
-                  className={`aspect-square rounded-xl flex flex-col items-center justify-center text-sm font-medium transition ${
-                    isSelected
-                      ? "bg-blue-600 text-white"
+                  className={`h-[72px] flex flex-col items-start px-2.5 pt-2 pb-1.5 text-left transition focus:outline-none
+                    ${isSelected
+                      ? "bg-primary-600 ring-2 ring-inset ring-primary-400"
                       : isToday
-                      ? "bg-blue-50 text-blue-700 border-2 border-blue-400"
-                      : count > 0
-                      ? "bg-slate-50 text-slate-900 border border-slate-200"
-                      : "hover:bg-slate-50 text-slate-700"
-                  }`}
+                      ? "bg-primary-50 hover:bg-primary-100"
+                      : "bg-white hover:bg-slate-50"
+                    }
+                  `}
                 >
-                  {day}
-                  {count > 0 && (
-                    <span className={`text-xs mt-0.5 font-semibold ${isSelected ? "text-blue-200" : "text-blue-600"}`}>
-                      {count}
+                  {/* Day number */}
+                  {isToday && !isSelected ? (
+                    <span className="inline-flex items-center justify-center w-6 h-6 bg-primary-600 text-white rounded-full text-xs font-bold leading-none">
+                      {day}
                     </span>
+                  ) : (
+                    <span
+                      className={`text-sm font-semibold leading-none
+                        ${isSelected ? "text-white" : isToday ? "text-primary-700" : "text-slate-700"}
+                      `}
+                    >
+                      {day}
+                    </span>
+                  )}
+
+                  {/* Appointment indicators */}
+                  {count > 0 && (
+                    <div className="mt-auto flex items-center gap-0.5 flex-wrap">
+                      {count <= 5 ? (
+                        dayAppts.slice(0, 5).map((a: any, idx: number) => (
+                          <span
+                            key={idx}
+                            className={`w-1.5 h-1.5 rounded-full flex-shrink-0
+                              ${isSelected
+                                ? "bg-primary-200"
+                                : (STATUS_META[a.status]?.dot ?? "bg-slate-400")
+                              }
+                            `}
+                          />
+                        ))
+                      ) : (
+                        <span
+                          className={`text-[10px] font-bold leading-none
+                            ${isSelected ? "text-primary-100" : "text-primary-600"}
+                          `}
+                        >
+                          {count} appts
+                        </span>
+                      )}
+                    </div>
                   )}
                 </button>
               );
@@ -126,47 +204,91 @@ export default function CalendarPage() {
           </div>
         </div>
 
-        {/* Day appointments */}
-        <div className="bg-white rounded-xl border border-slate-200 p-5">
-          <h3 className="text-sm font-semibold text-slate-900 mb-4">
-            {selectedDate
-              ? new Date(selectedDate + "T00:00:00").toLocaleDateString("default", { weekday: "long", month: "long", day: "numeric" })
-              : "Select a date"}
-          </h3>
-
-          {!selectedDate && <p className="text-sm text-slate-400">Click on a date to see appointments</p>}
-
-          {selectedDate && selectedDateAppts.length === 0 && (
-            <p className="text-sm text-slate-400">No appointments on this day.</p>
-          )}
-
-          <div className="space-y-2.5">
-            {selectedDateAppts
-              .sort((a, b) => (a.start_time ?? "").localeCompare(b.start_time ?? ""))
-              .map((a: any) => (
-                <RouterLink
-                  key={a.id}
-                  to={`/appointments/${a.id}`}
-                  className={`block p-3 rounded-lg text-xs ${STATUS_COLORS[a.status] ?? "bg-gray-100"}`}
-                >
-                  <p className="font-semibold">{a.start_time} {a.end_time ? `– ${a.end_time}` : ""}</p>
-                  <p className="mt-0.5 text-xs opacity-80">
-                    {a.patient_id?.slice(0, 8)} · {a.chief_complaint ?? a.appointment_type ?? "Appointment"}
-                  </p>
-                  <p className="mt-0.5 capitalize opacity-70">{a.status?.replace(/_/g, " ")}</p>
-                </RouterLink>
-              ))}
+        {/* ── Day panel ── */}
+        <div className="bg-white rounded-2xl border border-slate-200 shadow-sm flex flex-col overflow-hidden">
+          {/* Panel header */}
+          <div className="px-5 py-4 border-b border-slate-100 flex-shrink-0">
+            <div className="flex items-center gap-2 mb-0.5">
+              <CalendarDays className="h-4 w-4 text-primary-500 flex-shrink-0" />
+              <h3 className="text-sm font-semibold text-slate-800 leading-snug">{fmtSelectedDate}</h3>
+            </div>
+            <p className="text-xs text-slate-400 ml-6">
+              {selectedAppts.length === 0
+                ? "No appointments"
+                : `${selectedAppts.length} appointment${selectedAppts.length !== 1 ? "s" : ""}`}
+            </p>
           </div>
 
-          {selectedDate && (
+          {/* Appointment list */}
+          <div className="flex-1 overflow-y-auto p-4 space-y-2 min-h-[260px]">
+            {selectedAppts.length === 0 ? (
+              <div className="flex flex-col items-center justify-center h-full py-10 text-center">
+                <CalendarDays className="h-9 w-9 text-slate-200 mb-2.5" />
+                <p className="text-sm font-medium text-slate-400">Nothing scheduled</p>
+                <p className="text-xs text-slate-300 mt-0.5">Click a date to view or book</p>
+              </div>
+            ) : (
+              selectedAppts.map((a: any) => {
+                const m = STATUS_META[a.status] ?? STATUS_META.scheduled;
+                return (
+                  <RouterLink
+                    key={a.id}
+                    to={`/appointments/${a.id}`}
+                    className={`block rounded-xl p-3 text-xs ${m.card} hover:opacity-90 transition`}
+                  >
+                    <div className="flex items-start justify-between gap-2">
+                      <p className="font-semibold text-slate-800 leading-snug line-clamp-1">
+                        {a.patient_name ?? a.patient_id?.slice(0, 8) ?? "—"}
+                      </p>
+                      <span className={`flex-shrink-0 w-2 h-2 rounded-full mt-0.5 ${m.dot}`} />
+                    </div>
+
+                    {(a.start_time || a.end_time) && (
+                      <div className="flex items-center gap-1 mt-1.5 text-slate-500">
+                        <Clock className="h-3 w-3 flex-shrink-0" />
+                        <span>
+                          {a.start_time}
+                          {a.end_time ? ` – ${a.end_time}` : ""}
+                        </span>
+                      </div>
+                    )}
+
+                    {(a.chief_complaint ?? a.appointment_type) && (
+                      <p className="mt-1 text-slate-500 line-clamp-1">
+                        {a.chief_complaint ?? a.appointment_type}
+                      </p>
+                    )}
+
+                    <span className={`inline-block mt-1.5 text-[10px] font-semibold uppercase tracking-wide ${m.text}`}>
+                      {m.label}
+                    </span>
+                  </RouterLink>
+                );
+              })
+            )}
+          </div>
+
+          {/* Book CTA */}
+          <div className="px-4 pb-4 pt-2 border-t border-slate-100 flex-shrink-0">
             <RouterLink
               to={`/appointments/new?date=${selectedDate}`}
-              className="mt-4 w-full block text-center text-xs text-blue-600 hover:text-blue-700 font-medium border border-blue-200 rounded-lg py-2 hover:bg-blue-50"
+              className="flex items-center justify-center gap-1.5 w-full py-2 text-xs font-semibold text-primary-600 border border-primary-200 rounded-xl hover:bg-primary-50 transition"
             >
-              + Book on this date
+              <Plus className="h-3.5 w-3.5" />
+              Book on this date
             </RouterLink>
-          )}
+          </div>
         </div>
+      </div>
+
+      {/* Status legend */}
+      <div className="mt-4 flex items-center gap-5 flex-wrap">
+        {Object.entries(STATUS_META).map(([key, m]) => (
+          <div key={key} className="flex items-center gap-1.5 text-xs text-slate-500">
+            <span className={`w-2 h-2 rounded-full flex-shrink-0 ${m.dot}`} />
+            {m.label}
+          </div>
+        ))}
       </div>
     </div>
   );

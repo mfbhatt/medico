@@ -1,0 +1,19 @@
+{
+  "java.configuration.updateBuildConfiguration": "interactive",
+  "azureTerraform.checkTerraformCmd": false,
+
+  "editor.formatOnSave": true,
+  "editor.defaultFormatter": "esbenp.prettier-vscode",
+
+  "[python]": {
+    "editor.defaultFormatter": "ms-python.black-formatter",
+    "editor.formatOnSave": true,
+    "editor.codeActionsOnSave": {
+      "source.organizeImports": "explicit"
+    }
+  },
+
+  "isort.args": ["--settings-path", "${workspaceFolder}/backend/pyproject.toml"],
+  "black-formatter.args": ["--config", "${workspaceFolder}/backend/pyproject.toml"],
+  "prettier.configPath": "${workspaceFolder}/frontend/.prettierrc"
+}

@@ -65,7 +65,7 @@ infrastructure/terraform/**/.terraform.lock.hcl
 
 # IDE
 .idea/
-.vscode/
+vscode/
 *.swp
 *.swo
 .DS_Store

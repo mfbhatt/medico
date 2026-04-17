@@ -33,25 +33,28 @@ const PLAN_COLORS: Record<string, string> = {
 
 export default function TenantsPage() {
   const qc = useQueryClient();
-  const [searchInput, setSearchInput] = useState("");
   const [search, setSearch] = useState("");
+  const [debouncedSearch, setDebouncedSearch] = useState("");
   const [page, setPage] = useState(1);
+
+  useEffect(() => {
+    const t = setTimeout(() => { setDebouncedSearch(search); setPage(1); }, 300);
+    return () => clearTimeout(t);
+  }, [search]);
   const [showNewModal, setShowNewModal] = useState(false);
   const [suspendTarget, setSuspendTarget] = useState<any>(null);
   const [editTarget, setEditTarget] = useState<any>(null);
 
   const { data: tenantsData, isLoading } = useQuery({
-    queryKey: ["tenants", search, page],
+    queryKey: ["tenants", debouncedSearch, page],
     queryFn: () =>
-      api.get("/tenants/", { params: { search: search || undefined, page, page_size: PAGE_SIZE } })
+      api.get("/tenants/", { params: { search: debouncedSearch || undefined, page, page_size: PAGE_SIZE } })
         .then((r) => r.data),
     keepPreviousData: true,
   } as any);
 
   const allTenants: any[] = Array.isArray((tenantsData as any)?.data) ? (tenantsData as any).data : [];
   const total: number = (tenantsData as any)?.meta?.total ?? 0;
-
-  const handleSearch = () => { setSearch(searchInput); setPage(1); };
 
   const filteredTenants = allTenants;
 
@@ -73,19 +76,23 @@ export default function TenantsPage() {
       </div>
 
       {/* Search */}
-      <div className="bg-white rounded-xl border border-slate-200 p-4 mb-6 flex gap-3">
-        <div className="relative flex-1">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
+      <div className="bg-white rounded-xl border border-slate-200 p-4 mb-6">
+        <div className="relative">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400 pointer-events-none" />
           <input
-            type="text" placeholder="Search by name or email…" value={searchInput}
-            onChange={(e) => setSearchInput(e.target.value)}
-            onKeyDown={(e) => e.key === "Enter" && handleSearch()}
-            className="w-full pl-10 pr-4 py-2.5 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+            type="text" placeholder="Search by name or email…" value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            className="w-full pl-10 pr-8 py-2.5 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
           />
+          {search && (
+            <button
+              onClick={() => setSearch("")}
+              className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
+            >
+              <X className="h-4 w-4" />
+            </button>
+          )}
         </div>
-        <button onClick={handleSearch} className="px-4 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 text-sm font-medium rounded-lg">
-          Search
-        </button>
       </div>
 
       {isLoading && <div className="text-center py-12 text-slate-400 text-sm">Loading tenants…</div>}
