@@ -279,10 +279,12 @@ async def add_stock(
         quantity_remaining=qty,
         unit_cost=body.get("unit_cost", drug.unit_cost),
         expiry_date=body["expiry_date"],
-        manufacture_date=body.get("manufacture_date"),
+        manufacture_date=body.get("manufacturing_date") or body.get("manufacture_date"),
         supplier_name=body.get("supplier_name"),
         purchase_order_id=body.get("purchase_order_id"),
         received_date=date.today().isoformat(),
+        sku_code=body.get("sku_code"),
+        barcode=body.get("barcode"),
         created_by=current_user.user_id,
     )
     db.add(batch)

@@ -425,7 +425,12 @@ function AdjustmentModal({ drug, onClose }: { drug: Drug; onClose: () => void })
 
   const mutation = useMutation({
     mutationFn: (data: any) => api.post('/inventory/adjustments', data),
-    onSuccess: () => { qc.invalidateQueries({ queryKey: ['pharmacy-drugs'] }); onClose(); },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['pharmacy-drugs'] });
+      qc.invalidateQueries({ queryKey: ['pharmacy-alerts'] });
+      qc.invalidateQueries({ queryKey: ['pharmacy-alerts-count'] });
+      onClose();
+    },
     onError: (err: any) => setError(err.response?.data?.detail ?? 'Adjustment failed'),
   });
 
@@ -848,7 +853,7 @@ function POSPanel({ clinics }: { clinics: { id: string; name: string }[] }) {
 
   const clinicId = clinics[0]?.id ?? '';
 
-  const { data: drugsData, isLoading, isFetching } = useQuery({
+  const { data: drugsData, isLoading, isFetching, isError: drugsError, error: drugsErrorObj } = useQuery({
     queryKey: ['pharmacy-pos-drugs', debouncedSearch],
     queryFn: () =>
       api.get('/inventory/drugs', { params: { q: debouncedSearch || undefined, page_size: 30 } })
@@ -857,6 +862,7 @@ function POSPanel({ clinics }: { clinics: { id: string; name: string }[] }) {
     staleTime: 30_000,
   });
   const drugs: Drug[] = drugsData ?? [];
+  const posErrorMsg = drugsError ? ((drugsErrorObj as any)?.response?.data?.detail ?? (drugsErrorObj as any)?.message ?? 'Failed to load drugs') : null;
 
   const addToCart = useCallback((drug: Drug) => {
     if (drug.total_stock <= 0) return;
@@ -963,7 +969,7 @@ function POSPanel({ clinics }: { clinics: { id: string; name: string }[] }) {
   };
 
   return (
-    <div className="flex gap-6 h-[calc(100vh-200px)] min-h-[500px]">
+    <div className="flex gap-6 h-[calc(100vh-240px)] min-h-[560px]">
       {/* Drug search – left panel */}
       <div className="flex-1 flex flex-col min-w-0">
         <div className="relative mb-4">
@@ -981,8 +987,15 @@ function POSPanel({ clinics }: { clinics: { id: string; name: string }[] }) {
         <div className={`flex-1 overflow-y-auto border border-gray-200 rounded-xl transition-opacity ${isFetching ? 'opacity-60' : 'opacity-100'}`}>
           {isLoading ? (
             <div className="text-center py-12 text-gray-400">Loading drugs…</div>
+          ) : posErrorMsg ? (
+            <div className="flex flex-col items-center gap-2 py-12 text-red-600">
+              <AlertCircle className="w-6 h-6" />
+              <span className="text-sm font-medium px-4 text-center">{posErrorMsg}</span>
+            </div>
           ) : drugs.length === 0 ? (
-            <div className="text-center py-12 text-gray-400">No drugs found</div>
+            <div className="text-center py-12 text-gray-400 text-sm px-4">
+              No drugs found. Add drugs in the Inventory tab first.
+            </div>
           ) : (
             <div className="divide-y divide-gray-100">
               {drugs.map((drug) => {
@@ -1018,7 +1031,7 @@ function POSPanel({ clinics }: { clinics: { id: string; name: string }[] }) {
       </div>
 
       {/* Cart – right panel */}
-      <div className="w-96 shrink-0 flex flex-col border border-gray-200 rounded-xl bg-white overflow-hidden">
+      <div className="w-[460px] shrink-0 flex flex-col border border-gray-200 rounded-xl bg-white overflow-hidden">
         <div className="p-4 border-b border-gray-200 bg-gray-50">
           <h3 className="font-semibold text-gray-900 flex items-center gap-2">
             <ShoppingCart className="w-4 h-4" /> Cart
@@ -1195,7 +1208,7 @@ function InventoryTab({ clinics }: { clinics: { id: string; name: string }[] }) 
   const limit = 25;
   const debouncedSearch = useDebounce(search, 300);
 
-  const { data, isLoading } = useQuery({
+  const { data, isLoading, isError, error } = useQuery({
     queryKey: ['pharmacy-drugs', debouncedSearch, page],
     queryFn: () =>
       api.get('/inventory/drugs', { params: { q: debouncedSearch || undefined, page: page + 1, page_size: limit } })
@@ -1206,6 +1219,7 @@ function InventoryTab({ clinics }: { clinics: { id: string; name: string }[] }) 
 
   const drugs: Drug[] = data?.data ?? [];
   const meta = data?.meta ?? {};
+  const errorMsg = isError ? ((error as any)?.response?.data?.detail ?? (error as any)?.message ?? 'Failed to load inventory') : null;
 
   return (
     <>
@@ -1237,8 +1251,15 @@ function InventoryTab({ clinics }: { clinics: { id: string; name: string }[] }) 
           <tbody className="divide-y divide-gray-100">
             {isLoading ? (
               <tr><td colSpan={8} className="text-center py-12 text-gray-400">Loading…</td></tr>
+            ) : errorMsg ? (
+              <tr><td colSpan={8} className="text-center py-12">
+                <div className="flex flex-col items-center gap-2 text-red-600">
+                  <AlertCircle className="w-6 h-6" />
+                  <span className="text-sm font-medium">{errorMsg}</span>
+                </div>
+              </td></tr>
             ) : drugs.length === 0 ? (
-              <tr><td colSpan={8} className="text-center py-12 text-gray-400">No drugs found</td></tr>
+              <tr><td colSpan={8} className="text-center py-12 text-gray-400">No drugs found. Use "Add Drug" to add your first drug.</td></tr>
             ) : (
               drugs.map((drug) => {
                 const isOut = drug.total_stock === 0;

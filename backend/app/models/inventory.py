@@ -65,6 +65,8 @@ class StockBatch(BaseModel):
         String(36), ForeignKey("purchase_orders.id", ondelete="SET NULL"), nullable=True
     )
     received_date: Mapped[str] = mapped_column(String(10), nullable=False)
+    sku_code: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
+    barcode: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
 
     drug_item: Mapped["DrugItem"] = relationship("DrugItem", back_populates="stock_batches")
