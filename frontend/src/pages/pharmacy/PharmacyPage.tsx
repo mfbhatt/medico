@@ -282,12 +282,26 @@ function AddDrugModal({ onClose, clinics }: { onClose: () => void; clinics: { id
 
 function AddStockModal({ drug, onClose }: { drug: Drug; onClose: () => void }) {
   const qc = useQueryClient();
-  const [form, setForm] = useState({ quantity: '', expiry_date: '', batch_number: '', unit_cost: '', supplier_name: '' });
+  const [form, setForm] = useState({
+    quantity: '', expiry_date: '', batch_number: '', unit_cost: '',
+    supplier_name: '', sku_code: '', barcode: '', manufacturing_date: '',
+  });
   const [error, setError] = useState('');
+
+  const shelfLifeDays = form.manufacturing_date && form.expiry_date
+    ? Math.max(0, Math.round(
+        (new Date(form.expiry_date).getTime() - new Date(form.manufacturing_date).getTime()) / 86_400_000,
+      ))
+    : null;
 
   const mutation = useMutation({
     mutationFn: (data: any) => api.post(`/inventory/drugs/${drug.id}/stock`, data),
-    onSuccess: () => { qc.invalidateQueries({ queryKey: ['pharmacy-drugs'] }); onClose(); },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['pharmacy-drugs'] });
+      qc.invalidateQueries({ queryKey: ['pharmacy-alerts'] });
+      qc.invalidateQueries({ queryKey: ['pharmacy-alerts-count'] });
+      onClose();
+    },
     onError: (err: any) => setError(err.response?.data?.detail ?? 'Failed to add stock'),
   });
 
@@ -295,11 +309,11 @@ function AddStockModal({ drug, onClose }: { drug: Drug; onClose: () => void }) {
 
   return (
     <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
-      <div className="bg-white rounded-xl shadow-xl w-full max-w-md">
-        <div className="flex items-center justify-between p-5 border-b border-gray-200">
+      <div className="bg-white rounded-xl shadow-xl w-full max-w-lg max-h-[90vh] overflow-y-auto">
+        <div className="flex items-center justify-between p-5 border-b border-gray-200 sticky top-0 bg-white">
           <div>
             <h2 className="text-lg font-semibold text-gray-900">Receive Stock</h2>
-            <p className="text-sm text-gray-500">{drug.name} · {drug.form} {drug.strength}</p>
+            <p className="text-sm text-gray-500">{drug.name} · {drug.form} {drug.strength}{drug.category ? ` · ${drug.category}` : ''}</p>
           </div>
           <button onClick={onClose}><X className="w-5 h-5 text-gray-400" /></button>
         </div>
@@ -313,34 +327,84 @@ function AddStockModal({ drug, onClose }: { drug: Drug; onClose: () => void }) {
               batch_number: form.batch_number || undefined,
               unit_cost: form.unit_cost ? Number(form.unit_cost) : undefined,
               supplier_name: form.supplier_name || undefined,
+              sku_code: form.sku_code || undefined,
+              barcode: form.barcode || undefined,
+              manufacturing_date: form.manufacturing_date || undefined,
             });
           }}
-          className="p-5 space-y-4"
+          className="p-5 space-y-5"
         >
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <label className="label">Quantity *</label>
-              <input className="input" type="number" min={1} value={form.quantity} onChange={set('quantity')} required />
-            </div>
-            <div>
-              <label className="label">Expiry Date *</label>
-              <input className="input" type="date" value={form.expiry_date} onChange={set('expiry_date')} required />
-            </div>
-            <div>
-              <label className="label">Batch Number</label>
-              <input className="input" value={form.batch_number} onChange={set('batch_number')} placeholder="Auto-generated if blank" />
-            </div>
-            <div>
-              <label className="label">Unit Cost</label>
-              <input className="input" type="number" min={0} step="0.01" value={form.unit_cost} onChange={set('unit_cost')} />
-            </div>
-            <div className="col-span-2">
-              <label className="label">Supplier</label>
-              <input className="input" value={form.supplier_name} onChange={set('supplier_name')} />
+          {/* Product Identification */}
+          <div>
+            <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-3">Product Identification</h3>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="col-span-2">
+                <label className="label">Medicine</label>
+                <input className="input bg-gray-50 text-gray-600" value={`${drug.name}${drug.generic_name ? ` (${drug.generic_name})` : ''}`} readOnly />
+              </div>
+              <div>
+                <label className="label">SKU / Item Code</label>
+                <input className="input" value={form.sku_code} onChange={set('sku_code')} placeholder="Internal SKU" />
+              </div>
+              <div>
+                <label className="label">Barcode / UPC</label>
+                <input className="input" value={form.barcode} onChange={set('barcode')} placeholder="Scan or type barcode" />
+              </div>
+              <div>
+                <label className="label">Category</label>
+                <input className="input bg-gray-50 text-gray-600" value={drug.category || '—'} readOnly />
+              </div>
+              <div>
+                <label className="label">Supplier / Manufacturer</label>
+                <input className="input" value={form.supplier_name} onChange={set('supplier_name')} placeholder="Company name" />
+              </div>
             </div>
           </div>
+
+          {/* Batch & Expiry */}
+          <div>
+            <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-3">Batch &amp; Expiry</h3>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="label">Batch / Lot Number</label>
+                <input className="input" value={form.batch_number} onChange={set('batch_number')} placeholder="Auto-generated if blank" />
+              </div>
+              <div>
+                <label className="label">Manufacturing Date</label>
+                <input className="input" type="date" value={form.manufacturing_date} onChange={set('manufacturing_date')} />
+              </div>
+              <div>
+                <label className="label">Expiry Date *</label>
+                <input className="input" type="date" value={form.expiry_date} onChange={set('expiry_date')} required />
+              </div>
+              <div>
+                <label className="label">Shelf Life</label>
+                <input
+                  className="input bg-gray-50 text-gray-600"
+                  value={shelfLifeDays !== null ? `${shelfLifeDays} days` : 'Set mfg & expiry dates'}
+                  readOnly
+                />
+              </div>
+            </div>
+          </div>
+
+          {/* Quantity & Pricing */}
+          <div>
+            <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-3">Quantity &amp; Pricing</h3>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="label">Quantity *</label>
+                <input className="input" type="number" min={1} value={form.quantity} onChange={set('quantity')} required />
+              </div>
+              <div>
+                <label className="label">Unit Cost</label>
+                <input className="input" type="number" min={0} step="0.01" value={form.unit_cost} onChange={set('unit_cost')} placeholder="0.00" />
+              </div>
+            </div>
+          </div>
+
           {error && <div className="bg-red-50 border border-red-200 text-red-700 px-3 py-2 rounded text-sm">{error}</div>}
-          <div className="flex gap-3 pt-2">
+          <div className="flex gap-3 pt-1">
             <button type="submit" disabled={mutation.isPending} className="btn-primary flex-1">
               {mutation.isPending ? 'Receiving…' : 'Receive Stock'}
             </button>
@@ -865,8 +929,11 @@ function POSPanel({ clinics }: { clinics: { id: string; name: string }[] }) {
       setNotes('');
       setError('');
       qc.invalidateQueries({ queryKey: ['pharmacy-drugs'] });
+      qc.invalidateQueries({ queryKey: ['pharmacy-pos-drugs'] });
       qc.invalidateQueries({ queryKey: ['pharmacy-sales'] });
       qc.invalidateQueries({ queryKey: ['pharmacy-analytics'] });
+      qc.invalidateQueries({ queryKey: ['pharmacy-alerts'] });
+      qc.invalidateQueries({ queryKey: ['pharmacy-alerts-count'] });
     },
     onError: (err: any) => setError(err.response?.data?.detail ?? 'Sale failed'),
   });
@@ -1079,7 +1146,14 @@ function POSPanel({ clinics }: { clinics: { id: string; name: string }[] }) {
       {/* Sale success modal */}
       {completedSale && (
         <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-xl shadow-xl w-full max-w-md p-6 text-center space-y-4">
+          <div className="bg-white rounded-xl shadow-xl w-full max-w-md p-6 text-center space-y-4 relative">
+            <button
+              onClick={() => setCompletedSale(null)}
+              className="absolute top-4 right-4 text-gray-400 hover:text-gray-600"
+              aria-label="Close"
+            >
+              <X className="w-5 h-5" />
+            </button>
             <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto">
               <CheckCircle className="w-9 h-9 text-green-600" />
             </div>
@@ -1337,16 +1411,17 @@ function SalesTab() {
   const [selectedSale, setSelectedSale] = useState<string | null>(null);
   const limit = 25;
 
-  const { data, isLoading } = useQuery({
+  const { data, isLoading, isError, error } = useQuery({
     queryKey: ['pharmacy-sales', page, dateFrom, dateTo],
     queryFn: () =>
       api.get('/inventory/sales', {
         params: {
           page: page + 1, page_size: limit,
-          date_from: dateFrom || undefined,
-          date_to: dateTo || undefined,
+          ...(dateFrom ? { date_from: dateFrom } : {}),
+          ...(dateTo ? { date_to: dateTo } : {}),
         },
       }).then((r) => r.data),
+    retry: 1,
   });
 
   const sales: SaleRecord[] = data?.data ?? [];
@@ -1385,6 +1460,10 @@ function SalesTab() {
           <tbody className="divide-y divide-gray-100">
             {isLoading ? (
               <tr><td colSpan={7} className="text-center py-12 text-gray-400">Loading…</td></tr>
+            ) : isError ? (
+              <tr><td colSpan={7} className="text-center py-12 text-red-500 text-sm">
+                Failed to load sales: {(error as any)?.response?.data?.detail ?? (error as any)?.message ?? 'Unknown error'}
+              </td></tr>
             ) : sales.length === 0 ? (
               <tr><td colSpan={7} className="text-center py-12 text-gray-400">No sales found</td></tr>
             ) : (
@@ -1589,11 +1668,35 @@ function ReportsTab() {
 // ─── Alerts Tab ───────────────────────────────────────────────────────────────
 
 function AlertsTab() {
+  const [stockDrug, setStockDrug] = useState<Drug | null>(null);
+
   const { data: alerts, isLoading } = useQuery({
     queryKey: ['pharmacy-alerts'],
     queryFn: () => api.get('/inventory/stock-alerts').then((r) => r.data.data ?? []),
     refetchInterval: 300_000,
   });
+
+  const openAddStock = (alert: any) => {
+    setStockDrug({
+      id: alert.drug_id,
+      name: alert.drug_name,
+      generic_name: alert.generic_name ?? '',
+      brand_name: alert.brand_name ?? '',
+      form: alert.form,
+      strength: alert.strength,
+      unit: alert.unit ?? '',
+      category: alert.category ?? '',
+      selling_price: alert.selling_price ?? 0,
+      unit_cost: alert.unit_cost ?? 0,
+      requires_prescription: false,
+      is_controlled: false,
+      total_stock: alert.current_stock,
+      reorder_level: alert.reorder_level,
+      is_low_stock: true,
+      is_active: true,
+      clinic_id: alert.clinic_id ?? '',
+    });
+  };
 
   return (
     <div className="space-y-3">
@@ -1634,15 +1737,26 @@ function AlertsTab() {
                   </div>
                 )}
               </div>
-              <div className="flex flex-col gap-1 items-end shrink-0 ml-4">
+              <div className="flex flex-col gap-2 items-end shrink-0 ml-4">
                 {alert.expired_qty > 0 && <span className="badge-red flex items-center gap-1"><AlertCircle className="w-3 h-3" /> Expired Stock</span>}
                 {alert.expiring_soon_qty > 0 && <span className="badge-yellow flex items-center gap-1"><AlertTriangle className="w-3 h-3" /> Expiring Soon</span>}
-                {alert.is_low_stock && <span className="badge-blue flex items-center gap-1"><AlertTriangle className="w-3 h-3" /> Low Stock</span>}
+                {alert.is_low_stock && (
+                  <div className="flex flex-col items-end gap-1.5">
+                    <span className="badge-blue flex items-center gap-1"><AlertTriangle className="w-3 h-3" /> Low Stock</span>
+                    <button
+                      onClick={() => openAddStock(alert)}
+                      className="flex items-center gap-1 text-xs font-medium text-white bg-blue-600 hover:bg-blue-700 px-2.5 py-1 rounded-lg transition-colors"
+                    >
+                      <Plus className="w-3 h-3" /> Add Stock
+                    </button>
+                  </div>
+                )}
               </div>
             </div>
           </div>
         ))
       )}
+      {stockDrug && <AddStockModal drug={stockDrug} onClose={() => setStockDrug(null)} />}
     </div>
   );
 }

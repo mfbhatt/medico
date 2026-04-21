@@ -104,7 +104,7 @@ export default function DoctorClinicsPage() {
   return (
     <div>
       <div className="mb-6">
-        <Link to="/doctors" className="inline-flex items-center gap-1.5 text-sm text-slate-500 hover:text-slate-700">
+        <Link to="/doctors" className="inline-flex items-center gap-1.5 text-sm text-blue-600 hover:text-blue-700">
           <ArrowLeft className="w-4 h-4" />
           Back to Doctors
         </Link>

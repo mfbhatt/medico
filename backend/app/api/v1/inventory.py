@@ -4,7 +4,7 @@ from datetime import date, datetime, timedelta, timezone
 from typing import Optional
 
 from fastapi import APIRouter, Depends, Query
-from sqlalchemy import select, func, or_
+from sqlalchemy import select, func, or_, cast, Date
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
@@ -1008,9 +1008,9 @@ async def list_sales(
     if clinic_id:
         query = query.where(PharmacySale.clinic_id == clinic_id)
     if date_from:
-        query = query.where(func.date(PharmacySale.created_at) >= date_from)
+        query = query.where(cast(PharmacySale.created_at, Date) >= date_from)
     if date_to:
-        query = query.where(func.date(PharmacySale.created_at) <= date_to)
+        query = query.where(cast(PharmacySale.created_at, Date) <= date_to)
     if payment_method:
         query = query.where(PharmacySale.payment_method == payment_method)
     if status:

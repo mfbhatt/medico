@@ -304,6 +304,7 @@ export default function DashboardLayout() {
     setSwitchingTenant(tenantId);
     try {
       await dispatch(switchTenantThunk({ tenant_id: tenantId })).unwrap();
+      queryClient.clear();
       setUserMenuOpen(false);
       setTenantMenuOpen(false);
       navigate("/home");
