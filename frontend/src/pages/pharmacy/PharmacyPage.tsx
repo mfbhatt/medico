@@ -969,7 +969,7 @@ function POSPanel({ clinics }: { clinics: { id: string; name: string }[] }) {
   };
 
   return (
-    <div className="flex gap-6 h-[calc(100vh-240px)] min-h-[560px]">
+    <div className="flex gap-6 h-[calc(100vh-195px)] min-h-[560px]">
       {/* Drug search – left panel */}
       <div className="flex-1 flex flex-col min-w-0">
         <div className="relative mb-4">
@@ -1039,71 +1039,84 @@ function POSPanel({ clinics }: { clinics: { id: string; name: string }[] }) {
           </h3>
         </div>
 
-        <div className="flex-1 overflow-y-auto p-4 space-y-3">
+        <div className="flex-1 overflow-y-auto px-3 pt-1 pb-3">
           {cart.length === 0 ? (
             <p className="text-center text-gray-400 text-sm py-8">Add drugs from the list</p>
           ) : (
-            cart.map((item) => (
-              <div key={item.drug_id} className="border border-gray-100 rounded-lg p-3 bg-gray-50">
-                <div className="flex items-start justify-between gap-2 mb-2">
-                  <p className="font-medium text-sm text-gray-900 leading-snug">{item.drug_name}</p>
-                  <button onClick={() => removeFromCart(item.drug_id)} className="text-gray-400 hover:text-red-500 shrink-0">
-                    <Trash2 className="w-3.5 h-3.5" />
+            <>
+            <div className="flex items-center gap-2 px-0 py-1 text-xs text-gray-400 border-b border-gray-100 mb-1">
+              <span className="flex-1">Drug</span>
+              <span className="w-[76px] text-center">Qty</span>
+              <span className="w-12 text-center">Disc%</span>
+              <span className="w-16 text-right">Total</span>
+              <span className="w-4" />
+            </div>
+            {cart.map((item) => (
+              <div key={item.drug_id} className="flex items-center gap-2 py-2.5 border-b border-gray-100 last:border-0">
+                {/* Name + price breakdown */}
+                <div className="flex-1 min-w-0">
+                  <p className="font-medium text-sm text-gray-900 truncate leading-tight">{item.drug_name}</p>
+                  <p className="text-xs text-gray-400">{fmt(item.unit_price)} × {item.quantity}</p>
+                </div>
+
+                {/* Qty stepper */}
+                <div className="flex items-center border border-gray-200 rounded-lg bg-white shrink-0">
+                  <button onClick={() => updateCartQty(item.drug_id, -1)} className="w-6 h-6 flex items-center justify-center text-gray-500 hover:text-gray-800">
+                    <Minus className="w-2.5 h-2.5" />
+                  </button>
+                  <span className="w-7 text-center text-xs font-semibold">{item.quantity}</span>
+                  <button onClick={() => updateCartQty(item.drug_id, 1)} disabled={item.quantity >= item.available_stock}
+                    className="w-6 h-6 flex items-center justify-center text-gray-500 hover:text-gray-800 disabled:opacity-30">
+                    <Plus className="w-2.5 h-2.5" />
                   </button>
                 </div>
-                <div className="flex items-center justify-between gap-3">
-                  <div className="flex items-center border border-gray-200 rounded-lg bg-white">
-                    <button onClick={() => updateCartQty(item.drug_id, -1)} className="w-7 h-7 flex items-center justify-center text-gray-500 hover:text-gray-800">
-                      <Minus className="w-3 h-3" />
-                    </button>
-                    <span className="w-8 text-center text-sm font-medium">{item.quantity}</span>
-                    <button onClick={() => updateCartQty(item.drug_id, 1)} disabled={item.quantity >= item.available_stock}
-                      className="w-7 h-7 flex items-center justify-center text-gray-500 hover:text-gray-800 disabled:opacity-30">
-                      <Plus className="w-3 h-3" />
-                    </button>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <span className="text-xs text-gray-500">Disc%</span>
-                    <input
-                      type="number" min={0} max={100} step={0.5}
-                      value={item.discount_percent}
-                      onChange={(e) => updateCartDiscount(item.drug_id, parseFloat(e.target.value) || 0)}
-                      className="w-14 input text-xs py-1 px-2"
-                    />
-                  </div>
-                  <span className="text-sm font-semibold text-gray-900 text-right">{fmt(item.line_total)}</span>
-                </div>
-                <p className="text-xs text-gray-400 mt-1">{fmt(item.unit_price)} × {item.quantity}</p>
+
+                {/* Discount % */}
+                <input
+                  type="number" min={0} max={100} step={0.5}
+                  value={item.discount_percent}
+                  onChange={(e) => updateCartDiscount(item.drug_id, parseFloat(e.target.value) || 0)}
+                  className="w-12 input text-xs py-0.5 px-1.5 shrink-0"
+                  title="Discount %"
+                  placeholder="0%"
+                />
+
+                {/* Line total */}
+                <span className="text-sm font-semibold text-gray-900 w-16 text-right shrink-0">{fmt(item.line_total)}</span>
+
+                {/* Remove */}
+                <button onClick={() => removeFromCart(item.drug_id)} className="text-gray-300 hover:text-red-500 shrink-0 ml-0.5">
+                  <Trash2 className="w-3.5 h-3.5" />
+                </button>
               </div>
-            ))
+            ))}
+            </>
           )}
         </div>
 
         {/* Cart footer */}
-        <div className="p-4 border-t border-gray-200 bg-gray-50 space-y-3">
-          {/* Patient name */}
-          <input className="input text-sm" placeholder="Patient name (optional)" value={patientName} onChange={(e) => setPatientName(e.target.value)} />
-
-          {/* Discount + Tax */}
-          <div className="grid grid-cols-2 gap-2">
+        <div className="p-3 border-t border-gray-200 bg-gray-50 space-y-2">
+          {/* Patient name + Discount + Tax on one row */}
+          <div className="grid grid-cols-[1fr_80px_80px] gap-2">
+            <input className="input text-xs py-1" placeholder="Patient name (optional)" value={patientName} onChange={(e) => setPatientName(e.target.value)} />
             <div>
-              <label className="label text-xs">Discount</label>
-              <input className="input text-sm py-1" type="number" min={0} step={0.01} placeholder="0.00"
+              <label className="label text-xs mb-0.5">Discount</label>
+              <input className="input text-xs py-1" type="number" min={0} step={0.01} placeholder="0.00"
                 value={discountAmount} onChange={(e) => setDiscountAmount(e.target.value)} />
             </div>
             <div>
-              <label className="label text-xs">Tax</label>
-              <input className="input text-sm py-1" type="number" min={0} step={0.01} placeholder="0.00"
+              <label className="label text-xs mb-0.5">Tax</label>
+              <input className="input text-xs py-1" type="number" min={0} step={0.01} placeholder="0.00"
                 value={taxAmount} onChange={(e) => setTaxAmount(e.target.value)} />
             </div>
           </div>
 
           {/* Totals */}
-          <div className="space-y-1 text-sm">
+          <div className="space-y-0.5 text-xs">
             <div className="flex justify-between text-gray-500"><span>Subtotal</span><span>{fmt(subtotal)}</span></div>
             {disc > 0 && <div className="flex justify-between text-red-500"><span>Discount</span><span>−{fmt(disc)}</span></div>}
             {tax > 0 && <div className="flex justify-between text-gray-500"><span>Tax</span><span>{fmt(tax)}</span></div>}
-            <div className="flex justify-between font-bold text-base border-t border-gray-200 pt-1">
+            <div className="flex justify-between font-bold text-sm border-t border-gray-200 pt-1">
               <span>Total</span><span>{fmt(total)}</span>
             </div>
           </div>
@@ -1115,7 +1128,7 @@ function POSPanel({ clinics }: { clinics: { id: string; name: string }[] }) {
                 key={m.value}
                 type="button"
                 onClick={() => setPaymentMethod(m.value)}
-                className={`flex-1 min-w-[60px] px-2 py-1.5 text-xs font-medium rounded-lg border transition-colors
+                className={`flex-1 min-w-[60px] px-2  text-xs font-medium rounded-lg border transition-colors
                   ${paymentMethod === m.value ? 'bg-primary-600 text-white border-primary-600' : 'border-gray-200 text-gray-600 hover:border-gray-300'}`}
               >
                 {m.label}
@@ -1127,25 +1140,25 @@ function POSPanel({ clinics }: { clinics: { id: string; name: string }[] }) {
           {paymentMethod === 'cash' && (
             <div className="flex items-center gap-2">
               <div className="flex-1">
-                <label className="label text-xs">Cash Paid</label>
-                <input className="input text-sm py-1" type="number" min={total} step={0.01} placeholder={total.toFixed(2)}
+                <label className="label text-xs mb-0.5">Cash Paid</label>
+                <input className="input text-xs py-1" type="number" min={total} step={0.01} placeholder={total.toFixed(2)}
                   value={paidAmount} onChange={(e) => setPaidAmount(e.target.value)} />
               </div>
               {change > 0 && (
-                <div className="text-right">
+                <div className="text-right shrink-0">
                   <p className="text-xs text-gray-500">Change</p>
-                  <p className="text-lg font-bold text-green-600">{fmt(change)}</p>
+                  <p className="text-base font-bold text-green-600">{fmt(change)}</p>
                 </div>
               )}
             </div>
           )}
 
-          {error && <div className="text-xs text-red-600 bg-red-50 border border-red-200 px-2 py-1.5 rounded">{error}</div>}
+          {error && <div className="text-xs text-red-600 bg-red-50 border border-red-200 px-2 py-1 rounded">{error}</div>}
 
           <button
             onClick={processSale}
             disabled={cart.length === 0 || saleMutation.isPending}
-            className="w-full btn-primary py-2.5 font-semibold flex items-center justify-center gap-2"
+            className="w-full btn-primary py-2 font-semibold flex items-center justify-center gap-2 text-sm"
           >
             {saleMutation.isPending ? (
               <><RefreshCw className="w-4 h-4 animate-spin" /> Processing…</>
