@@ -1,11 +1,11 @@
 """Custom exceptions and FastAPI exception handlers (CORS-safe)."""
+
 from typing import Any, Optional
 
+import structlog
 from fastapi import Request, status
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
-
-import structlog
 
 log = structlog.get_logger()
 
@@ -129,9 +129,15 @@ class FileUploadException(BadRequestException):
     error_code = "FILE_UPLOAD_ERROR"
     message = "File upload failed"
 
+
 class MissingTenantException(BadRequestException):
     error_code = "MISSING_TENANT"
     message = "Provide X-Tenant-ID header"
+
+
+class ValidationException(UnprocessableEntityException):
+    error_code = "VALIDATION_ERROR"
+    message = "Validation failed"
 
 
 # ── CORS Helper ──────────────────────────────────────────────────
@@ -167,9 +173,7 @@ def _error_response(
 
 
 # ── Exception Handlers ───────────────────────────────────────────
-async def clinic_exception_handler(
-    request: Request, exc: ClinicBaseException
-) -> JSONResponse:
+async def clinic_exception_handler(request: Request, exc: ClinicBaseException) -> JSONResponse:
     log.warning(
         "Handled exception",
         error_code=exc.error_code,
@@ -186,9 +190,7 @@ async def clinic_exception_handler(
     )
 
 
-async def validation_exception_handler(
-    request: Request, exc: RequestValidationError
-) -> JSONResponse:
+async def validation_exception_handler(request: Request, exc: RequestValidationError) -> JSONResponse:
     errors = [
         {
             "field": ".".join(str(loc) for loc in error["loc"][1:]),
@@ -209,10 +211,9 @@ async def validation_exception_handler(
     )
 
 
-async def unhandled_exception_handler(
-    request: Request, exc: Exception
-) -> JSONResponse:
+async def unhandled_exception_handler(request: Request, exc: Exception) -> JSONResponse:
     import traceback
+
     tb = traceback.format_exc()
     log.error(
         "Unhandled exception",
@@ -223,6 +224,7 @@ async def unhandled_exception_handler(
     )
 
     from app.core.config import settings
+
     detail = f"{type(exc).__name__}: {exc}" if settings.is_development else None
 
     return _error_response(

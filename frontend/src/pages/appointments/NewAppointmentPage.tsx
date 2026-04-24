@@ -109,6 +109,23 @@ export default function NewAppointmentPage() {
   });
   const patientResults_ = patientResults ?? [];
 
+  // When arriving from the patients page (?patient_id=xxx), fetch the patient
+  // name so the search field shows it as already selected.
+  const { data: prefillPatientData } = useQuery({
+    queryKey: ["patient-prefill", prefillPatientId],
+    queryFn: () =>
+      api.get(`/patients/${prefillPatientId}`).then((r) => r.data.data ?? r.data),
+    enabled: !isPatient && !!prefillPatientId,
+    staleTime: 60_000,
+  });
+
+  useEffect(() => {
+    if (!isPatient && prefillPatientData) {
+      const name = `${prefillPatientData.first_name ?? ""} ${prefillPatientData.last_name ?? ""}`.trim();
+      setPatientLabel(name);
+    }
+  }, [prefillPatientData, isPatient]);
+
   // Close dropdown on outside click
   useEffect(() => {
     function handleClick(e: MouseEvent) {

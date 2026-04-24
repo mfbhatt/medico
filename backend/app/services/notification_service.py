@@ -1,23 +1,29 @@
 """Notification service — unified interface for all notification channels."""
 from typing import Optional
+import structlog
 
+log = structlog.get_logger()
 
 async def send_sms(phone: str, message: str) -> bool:
     """Send SMS via Twilio."""
     from app.core.config import settings
     if not settings.TWILIO_ACCOUNT_SID:
-        return False
+        print(f"[SMS] To: {phone}\n{message}")
+        return True
     try:
         from twilio.rest import Client
         client = Client(settings.TWILIO_ACCOUNT_SID, settings.TWILIO_AUTH_TOKEN)
-        client.messages.create(
+        response = client.messages.create(
             body=message,
             from_=settings.TWILIO_FROM_NUMBER,
             to=phone,
-        )
+            )
+        log.info(f"Sent SMS to {phone}: {message} (SID: {response.sid})")
         return True
-    except Exception:
-        print(f"Failed to send SMS to {phone}: {message}")
+    except Exception as e:
+        log.error(f"Failed to send SMS to {phone}: {e}")
+        if settings.is_development:
+            print(f"[SMS FALLBACK] To: {phone}\n{message}")
         return False
 
 

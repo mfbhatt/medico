@@ -3,12 +3,16 @@ import api from './api';
 export interface LoginResponse {
   access_token: string;
   refresh_token: string;
+  is_new_user?: boolean;
   user: {
     id: string;
     email: string;
     full_name: string;
+    first_name?: string;
+    last_name?: string;
     role: string;
     tenant_id: string;
+    patient_id?: string;
   };
 }
 

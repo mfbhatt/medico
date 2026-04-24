@@ -2,8 +2,9 @@
 from enum import Enum
 from typing import List, Optional
 
-from sqlalchemy import Boolean, Float, ForeignKey, Integer, JSON, String, Text
+from sqlalchemy import Boolean, Float, ForeignKey, Index, Integer, JSON, String, Text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
+from sqlalchemy.sql import text as sa_text
 
 from app.models.base import BaseModel
 
@@ -35,6 +36,21 @@ class Patient(BaseModel):
     Can also exist without a User account (walk-in patients).
     """
     __tablename__ = "patients"
+    __table_args__ = (
+        # Partial unique indexes so NULLs and soft-deleted rows don't count.
+        Index(
+            "uq_patients_tenant_phone",
+            "tenant_id", "phone",
+            unique=True,
+            postgresql_where=sa_text("phone IS NOT NULL AND phone != '' AND is_deleted = false"),
+        ),
+        Index(
+            "uq_patients_tenant_email",
+            "tenant_id", "email",
+            unique=True,
+            postgresql_where=sa_text("email IS NOT NULL AND email != '' AND is_deleted = false"),
+        ),
+    )
 
     user_id: Mapped[Optional[str]] = mapped_column(
         String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True, unique=True

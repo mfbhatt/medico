@@ -43,7 +43,7 @@ class User(TenantFreeModel):
     email: Mapped[Optional[str]] = mapped_column(
         String(255), nullable=True, index=True, unique=True
     )
-    phone: Mapped[Optional[str]] = mapped_column(String(20), nullable=True, index=True)
+    phone: Mapped[Optional[str]] = mapped_column(String(20), nullable=True, index=True, unique=True)
     password_hash: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
 
     # Profile

@@ -5,7 +5,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { useGoogleLogin } from "@react-oauth/google";
 import { useAppDispatch } from "@/store/hooks";
-import { loginThunk, switchTenantThunk } from "@/store/slices/authSlice";
+import { loginThunk, switchTenantThunk, setUser, setToken } from "@/store/slices/authSlice";
 import { addToast } from "@/store/slices/uiSlice";
 import api from "@/services/api";
 import { FACEBOOK_APP_ID, STORAGE_KEYS } from "@/utils/constants";
@@ -88,6 +88,12 @@ export default function LoginPage() {
         return;
       }
       persistTokens(payload);
+      dispatch(setUser(payload.user));
+      dispatch(setToken({ token: payload.access_token, refreshToken: payload.refresh_token ?? "" }));
+      if (payload.is_new_user) {
+        navigate("/complete-profile", { replace: true });
+        return;
+      }
       await handlePostLogin();
     } catch (err: any) {
       dispatch(addToast({ id: `t-${Date.now()}`, type: "error", message: err?.response?.data?.message ?? "Social login failed" }));
@@ -185,6 +191,12 @@ export default function LoginPage() {
         return;
       }
       persistTokens(payload);
+      dispatch(setUser(payload.user));
+      dispatch(setToken({ token: payload.access_token, refreshToken: payload.refresh_token ?? "" }));
+      if (payload.is_new_user) {
+        navigate("/complete-profile", { replace: true });
+        return;
+      }
       await handlePostLogin();
     } catch (err: any) {
       dispatch(addToast({ id: `t-${Date.now()}`, type: "error", message: err?.response?.data?.message ?? "Invalid OTP" }));

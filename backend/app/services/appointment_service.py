@@ -11,7 +11,6 @@ from app.repositories.doctor import DoctorRepository
 from app.schemas.appointment import (
     AppointmentCreate,
     AppointmentRescheduleRequest,
-    AvailableSlot,
     WaitlistCreate,
 )
 from app.schemas.doctor import AvailableSlot

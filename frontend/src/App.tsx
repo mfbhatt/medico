@@ -12,6 +12,7 @@ import PublicLayout from "./components/layouts/PublicLayout";
 import LoginPage from "./pages/LoginPage";
 import ForgotPasswordPage from "./pages/ForgotPasswordPage";
 import ResetPasswordPage from "./pages/auth/ResetPasswordPage";
+import PatientProfileCompletionPage from "./pages/auth/PatientProfileCompletionPage";
 import PatientRegisterPage from "./pages/public/PatientRegisterPage";
 
 // ─── Public pages ────────────────────────────────────────────────────────────
@@ -124,6 +125,9 @@ export default function App() {
         <Route path="/forgot-password" element={<ForgotPasswordPage />} />
         <Route path="/reset-password" element={<ResetPasswordPage />} />
       </Route>
+
+      {/* ── Profile completion (post OTP/social login, standalone layout) ── */}
+      <Route path="/complete-profile" element={<PatientProfileCompletionPage />} />
 
       {/* ── Protected routes (any authenticated user) ────────────────────── */}
       <Route element={<ProtectedRoute />}>

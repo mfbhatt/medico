@@ -1,6 +1,7 @@
 """Redis client and caching utilities."""
 import json
 import logging
+import time
 from typing import Any, Optional
 
 import redis.asyncio as aioredis
@@ -17,6 +18,29 @@ redis_client: aioredis.Redis = aioredis.from_url(
     socket_connect_timeout=2,
 )
 
+# ── In-memory fallback (dev only, single-process) ────────────────
+# Activated automatically when Redis is unreachable.
+_mem_store: dict[str, tuple[Any, float]] = {}  # key → (value, expires_at)
+
+
+def _mem_get(key: str) -> Optional[Any]:
+    entry = _mem_store.get(key)
+    if entry is None:
+        return None
+    value, expires_at = entry
+    if time.monotonic() > expires_at:
+        _mem_store.pop(key, None)
+        return None
+    return value
+
+
+def _mem_set(key: str, value: Any, ttl: int) -> None:
+    _mem_store[key] = (value, time.monotonic() + ttl)
+
+
+def _mem_delete(key: str) -> None:
+    _mem_store.pop(key, None)
+
 
 async def _redis_available() -> bool:
     try:
@@ -30,31 +54,34 @@ async def cache_get(key: str) -> Optional[Any]:
     """Get a value from cache. Returns None if key doesn't exist or Redis is unavailable."""
     try:
         value = await redis_client.get(key)
+        if value is None:
+            return None
+        try:
+            return json.loads(value)
+        except json.JSONDecodeError:
+            return value
     except Exception:
-        return None
-    if value is None:
-        return None
-    try:
-        return json.loads(value)
-    except json.JSONDecodeError:
-        return value
+        # Redis unavailable — fall back to in-memory store
+        return _mem_get(key)
 
 
 async def cache_set(key: str, value: Any, ttl: int = settings.REDIS_CACHE_TTL) -> None:
-    """Set a value in cache with TTL (seconds). No-op if Redis is unavailable."""
+    """Set a value in cache with TTL (seconds). Falls back to in-memory when Redis is unavailable."""
     try:
         serialized = json.dumps(value, default=str)
         await redis_client.setex(key, ttl, serialized)
     except Exception:
-        pass
+        # Redis unavailable — fall back to in-memory store
+        logger.warning("Redis unavailable, using in-memory fallback for key: %s", key)
+        _mem_set(key, value, ttl)
 
 
 async def cache_delete(key: str) -> None:
-    """Delete a cache key. No-op if Redis is unavailable."""
+    """Delete a cache key."""
     try:
         await redis_client.delete(key)
     except Exception:
-        pass
+        _mem_delete(key)
 
 
 async def cache_delete_pattern(pattern: str) -> int:

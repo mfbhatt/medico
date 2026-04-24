@@ -102,7 +102,7 @@ async def create_patient(
         if not body.get(field):
             raise BadRequestException(detail=f"Missing required field: {field}")
 
-    # Check duplicate by phone only when provided
+    # Check for duplicate phone within this tenant
     if body.get("phone"):
         existing = await db.execute(
             select(Patient).where(
@@ -114,6 +114,21 @@ async def create_patient(
         if existing.scalar_one_or_none():
             raise ConflictException(
                 detail=f"A patient with phone {body['phone']} already exists. "
+                       "Please check for duplicate records."
+            )
+
+    # Check for duplicate email within this tenant
+    if body.get("email"):
+        existing_email = await db.execute(
+            select(Patient).where(
+                Patient.email == body["email"],
+                Patient.tenant_id == current_user.tenant_id,
+                Patient.is_deleted == False,
+            )
+        )
+        if existing_email.scalar_one_or_none():
+            raise ConflictException(
+                detail=f"A patient with email {body['email']} already exists. "
                        "Please check for duplicate records."
             )
 
@@ -153,9 +168,9 @@ async def create_patient(
         date_of_birth=body["date_of_birth"],
         gender=body["gender"],
         marital_status=body.get("marital_status"),
-        phone=body["phone"],
-        alternate_phone=body.get("alternate_phone"),
-        email=body.get("email"),
+        phone=body.get("phone") or None,
+        alternate_phone=body.get("alternate_phone") or None,
+        email=body.get("email") or None,
         blood_group=body.get("blood_group"),
         height_cm=body.get("height_cm"),
         weight_kg=body.get("weight_kg"),

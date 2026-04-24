@@ -1,11 +1,8 @@
 """Appointment and waitlist schemas."""
+
 from typing import List, Optional
 
-from app.models.appointment import (
-    AppointmentPriority,
-    AppointmentStatus,
-    AppointmentType,
-)
+from app.models.appointment import AppointmentPriority, AppointmentStatus, AppointmentType
 from app.schemas.base import AuditSchema, BaseSchema
 
 
@@ -14,8 +11,8 @@ class AppointmentCreate(BaseSchema):
     doctor_id: str
     clinic_id: str
     room_id: Optional[str] = None
-    appointment_date: str   # YYYY-MM-DD
-    start_time: str         # HH:MM
+    appointment_date: str  # YYYY-MM-DD
+    start_time: str  # HH:MM
     duration_minutes: int = 15
     timezone: str = "UTC"
     appointment_type: AppointmentType = AppointmentType.IN_PERSON
@@ -49,7 +46,7 @@ class AppointmentCancelRequest(BaseSchema):
 
 
 class AppointmentRescheduleRequest(BaseSchema):
-    new_date: str   # YYYY-MM-DD
+    new_date: str  # YYYY-MM-DD
     new_start_time: str  # HH:MM
     reason: Optional[str] = None
 

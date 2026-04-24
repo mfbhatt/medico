@@ -195,7 +195,8 @@ export default function LoginScreen() {
     }
     await persistSession(data);
     dispatch(setCredentials(data));
-    if ((data as any).is_new_user) navigation.navigate("CompleteProfile");
+    // Navigation to the patient dashboard is handled automatically by the root
+    // navigator watching isAuthenticated in Redux state.
   };
 
   // ── Phone OTP ───────────────────────────────────────────────────────────────

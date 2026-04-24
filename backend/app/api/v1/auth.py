@@ -3,11 +3,14 @@ import random
 import string
 from datetime import datetime, timezone
 from typing import Optional
-
+import structlog
 from fastapi import APIRouter, Depends, Request, BackgroundTasks
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+log = structlog.get_logger()
+
+from app.core.config import settings
 from app.core.database import get_db
 from app.core.security import (
     hash_password,
@@ -275,7 +278,7 @@ async def verify_otp(
 
     # Find or create the global User by phone
     user = (await db.execute(
-        select(User).where(User.phone == phone, User.is_deleted.isnot(True))
+        select(User).where(User.phone == phone, User.is_deleted.isnot(True)).limit(1)
     )).scalar_one_or_none()
 
     if not user:
@@ -294,13 +297,14 @@ async def verify_otp(
     # Find or create the UserTenant record for this tenant
     ut = None
     from app.models.user import UserRole
+    from app.models.tenant import Tenant, TenantStatus
     if tenant_id:
         ut = (await db.execute(
             select(UserTenant).where(
                 UserTenant.user_id == user.id,
                 UserTenant.tenant_id == tenant_id,
                 UserTenant.is_deleted.isnot(True),
-            )
+            ).limit(1)
         )).scalar_one_or_none()
 
         if not ut:
@@ -328,12 +332,10 @@ async def verify_otp(
             ut.status = UserStatus.ACTIVE
         else:
             # Brand-new user — auto-assign to first active non-system tenant
-            from app.models.tenant import Tenant
             first_tenant = (await db.execute(
                 select(Tenant).where(
                     Tenant.id != SYSTEM_TENANT_ID,
-                    Tenant.is_active == True,
-                    Tenant.is_deleted.isnot(True),
+                    Tenant.status == TenantStatus.ACTIVE,
                 ).order_by(Tenant.created_at).limit(1)
             )).scalar_one_or_none()
 
@@ -361,7 +363,7 @@ async def verify_otp(
     # Ensure a Patient record exists for this user (may be missing for OTP-only registrations)
     from app.models.patient import Patient as PatientModel
     otp_patient = (await db.execute(
-        select(PatientModel).where(PatientModel.user_id == user.id)
+        select(PatientModel).where(PatientModel.user_id == user.id).limit(1)
     )).scalar_one_or_none()
     if not otp_patient:
         # Try to claim an admin-created Patient record with the same phone
@@ -372,7 +374,7 @@ async def verify_otp(
                     PatientModel.user_id == None,
                     PatientModel.tenant_id == ut.tenant_id,
                     PatientModel.is_deleted == False,
-                )
+                ).limit(1)
             )).scalar_one_or_none()
             if otp_patient:
                 otp_patient.user_id = user.id
@@ -392,7 +394,7 @@ async def verify_otp(
             mrn=mrn,
             first_name=user.first_name if user.first_name and user.first_name != "Patient" else "Patient",
             last_name=user.last_name or "",
-            phone=user.phone or "",
+            phone=user.phone or None,
             date_of_birth="1900-01-01",
             gender="unknown",
         )
@@ -810,7 +812,14 @@ async def social_login(
             },
         }, message="Login successful")
 
-    # ── Tenant user: find the right membership ─────────────────────
+    # ── Treat social login as patient login ───────────────────────
+    from app.models.user import UserRole
+    from app.models.tenant import Tenant, TenantStatus
+    from app.models.patient import Patient as PatientModel
+    import uuid as _uuid
+
+    is_new_user = False
+
     memberships = (await db.execute(
         select(UserTenant).where(
             UserTenant.user_id == user.id,
@@ -818,23 +827,92 @@ async def social_login(
         )
     )).scalars().all()
 
+    # No membership yet — auto-assign to first active tenant as patient
     if not memberships:
-        await db.commit()
-        return _success({
-            "access_token": None, "refresh_token": None,
-            "is_new_user": True,
-            "user": {"id": user.id, "email": user.email, "full_name": user.full_name},
-        }, message="Account created. Please contact your administrator to activate access.")
+        is_new_user = True
+        if tenant_id:
+            first_tenant = (await db.execute(
+                select(Tenant).where(
+                    Tenant.id == tenant_id,
+                )
+            )).scalar_one_or_none()
+        else:
+            first_tenant = (await db.execute(
+                select(Tenant).where(
+                    Tenant.id != SYSTEM_TENANT_ID,
+                    Tenant.status == TenantStatus.ACTIVE,
+                ).order_by(Tenant.created_at).limit(1)
+            )).scalar_one_or_none()
 
-    if tenant_id:
-        ut = next((m for m in memberships if m.tenant_id == tenant_id), None)
-        if not ut:
-            raise ForbiddenException(detail="You do not have access to this tenant")
+        if not first_tenant:
+            await db.commit()
+            return _success({
+                "access_token": None, "refresh_token": None,
+                "is_new_user": True,
+                "user": {"id": user.id, "email": user.email, "full_name": user.full_name},
+            }, message="No clinic is available yet. Please try again later.")
+
+        ut = UserTenant(
+            user_id=user.id,
+            tenant_id=first_tenant.id,
+            role=UserRole.PATIENT,
+            status=UserStatus.ACTIVE,
+        )
+        db.add(ut)
+        await db.flush()
     else:
-        ut = next((m for m in memberships if m.status == UserStatus.ACTIVE), memberships[0])
+        if tenant_id:
+            ut = next((m for m in memberships if m.tenant_id == tenant_id), None)
+            if not ut:
+                raise ForbiddenException(detail="You do not have access to this tenant")
+        else:
+            active = [m for m in memberships if m.status == UserStatus.ACTIVE]
+            ut = (
+                next((m for m in active if m.is_current), None)
+                or next(iter(active), None)
+                or memberships[0]
+            )
+        ut.status = UserStatus.ACTIVE
 
-    if ut.status not in (UserStatus.ACTIVE,):
-        raise UnauthorizedException(detail=f"Account status: {ut.status}. Contact your administrator.")
+    # ── Ensure a Patient record exists ────────────────────────────
+    social_patient = (await db.execute(
+        select(PatientModel).where(PatientModel.user_id == user.id)
+    )).scalar_one_or_none()
+
+    if not social_patient:
+        # Try to claim an admin-created Patient record with the same email
+        if email:
+            social_patient = (await db.execute(
+                select(PatientModel).where(
+                    PatientModel.email == email,
+                    PatientModel.user_id == None,
+                    PatientModel.tenant_id == ut.tenant_id,
+                    PatientModel.is_deleted == False,
+                )
+            )).scalar_one_or_none()
+            if social_patient:
+                social_patient.user_id = user.id
+                await db.flush()
+
+    if not social_patient:
+        tenant_row = (await db.execute(
+            select(Tenant).where(Tenant.id == ut.tenant_id)
+        )).scalar_one_or_none()
+        mrn_prefix = tenant_row.id[:3].upper() if tenant_row else "PAT"
+        mrn = f"{mrn_prefix}-{_uuid.uuid4().hex[:8].upper()}"
+        social_patient = PatientModel(
+            user_id=user.id,
+            tenant_id=ut.tenant_id,
+            mrn=mrn,
+            first_name=user.first_name or first_name or "Patient",
+            last_name=user.last_name or last_name or "",
+            email=email or None,
+            phone=user.phone or None,
+            date_of_birth="1900-01-01",
+            gender="unknown",
+        )
+        db.add(social_patient)
+        await db.flush()
 
     access_token, refresh_token = _issue_tokens(user, ut)
     ut.refresh_token_hash = hash_password(refresh_token)
@@ -844,11 +922,16 @@ async def social_login(
         "access_token": access_token,
         "refresh_token": refresh_token,
         "token_type": "bearer",
-        "is_new_user": False,
+        "is_new_user": is_new_user,
         "user": {
-            "id": user.id, "email": user.email,
-            "full_name": user.full_name, "role": ut.role,
+            "id": user.id,
+            "email": user.email,
+            "full_name": user.full_name,
+            "first_name": user.first_name,
+            "last_name": user.last_name,
+            "role": ut.role,
             "tenant_id": ut.tenant_id,
+            "patient_id": social_patient.id,
         },
     }, message="Login successful")
 
@@ -869,6 +952,14 @@ async def register_patient(
     if existing:
         raise ConflictException(detail="An account with this email already exists. Please sign in.")
 
+    phone_normalized = body.phone.strip() if body.phone else None
+    if phone_normalized:
+        existing_phone = (await db.execute(
+            select(User).where(User.phone == phone_normalized, User.is_deleted.isnot(True))
+        )).scalar_one_or_none()
+        if existing_phone:
+            raise ConflictException(detail="An account with this phone number already exists. Please sign in.")
+
     from app.models.user import UserRole
     from app.models.tenant import Tenant
 
@@ -876,7 +967,7 @@ async def register_patient(
         email=email,
         first_name=body.first_name.strip(),
         last_name=body.last_name.strip(),
-        phone=body.phone.strip() if body.phone else None,
+        phone=phone_normalized or None,
         password_hash=hash_password(body.password),
         is_email_verified=False,
     )
@@ -920,8 +1011,8 @@ async def register_patient(
         mrn=mrn,
         first_name=user.first_name,
         last_name=user.last_name,
-        email=user.email,
-        phone=user.phone or "",
+        email=user.email or None,
+        phone=user.phone or None,
         date_of_birth="1900-01-01",  # placeholder — patient should update profile
         gender="unknown",
     )
@@ -951,6 +1042,62 @@ async def register_patient(
         },
         message="Account created successfully",
     )
+
+
+# ── Patient Profile Completion ───────────────────────────────────
+@router.post("/complete-profile")
+async def complete_profile(
+    body: dict,
+    db: AsyncSession = Depends(get_db),
+    current_user: CurrentUser = Depends(get_current_user),
+):
+    """Update name, DOB, and gender for a newly registered patient."""
+    user = (await db.execute(
+        select(User).where(User.id == current_user.user_id, User.is_deleted.isnot(True))
+    )).scalar_one_or_none()
+    if not user:
+        raise UnauthorizedException(detail="User not found")
+
+    first_name = (body.get("first_name") or "").strip()
+    last_name = (body.get("last_name") or "").strip()
+    if first_name:
+        user.first_name = first_name
+    if last_name:
+        user.last_name = last_name
+
+    from app.models.patient import Patient as PatientModel
+    patient = (await db.execute(
+        select(PatientModel).where(
+            PatientModel.user_id == user.id,
+            PatientModel.tenant_id == current_user.tenant_id,
+            PatientModel.is_deleted == False,
+        ).limit(1)
+    )).scalar_one_or_none()
+
+    if patient:
+        if first_name:
+            patient.first_name = first_name
+        if last_name:
+            patient.last_name = last_name
+        if body.get("date_of_birth"):
+            patient.date_of_birth = body["date_of_birth"]
+        if body.get("gender"):
+            patient.gender = body["gender"]
+
+    await db.commit()
+
+    updated_user: dict = {
+        "id": user.id,
+        "phone": user.phone,
+        "email": user.email,
+        "full_name": user.full_name,
+        "first_name": user.first_name,
+        "last_name": user.last_name,
+        "role": current_user.role,
+        "tenant_id": current_user.tenant_id,
+        "patient_id": patient.id if patient else None,
+    }
+    return _success({"user": updated_user}, message="Profile updated successfully")
 
 
 # ── Current User ─────────────────────────────────────────────────
@@ -992,7 +1139,8 @@ async def _send_otp_sms(phone: str, otp: str) -> None:
     try:
         from app.services.notification_service import send_sms
         await send_sms(phone, f"Your ClinicManagement OTP is: {otp}. Valid for 10 minutes.")
-    except Exception:
+    except Exception as e:
+        log.error(f"Error sending OTP SMS to {phone}: {e}")
         pass
 
 
@@ -1005,5 +1153,6 @@ async def _send_password_reset_email(email: str, token: str) -> None:
             subject="Password Reset Request",
             body=f"Click here to reset your password: {reset_link}\n\nExpires in 1 hour.",
         )
-    except Exception:
+    except Exception as e:
+        log.error(f"Error sending password reset email to {email}: {e}")
         pass
