@@ -79,14 +79,20 @@ export default function LoginPage() {
 
   // ── Social login shared handler ───────────────────────────────
   const handleSocialLogin = async (provider: "google" | "facebook", token: string) => {
+    console.group(`[SocialLogin] provider=${provider}`);
+    console.log("token (first 20 chars):", token.slice(0, 20) + "…");
     setLoading(true);
     try {
+      console.log("→ POST /auth/social");
       const { data } = await api.post("/auth/social", { provider, token });
+      console.log("← response:", data);
       const payload = data.data;
       if (!payload.access_token) {
+        console.warn("no access_token in payload:", payload);
         dispatch(addToast({ id: `t-${Date.now()}`, type: "error", message: payload.message ?? "Account not activated. Contact your administrator." }));
         return;
       }
+      console.log("login ok — user:", payload.user?.email, "| new_user:", payload.is_new_user);
       persistTokens(payload);
       dispatch(setUser(payload.user));
       dispatch(setToken({ token: payload.access_token, refreshToken: payload.refresh_token ?? "" }));
@@ -96,9 +102,16 @@ export default function LoginPage() {
       }
       await handlePostLogin();
     } catch (err: any) {
-      dispatch(addToast({ id: `t-${Date.now()}`, type: "error", message: err?.response?.data?.message ?? "Social login failed" }));
+      console.error("social login error:", {
+        status: err?.response?.status,
+        data: err?.response?.data,
+        message: err?.message,
+      });
+      const msg = err?.response?.data?.detail ?? err?.response?.data?.message ?? "Social login failed";
+      dispatch(addToast({ id: `t-${Date.now()}`, type: "error", message: msg }));
     } finally {
       setLoading(false);
+      console.groupEnd();
     }
   };
 
@@ -112,19 +125,33 @@ export default function LoginPage() {
 
   // ── Facebook login ────────────────────────────────────────────
   const handleFacebookLogin = () => {
+    console.group("[FacebookLogin] init");
+    console.log("FACEBOOK_APP_ID:", FACEBOOK_APP_ID || "(not set)");
     if (!FACEBOOK_APP_ID) {
+      console.error("FACEBOOK_APP_ID is missing — check VITE_FACEBOOK_APP_ID in .env");
+      console.groupEnd();
       dispatch(addToast({ id: `t-${Date.now()}`, type: "error", message: "Facebook login is not configured" }));
       return;
     }
     const fb = (window as any).FB;
+    console.log("window.FB:", fb ? "loaded" : "NOT LOADED");
     if (!fb) {
+      console.error("Facebook SDK not present on window.FB — SDK may have failed to load");
+      console.groupEnd();
       dispatch(addToast({ id: `t-${Date.now()}`, type: "error", message: "Facebook SDK not loaded. Please refresh the page." }));
       return;
     }
+    console.log("calling fb.login() …");
     fb.login(
       (response: any) => {
-        if (response.authResponse?.accessToken) {
+        console.log("fb.login response:", response);
+        if (response.status === "connected" && response.authResponse?.accessToken) {
+          console.groupEnd();
           handleSocialLogin("facebook", response.authResponse.accessToken);
+        } else if (response.status !== "connected") {
+          console.warn("fb.login did not connect — status:", response.status);
+          console.groupEnd();
+          dispatch(addToast({ id: `t-${Date.now()}`, type: "error", message: "Facebook login was cancelled or failed." }));
         }
       },
       { scope: "email,public_profile" },

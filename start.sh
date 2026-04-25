@@ -65,7 +65,7 @@ else
   echo "    node_modules already present. Skipping npm install."
 fi
 
-echo "    Starting frontend on http://localhost:5173 ..."
+echo "    Starting frontend on https://localhost:5173 ..."
 npm run dev &
 FRONTEND_PID=$!
 cd "$ROOT_DIR"
@@ -75,7 +75,7 @@ cd "$ROOT_DIR"
 echo ""
 echo "Both services are running."
 echo "  Backend  → http://localhost:8000"
-echo "  Frontend → http://localhost:5173"
+echo "  Frontend → https://localhost:5173"
 echo ""
 echo "Press Ctrl+C to stop both."
 

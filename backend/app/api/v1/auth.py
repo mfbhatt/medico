@@ -753,7 +753,7 @@ async def social_login(
             if debug_resp.status_code != 200:
                 raise UnauthorizedException(detail="Invalid Facebook token")
             debug_data = debug_resp.json().get("data", {})
-            if not debug_data.get("is_valid") or debug_data.get("app_id") != settings.FACEBOOK_APP_ID:
+            if not debug_data.get("is_valid") or str(debug_data.get("app_id", "")) != str(settings.FACEBOOK_APP_ID):
                 raise UnauthorizedException(detail="Facebook token validation failed")
             # Fetch user profile
             profile_resp = await client.get(

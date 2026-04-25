@@ -1,5 +1,6 @@
 import path from 'path';
 import react from '@vitejs/plugin-react';
+import basicSsl from '@vitejs/plugin-basic-ssl';
 import { defineConfig, loadEnv } from 'vite';
 
 export default defineConfig(({ mode }) => {
@@ -9,6 +10,7 @@ export default defineConfig(({ mode }) => {
   return {
   plugins: [
     react(),
+    basicSsl(),
     // Inject VITE_FACEBOOK_APP_ID into the FB.init placeholder in index.html
     {
       name: 'html-facebook-appid',
@@ -24,6 +26,7 @@ export default defineConfig(({ mode }) => {
   },
   server: {
     port: 5173,
+    https: true,
     proxy: {
       '/api': {
         target: (env.VITE_API_URL ?? 'http://localhost:8000/api/v1').replace(/\/api\/v\d+$/, ''),
