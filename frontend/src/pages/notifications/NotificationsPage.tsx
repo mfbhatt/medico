@@ -39,7 +39,7 @@ export default function NotificationsPage() {
   const unreadCount = notifications.filter((n: { is_read: boolean }) => !n.is_read).length;
 
   return (
-    <div className="max-w-2xl">
+    <div>
       <div className="page-header">
         <div>
           <h1 className="page-title">Notifications</h1>

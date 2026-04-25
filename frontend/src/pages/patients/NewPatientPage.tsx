@@ -46,8 +46,8 @@ export default function NewPatientPage() {
         last_name: data.lastName,
         email: data.email || undefined,
         phone: data.phone,
-        date_of_birth: data.dateOfBirth || undefined,
-        gender: data.gender || undefined,
+        date_of_birth: data.dateOfBirth,
+        gender: data.gender,
         address: data.address || undefined,
         country: address.country || undefined,
         city: address.city || undefined,
@@ -142,22 +142,22 @@ export default function NewPatientPage() {
           </h2>
           <div className="grid grid-cols-3 gap-3">
             <div>
-              <label className="block text-xs font-medium text-slate-600 mb-1">First Name *</label>
+              <label className="block text-xs font-medium text-slate-600 mb-1">First Name <span className="text-red-500">*</span></label>
               <input type="text" name="firstName" value={form.firstName} onChange={handleChange} required className={cls} />
             </div>
             <div>
-              <label className="block text-xs font-medium text-slate-600 mb-1">Last Name *</label>
+              <label className="block text-xs font-medium text-slate-600 mb-1">Last Name <span className="text-red-500">*</span></label>
               <input type="text" name="lastName" value={form.lastName} onChange={handleChange} required className={cls} />
             </div>
             <div>
-              <label className="block text-xs font-medium text-slate-600 mb-1">Date of Birth</label>
-              <input type="date" name="dateOfBirth" value={form.dateOfBirth} onChange={handleChange} className={cls} />
+              <label className="block text-xs font-medium text-slate-600 mb-1">Date of Birth <span className="text-red-500">*</span></label>
+              <input type="date" name="dateOfBirth" value={form.dateOfBirth} onChange={handleChange} required className={cls} />
             </div>
           </div>
           <div className="grid grid-cols-3 gap-3 mt-3">
             <div>
-              <label className="block text-xs font-medium text-slate-600 mb-1">Gender</label>
-              <select name="gender" value={form.gender} onChange={handleChange} className={cls}>
+              <label className="block text-xs font-medium text-slate-600 mb-1">Gender <span className="text-red-500">*</span></label>
+              <select name="gender" value={form.gender} onChange={handleChange} required className={cls}>
                 <option value="">Select…</option>
                 <option value="male">Male</option>
                 <option value="female">Female</option>
@@ -177,7 +177,7 @@ export default function NewPatientPage() {
           </h2>
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className="block text-xs font-medium text-slate-600 mb-1">Phone Number *</label>
+              <label className="block text-xs font-medium text-slate-600 mb-1">Phone Number <span className="text-red-500">*</span></label>
               <input type="tel" name="phone" value={form.phone} onChange={handleChange} required className={cls} />
             </div>
             <div>

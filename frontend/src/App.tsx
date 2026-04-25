@@ -74,6 +74,9 @@ import SpecializationsPage from "./pages/admin/SpecializationsPage";
 // ─── Telemedicine ────────────────────────────────────────────────────────────
 import TelemedicinePage from "./pages/telemedicine/TelemedicinePage";
 
+// ─── Notifications ───────────────────────────────────────────────────────────
+import NotificationsPage from "./pages/notifications/NotificationsPage";
+
 // ─── Accounting ──────────────────────────────────────────────────────────────
 import AccountingDashboard from "./pages/accounting/AccountingDashboard";
 import ChartOfAccountsPage from "./pages/accounting/ChartOfAccountsPage";
@@ -178,6 +181,7 @@ export default function App() {
 
           {/* Pharmacy */}
           <Route path="/pharmacy" element={<PharmacyPage />} />
+          <Route path="/notifications" element={<NotificationsPage />} />
 
           {/* Telemedicine */}
           <Route path="/telemedicine/:appointmentId" element={<TelemedicinePage />} />
