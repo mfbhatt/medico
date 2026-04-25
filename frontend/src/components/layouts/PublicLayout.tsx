@@ -169,19 +169,27 @@ export default function PublicLayout() {
               </ul>
             </div>
             <div>
-              <h4 className="text-white font-semibold mb-3 text-sm">Support</h4>
+              <h4 className="text-white font-semibold mb-3 text-sm">Legal</h4>
               <ul className="space-y-2 text-sm">
                 <li>
-                  <span className="hover:text-white transition-colors cursor-pointer">Help Center</span>
+                  <Link to="/privacy-policy" className="hover:text-white transition-colors">
+                    Privacy Policy
+                  </Link>
                 </li>
                 <li>
-                  <span className="hover:text-white transition-colors cursor-pointer">Privacy Policy</span>
+                  <Link to="/data-deletion" className="hover:text-white transition-colors">
+                    Data Deletion
+                  </Link>
                 </li>
               </ul>
             </div>
           </div>
-          <div className="border-t border-gray-800 pt-6 text-sm text-center">
-            © {new Date().getFullYear()} ClinicHub. All rights reserved.
+          <div className="border-t border-gray-800 pt-6 text-sm flex flex-col sm:flex-row items-center justify-between gap-3">
+            <span>© {new Date().getFullYear()} ClinicHub. All rights reserved.</span>
+            <div className="flex gap-4">
+              <Link to="/privacy-policy" className="hover:text-white transition-colors">Privacy Policy</Link>
+              <Link to="/data-deletion" className="hover:text-white transition-colors">Data Deletion</Link>
+            </div>
           </div>
         </div>
       </footer>

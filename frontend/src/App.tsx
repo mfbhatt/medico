@@ -19,6 +19,8 @@ import PatientRegisterPage from "./pages/public/PatientRegisterPage";
 import LandingPage from "./pages/public/LandingPage";
 import PublicClinicsPage from "./pages/public/PublicClinicsPage";
 import PublicClinicDetailPage from "./pages/public/PublicClinicDetailPage";
+import PrivacyPolicyPage from "./pages/public/PrivacyPolicyPage";
+import DataDeletionPage from "./pages/public/DataDeletionPage";
 
 // ─── Dashboard pages ─────────────────────────────────────────────────────────
 import DashboardPage from "./pages/dashboard/DashboardPage";
@@ -116,6 +118,8 @@ export default function App() {
         <Route path="/" element={<LandingPage />} />
         <Route path="/clinics" element={<PublicClinicsPage />} />
         <Route path="/clinics/:id" element={<PublicClinicDetailPage />} />
+        <Route path="/privacy-policy" element={<PrivacyPolicyPage />} />
+        <Route path="/data-deletion" element={<DataDeletionPage />} />
       </Route>
 
       {/* ── Auth routes ──────────────────────────────────────────────────── */}
