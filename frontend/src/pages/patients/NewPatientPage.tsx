@@ -141,18 +141,33 @@ export default function NewPatientPage() {
             <User className="h-4 w-4" /> Personal Information
           </h2>
           <div className="grid grid-cols-3 gap-3">
-            <input type="text" name="firstName" placeholder="First Name *" value={form.firstName} onChange={handleChange} required className={cls} />
-            <input type="text" name="lastName" placeholder="Last Name *" value={form.lastName} onChange={handleChange} required className={cls} />
-            <input type="date" name="dateOfBirth" value={form.dateOfBirth} onChange={handleChange} className={cls} />
+            <div>
+              <label className="block text-xs font-medium text-slate-600 mb-1">First Name *</label>
+              <input type="text" name="firstName" value={form.firstName} onChange={handleChange} required className={cls} />
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-slate-600 mb-1">Last Name *</label>
+              <input type="text" name="lastName" value={form.lastName} onChange={handleChange} required className={cls} />
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-slate-600 mb-1">Date of Birth</label>
+              <input type="date" name="dateOfBirth" value={form.dateOfBirth} onChange={handleChange} className={cls} />
+            </div>
           </div>
           <div className="grid grid-cols-3 gap-3 mt-3">
-            <select name="gender" value={form.gender} onChange={handleChange} className={cls}>
-              <option value="">Gender</option>
-              <option value="male">Male</option>
-              <option value="female">Female</option>
-              <option value="other">Other</option>
-            </select>
-            <input type="email" name="email" placeholder="Email" value={form.email} onChange={handleChange} className={`${cls} col-span-2`} />
+            <div>
+              <label className="block text-xs font-medium text-slate-600 mb-1">Gender</label>
+              <select name="gender" value={form.gender} onChange={handleChange} className={cls}>
+                <option value="">Select…</option>
+                <option value="male">Male</option>
+                <option value="female">Female</option>
+                <option value="other">Other</option>
+              </select>
+            </div>
+            <div className="col-span-2">
+              <label className="block text-xs font-medium text-slate-600 mb-1">Email</label>
+              <input type="email" name="email" value={form.email} onChange={handleChange} className={cls} />
+            </div>
           </div>
         </div>
 
@@ -161,9 +176,18 @@ export default function NewPatientPage() {
             <Phone className="h-4 w-4" /> Contact
           </h2>
           <div className="grid grid-cols-2 gap-3">
-            <input type="tel" name="phone" placeholder="Phone Number *" value={form.phone} onChange={handleChange} required className={cls} />
-            <input type="text" name="emergencyContact" placeholder="Emergency Contact Name" value={form.emergencyContact} onChange={handleChange} className={cls} />
-            <input type="tel" name="emergencyPhone" placeholder="Emergency Contact Phone" value={form.emergencyPhone} onChange={handleChange} className={cls} />
+            <div>
+              <label className="block text-xs font-medium text-slate-600 mb-1">Phone Number *</label>
+              <input type="tel" name="phone" value={form.phone} onChange={handleChange} required className={cls} />
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-slate-600 mb-1">Emergency Contact Name</label>
+              <input type="text" name="emergencyContact" value={form.emergencyContact} onChange={handleChange} className={cls} />
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-slate-600 mb-1">Emergency Contact Phone</label>
+              <input type="tel" name="emergencyPhone" value={form.emergencyPhone} onChange={handleChange} className={cls} />
+            </div>
           </div>
         </div>
 
@@ -171,7 +195,10 @@ export default function NewPatientPage() {
           <h2 className="text-sm font-semibold text-slate-700 uppercase tracking-wide mb-3 flex items-center gap-2">
             <MapPin className="h-4 w-4" /> Address
           </h2>
-          <input type="text" name="address" placeholder="Street Address" value={form.address} onChange={handleChange} className={`${cls} mb-3`} />
+          <div className="mb-3">
+            <label className="block text-xs font-medium text-slate-600 mb-1">Street Address</label>
+            <input type="text" name="address" value={form.address} onChange={handleChange} className={cls} />
+          </div>
           <AddressFields
             value={address}
             onChange={setAddress}
@@ -184,7 +211,8 @@ export default function NewPatientPage() {
           <h2 className="text-sm font-semibold text-slate-700 uppercase tracking-wide mb-3 flex items-center gap-2">
             <FileText className="h-4 w-4" /> Notes
           </h2>
-          <textarea name="notes" value={form.notes} onChange={handleChange} placeholder="Allergies, medical history, special notes…" rows={3} className={cls} />
+          <label className="block text-xs font-medium text-slate-600 mb-1">Allergies, medical history, special notes</label>
+          <textarea name="notes" value={form.notes} onChange={handleChange} rows={3} className={cls} />
         </div>
 
         <div className="flex gap-3 pt-2 border-t border-slate-100">
