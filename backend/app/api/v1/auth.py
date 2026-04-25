@@ -5,6 +5,7 @@ from datetime import datetime, timezone
 from typing import Optional
 import structlog
 from fastapi import APIRouter, Depends, Request, BackgroundTasks
+from fastapi.responses import JSONResponse
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -1022,8 +1023,8 @@ async def facebook_data_deletion_callback(
         f"?code={confirmation_code}"
     )
 
-    # Meta requires exactly these two keys in the response body
-    return {"url": status_url, "confirmation_code": confirmation_code}
+    # Meta requires exactly these two keys in the response body with Content-Type: application/json
+    return JSONResponse(content={"url": status_url, "confirmation_code": confirmation_code})
 
 
 @router.get("/facebook/data-deletion/status")
