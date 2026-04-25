@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { Plus, Search, X, Building2, AlertTriangle, UserCircle, UserPlus, Eye, EyeOff, Pencil } from "lucide-react";
+import { Plus, Search, X, Building2, AlertTriangle, UserCircle, UserPlus, Eye, EyeOff, Pencil, Copy, Check } from "lucide-react";
 import api from "@/services/api";
 import Pagination from "@/components/ui/Pagination";
 
@@ -30,6 +30,28 @@ const PLAN_COLORS: Record<string, string> = {
   professional: "bg-purple-50 text-purple-700",
   enterprise: "bg-indigo-50 text-indigo-700",
 };
+
+function CopyableId({ id }: { id: string }) {
+  const [copied, setCopied] = useState(false);
+  const copy = () => {
+    navigator.clipboard.writeText(id).then(() => {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1500);
+    });
+  };
+  return (
+    <button
+      onClick={copy}
+      title="Copy tenant ID"
+      className="flex items-center gap-1 text-xs text-slate-400 font-mono hover:text-slate-600 transition-colors mt-0.5 group"
+    >
+      <span className="truncate max-w-[160px]">{id}</span>
+      {copied
+        ? <Check className="h-3 w-3 text-green-500 flex-shrink-0" />
+        : <Copy className="h-3 w-3 flex-shrink-0 opacity-0 group-hover:opacity-100 transition-opacity" />}
+    </button>
+  );
+}
 
 export default function TenantsPage() {
   const qc = useQueryClient();
@@ -109,6 +131,7 @@ export default function TenantsPage() {
                 <div>
                   <h3 className="font-semibold text-slate-900">{t.name}</h3>
                   <p className="text-xs text-slate-500">{t.primary_email ?? "—"}</p>
+                  <CopyableId id={t.id} />
                 </div>
               </div>
               <div className="flex items-center gap-2">

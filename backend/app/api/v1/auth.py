@@ -53,13 +53,13 @@ def _success(data: dict, message: str = "Success") -> dict:
 SYSTEM_TENANT_ID = "system"
 
 
-def _issue_tokens(user: User, ut: UserTenant) -> tuple[str, str]:
+def _issue_tokens(user: User, ut: UserTenant, extra: Optional[dict] = None) -> tuple[str, str]:
     """Create access + refresh token pair for a given user+tenant membership."""
     access_token = create_access_token(
         subject=user.id,
         tenant_id=ut.tenant_id,
         role=ut.role,
-        extra_claims={"clinic_id": ut.clinic_id},
+        extra_claims={"clinic_id": ut.clinic_id, **(extra or {})},
     )
     refresh_token = create_refresh_token(
         subject=user.id,
@@ -332,34 +332,16 @@ async def verify_otp(
             ut = next((m for m in existing_uts if m.status == UserStatus.ACTIVE), existing_uts[0])
             ut.status = UserStatus.ACTIVE
         else:
-            # Brand-new user — auto-assign to first active non-system tenant
-            first_tenant = (await db.execute(
-                select(Tenant).where(
-                    Tenant.id != SYSTEM_TENANT_ID,
-                    Tenant.status == TenantStatus.ACTIVE,
-                ).order_by(Tenant.created_at).limit(1)
-            )).scalar_one_or_none()
-
-            if first_tenant:
-                ut = UserTenant(
-                    user_id=user.id,
-                    tenant_id=first_tenant.id,
-                    role=UserRole.PATIENT,
-                    status=UserStatus.ACTIVE,
-                )
-                db.add(ut)
-                await db.flush()
-
-    if not ut:
-        await db.commit()
-        return _success(
-            {
-                "access_token": None,
-                "refresh_token": None,
-                "is_new_user": not bool(user.first_name and user.first_name != "Patient"),
-                "user": {"id": user.id, "phone": user.phone},
-            }
-        )
+            # Brand-new user — auto-assign to mobile tenant (created on demand)
+            mobile_t = await _get_or_create_mobile_tenant(db)
+            ut = UserTenant(
+                user_id=user.id,
+                tenant_id=mobile_t.id,
+                role=UserRole.PATIENT,
+                status=UserStatus.ACTIVE,
+            )
+            db.add(ut)
+            await db.flush()
 
     # Ensure a Patient record exists for this user (may be missing for OTP-only registrations)
     from app.models.patient import Patient as PatientModel
@@ -404,7 +386,12 @@ async def verify_otp(
 
     await db.commit()
 
-    access_token, refresh_token = _issue_tokens(user, ut)
+    # Detect mobile tenant for JWT claim
+    from app.models.tenant import Tenant as _Tenant
+    otp_tenant_row = (await db.execute(select(_Tenant).where(_Tenant.id == ut.tenant_id))).scalar_one_or_none()
+    otp_is_mobile = bool(otp_tenant_row and otp_tenant_row.slug == settings.MOBILE_TENANT_SLUG)
+
+    access_token, refresh_token = _issue_tokens(user, ut, extra={"is_mobile_patient": otp_is_mobile})
 
     otp_user_dict: dict = {
         "id": user.id,
@@ -423,6 +410,7 @@ async def verify_otp(
             "refresh_token": refresh_token,
             "token_type": "bearer",
             "is_new_user": not bool(user.first_name and user.first_name != "Patient"),
+            "is_mobile_patient": otp_is_mobile,
             "user": otp_user_dict,
         }
     )
@@ -684,6 +672,30 @@ async def switch_tenant(
     )
 
 
+async def _get_or_create_mobile_tenant(db: AsyncSession):
+    """Return the mobile tenant, creating it automatically if it doesn't exist yet."""
+    from app.models.tenant import Tenant, TenantStatus, SubscriptionPlan
+    tenant = (await db.execute(
+        select(Tenant).where(Tenant.slug == settings.MOBILE_TENANT_SLUG)
+    )).scalar_one_or_none()
+    if not tenant:
+        tenant = Tenant(
+            name="Mobile Patients",
+            slug=settings.MOBILE_TENANT_SLUG,
+            status=TenantStatus.ACTIVE,
+            subscription_plan=SubscriptionPlan.ENTERPRISE,
+            primary_email="mobile@system.local",
+            max_patients=999999,
+            max_clinics=999,
+            max_doctors=999,
+        )
+        db.add(tenant)
+        await db.flush()
+    elif tenant.status != TenantStatus.ACTIVE:
+        tenant.status = TenantStatus.ACTIVE
+    return tenant
+
+
 # ── Social Login ─────────────────────────────────────────────────
 @router.post("/social")
 async def social_login(
@@ -828,39 +840,21 @@ async def social_login(
         )
     )).scalars().all()
 
-    # No membership yet — auto-assign to first active tenant as patient
+    is_mobile_patient = False
+
+    # No membership yet — auto-assign to the mobile tenant (created on demand).
     if not memberships:
         is_new_user = True
-        if tenant_id:
-            first_tenant = (await db.execute(
-                select(Tenant).where(
-                    Tenant.id == tenant_id,
-                )
-            )).scalar_one_or_none()
-        else:
-            first_tenant = (await db.execute(
-                select(Tenant).where(
-                    Tenant.id != SYSTEM_TENANT_ID,
-                    Tenant.status == TenantStatus.ACTIVE,
-                ).order_by(Tenant.created_at).limit(1)
-            )).scalar_one_or_none()
-
-        if not first_tenant:
-            await db.commit()
-            return _success({
-                "access_token": None, "refresh_token": None,
-                "is_new_user": True,
-                "user": {"id": user.id, "email": user.email, "full_name": user.full_name},
-            }, message="No clinic is available yet. Please try again later.")
-
+        mobile_tenant = await _get_or_create_mobile_tenant(db)
         ut = UserTenant(
             user_id=user.id,
-            tenant_id=first_tenant.id,
+            tenant_id=mobile_tenant.id,
             role=UserRole.PATIENT,
             status=UserStatus.ACTIVE,
         )
         db.add(ut)
         await db.flush()
+        is_mobile_patient = True
     else:
         if tenant_id:
             ut = next((m for m in memberships if m.tenant_id == tenant_id), None)
@@ -874,6 +868,11 @@ async def social_login(
                 or memberships[0]
             )
         ut.status = UserStatus.ACTIVE
+        # Check if existing user's current tenant is the mobile tenant
+        existing_tenant = (await db.execute(
+            select(Tenant).where(Tenant.id == ut.tenant_id)
+        )).scalar_one_or_none()
+        is_mobile_patient = bool(existing_tenant and existing_tenant.slug == settings.MOBILE_TENANT_SLUG)
 
     # ── Ensure a Patient record exists ────────────────────────────
     social_patient = (await db.execute(
@@ -915,7 +914,7 @@ async def social_login(
         db.add(social_patient)
         await db.flush()
 
-    access_token, refresh_token = _issue_tokens(user, ut)
+    access_token, refresh_token = _issue_tokens(user, ut, extra={"is_mobile_patient": is_mobile_patient})
     ut.refresh_token_hash = hash_password(refresh_token)
     await db.commit()
 
@@ -924,6 +923,7 @@ async def social_login(
         "refresh_token": refresh_token,
         "token_type": "bearer",
         "is_new_user": is_new_user,
+        "is_mobile_patient": is_mobile_patient,
         "user": {
             "id": user.id,
             "email": user.email,

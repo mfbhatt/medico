@@ -104,6 +104,10 @@ async def list_clinics(
     if current_user.role == "super_admin":
         if tenant_id:
             base = base.where(Clinic.tenant_id == tenant_id)
+    elif current_user.is_mobile_patient:
+        # Mobile patients can browse all active clinics across every tenant.
+        from app.models.clinic import ClinicStatus
+        base = base.where(Clinic.status == ClinicStatus.ACTIVE)
     else:
         base = base.where(Clinic.tenant_id == current_user.tenant_id)
     if search:
@@ -122,6 +126,9 @@ async def list_clinics(
     if current_user.role == "super_admin":
         if tenant_id:
             query = query.where(Clinic.tenant_id == tenant_id)
+    elif current_user.is_mobile_patient:
+        from app.models.clinic import ClinicStatus
+        query = query.where(Clinic.status == ClinicStatus.ACTIVE)
     else:
         query = query.where(Clinic.tenant_id == current_user.tenant_id)
     if search:
@@ -144,7 +151,7 @@ async def get_clinic(
     current_user: CurrentUser = Depends(get_current_user),
 ):
     filters = [Clinic.id == clinic_id, Clinic.is_deleted == False]
-    if current_user.role != "super_admin":
+    if current_user.role != "super_admin" and not current_user.is_mobile_patient:
         filters.append(Clinic.tenant_id == current_user.tenant_id)
 
     result = await db.execute(select(Clinic).where(*filters))

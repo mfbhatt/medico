@@ -192,11 +192,11 @@ async def get_my_appointments(
 
     today = date_type.today().isoformat()
 
-    query = select(Appointment).where(
-        Appointment.patient_id == patient.id,
-        Appointment.tenant_id == current_user.tenant_id,
-        Appointment.is_deleted == False,
-    )
+    # Mobile patients may have appointments across multiple tenants' clinics.
+    base_filters = [Appointment.patient_id == patient.id, Appointment.is_deleted == False]
+    if not current_user.is_mobile_patient:
+        base_filters.append(Appointment.tenant_id == current_user.tenant_id)
+    query = select(Appointment).where(*base_filters)
 
     if filter == "past":
         query = query.where(Appointment.appointment_date < today)
@@ -435,9 +435,20 @@ async def book_appointment(
             )
             queue_num = (count_result.scalar() or 0) + 1
 
+        # Mobile patients book at clinics belonging to other tenants.
+        # Use the clinic's own tenant so clinic staff can see the appointment.
+        appt_tenant_id = current_user.tenant_id
+        if current_user.is_mobile_patient:
+            from app.models.clinic import Clinic
+            clinic_row = (await db.execute(
+                select(Clinic).where(Clinic.id == clinic_id, Clinic.is_deleted == False)
+            )).scalar_one_or_none()
+            if clinic_row:
+                appt_tenant_id = clinic_row.tenant_id
+
         # Create appointment
         appointment = Appointment(
-            tenant_id=current_user.tenant_id,
+            tenant_id=appt_tenant_id,
             patient_id=patient_id,
             doctor_id=doctor_id,
             clinic_id=clinic_id,

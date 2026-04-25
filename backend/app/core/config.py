@@ -65,6 +65,9 @@ class Settings(BaseSettings):
     GOOGLE_CLIENT_ID: Optional[str] = None
     FACEBOOK_APP_ID: Optional[str] = None
     FACEBOOK_APP_SECRET: Optional[str] = None
+    # Slug of the tenant that owns all mobile/social-login patient accounts.
+    # This tenant's clinics are visible to patients for cross-clinic booking.
+    MOBILE_TENANT_SLUG: str = "mobile"
 
     # ── Azure AD B2C ─────────────────────────────────────────────
     AZURE_AD_B2C_TENANT_NAME: Optional[str] = None

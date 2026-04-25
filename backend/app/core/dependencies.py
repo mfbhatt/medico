@@ -21,12 +21,16 @@ class CurrentUser:
         role: str,
         clinic_id: Optional[str] = None,
         is_patient: bool = False,
+        is_mobile_patient: bool = False,
     ):
         self.user_id = user_id
         self.tenant_id = tenant_id
         self.role = role
         self.clinic_id = clinic_id
         self.is_patient = is_patient
+        # Mobile patients belong to the platform-wide mobile tenant and can
+        # browse / book across all tenants' clinics.
+        self.is_mobile_patient = is_mobile_patient
 
     def has_permission(self, permission: str) -> bool:
         from app.core.security import has_permission
@@ -63,6 +67,7 @@ async def get_current_user(
         role=role,
         clinic_id=payload.get("clinic_id"),
         is_patient=(role == "patient"),
+        is_mobile_patient=bool(payload.get("is_mobile_patient", False)),
     )
 
 
