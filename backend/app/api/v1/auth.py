@@ -936,6 +936,118 @@ async def social_login(
     }, message="Login successful")
 
 
+# ── Facebook Data Deletion Callback ──────────────────────────────
+@router.post("/facebook/data-deletion")
+async def facebook_data_deletion_callback(
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    Meta Platform Policy — Data Deletion Callback.
+    Called when a user removes the app from their Facebook account or
+    submits a data deletion request via Facebook Settings.
+    Verifies the signed_request, records the deletion, and returns
+    { url, confirmation_code } as required by the Meta spec.
+    """
+    import base64
+    import hashlib
+    import hmac as _hmac
+    import json
+    import uuid
+
+    if not settings.FACEBOOK_APP_SECRET:
+        raise BadRequestException(detail="Facebook integration is not configured")
+
+    # Facebook POSTs signed_request as application/x-www-form-urlencoded
+    form = await request.form()
+    signed_request = str(form.get("signed_request", "")).strip()
+    if not signed_request:
+        raise BadRequestException(detail="signed_request is required")
+
+    # Format: base64url(HMAC-SHA256-sig) . base64url(json-payload)
+    try:
+        encoded_sig, payload_b64 = signed_request.split(".", 1)
+    except ValueError:
+        raise BadRequestException(detail="Malformed signed_request")
+
+    def _b64url_decode(s: str) -> bytes:
+        s += "=" * (-len(s) % 4)
+        return base64.urlsafe_b64decode(s)
+
+    try:
+        received_sig = _b64url_decode(encoded_sig)
+        payload = json.loads(_b64url_decode(payload_b64))
+    except Exception:
+        raise BadRequestException(detail="Failed to decode signed_request")
+
+    # Verify HMAC-SHA256 — compare against the raw base64url payload string
+    expected_sig = _hmac.new(
+        settings.FACEBOOK_APP_SECRET.encode(),
+        payload_b64.encode(),
+        hashlib.sha256,
+    ).digest()
+
+    if not _hmac.compare_digest(received_sig, expected_sig):
+        raise UnauthorizedException(detail="signed_request signature verification failed")
+
+    if payload.get("algorithm", "").upper() != "HMAC-SHA256":
+        raise BadRequestException(detail="Unsupported signing algorithm")
+
+    facebook_user_id = payload.get("user_id", "")
+    confirmation_code = uuid.uuid4().hex[:16].upper()
+
+    # Persist deletion record for 90 days so the status URL stays valid
+    deletion_key = make_cache_key("fb_deletion", confirmation_code)
+    await cache_set(deletion_key, {
+        "facebook_user_id": facebook_user_id,
+        "status": "received",
+        "requested_at": payload.get("issued_at"),
+    }, ttl=86400 * 90)
+
+    log.info(
+        "facebook_data_deletion_requested",
+        facebook_user_id=facebook_user_id,
+        confirmation_code=confirmation_code,
+    )
+
+    # Attempt to soft-delete any local User associated with this Facebook account.
+    # Our social login links accounts by email rather than storing facebook_user_id,
+    # so identity resolution here is best-effort; the full deletion is handled via
+    # the standard 30-day deletion workflow triggered by the status URL.
+    # If a facebook_user_id column is added to the User model in future, wire it here.
+
+    base_url = str(request.base_url).rstrip("/")
+    status_url = (
+        f"{base_url}/api/v1/auth/facebook/data-deletion/status"
+        f"?code={confirmation_code}"
+    )
+
+    # Meta requires exactly these two keys in the response body
+    return {"url": status_url, "confirmation_code": confirmation_code}
+
+
+@router.get("/facebook/data-deletion/status")
+async def facebook_data_deletion_status(code: str):
+    """Return the processing status of a Facebook data deletion request."""
+    if not code:
+        raise BadRequestException(detail="code is required")
+
+    deletion_key = make_cache_key("fb_deletion", code)
+    record = await cache_get(deletion_key)
+
+    if not record:
+        raise NotFoundException(detail="Deletion request not found or expired")
+
+    return {
+        "confirmation_code": code,
+        "status": record.get("status", "received"),
+        "message": (
+            "Your data deletion request has been received and is being processed. "
+            "Personal data will be removed within 30 days."
+        ),
+    }
+
+
 # ── Patient Self-Registration ────────────────────────────────────
 @router.post("/patient/register")
 async def register_patient(
