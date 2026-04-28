@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { X, Search } from 'lucide-react';
+import { X, Search, Pencil } from 'lucide-react';
 import api from '@/services/api';
 import Pagination from '@/components/ui/Pagination';
 import { useDebounce } from '@/hooks/useDebounce';
@@ -27,6 +27,38 @@ const INITIAL_FORM: AddDoctorForm = {
   specialization: '', consultation_fee: '', experience_years: '',
 };
 
+interface EditDoctorForm {
+  // User fields
+  first_name: string;
+  last_name: string;
+  phone: string;
+  // Doctor profile fields
+  registration_number: string;
+  specialization: string;
+  experience_years: string;
+  consultation_fee: string;
+  follow_up_fee: string;
+  default_slot_duration: string;
+  biography: string;
+  is_accepting_new_patients: boolean;
+  telemedicine_enabled: boolean;
+}
+
+const INITIAL_EDIT_FORM: EditDoctorForm = {
+  first_name: '',
+  last_name: '',
+  phone: '',
+  registration_number: '',
+  specialization: '',
+  experience_years: '',
+  consultation_fee: '',
+  follow_up_fee: '',
+  default_slot_duration: '',
+  biography: '',
+  is_accepting_new_patients: true,
+  telemedicine_enabled: false,
+};
+
 export default function DoctorsPage() {
   const fmt = useCurrency();
   const currencySymbol = useCurrencySymbol();
@@ -37,6 +69,10 @@ export default function DoctorsPage() {
   const [addOpen, setAddOpen] = useState(false);
   const [addForm, setAddForm] = useState<AddDoctorForm>(INITIAL_FORM);
   const [addError, setAddError] = useState('');
+  const [editOpen, setEditOpen] = useState(false);
+  const [editDoctorId, setEditDoctorId] = useState<string | null>(null);
+  const [editForm, setEditForm] = useState<EditDoctorForm>(INITIAL_EDIT_FORM);
+  const [editError, setEditError] = useState('');
   const qc = useQueryClient();
 
   // Fetch specialization catalog for dropdowns
@@ -91,6 +127,101 @@ export default function DoctorsPage() {
       setAddError(err.response?.data?.detail ?? 'Failed to create doctor');
     },
   });
+
+  const [editUserId, setEditUserId] = useState<string | null>(null);
+
+  const updateMutation = useMutation({
+    mutationFn: async ({ doctorId, userId, form }: { doctorId: string; userId: string; form: EditDoctorForm }) => {
+      await Promise.all([
+        api.patch(`/doctors/${doctorId}`, {
+          primary_specialization: form.specialization || undefined,
+          registration_number: form.registration_number || undefined,
+          consultation_fee: form.consultation_fee ? Number(form.consultation_fee) : undefined,
+          follow_up_fee: form.follow_up_fee ? Number(form.follow_up_fee) : undefined,
+          experience_years: form.experience_years ? Number(form.experience_years) : undefined,
+          default_slot_duration: form.default_slot_duration ? Number(form.default_slot_duration) : undefined,
+          bio: form.biography || undefined,
+          is_accepting_new_patients: form.is_accepting_new_patients,
+          telemedicine_enabled: form.telemedicine_enabled,
+        }),
+        api.patch(`/users/${userId}`, {
+          first_name: form.first_name || undefined,
+          last_name: form.last_name || undefined,
+          phone: form.phone || undefined,
+        }),
+      ]);
+    },
+    onSuccess: (_data, variables) => {
+      const { doctorId, form } = variables;
+      qc.setQueriesData({ queryKey: ['doctors'] }, (old: any) => {
+        if (!old?.data) return old;
+        return {
+          ...old,
+          data: old.data.map((d: any) => {
+            if (d.id !== doctorId) return d;
+            const firstName = form.first_name || d.first_name;
+            const lastName = form.last_name || d.last_name;
+            return {
+              ...d,
+              first_name: firstName,
+              last_name: lastName,
+              full_name: `${firstName} ${lastName}`.trim(),
+              phone: form.phone || d.phone,
+              registration_number: form.registration_number || d.registration_number,
+              primary_specialization: form.specialization || d.primary_specialization,
+              experience_years: form.experience_years ? Number(form.experience_years) : d.experience_years,
+              consultation_fee: form.consultation_fee ? Number(form.consultation_fee) : d.consultation_fee,
+              follow_up_fee: form.follow_up_fee ? Number(form.follow_up_fee) : d.follow_up_fee,
+              default_slot_duration: form.default_slot_duration ? Number(form.default_slot_duration) : d.default_slot_duration,
+              biography: form.biography,
+              is_accepting_new_patients: form.is_accepting_new_patients,
+              telemedicine_enabled: form.telemedicine_enabled,
+            };
+          }),
+        };
+      });
+      setEditOpen(false);
+      setEditDoctorId(null);
+      setEditUserId(null);
+      setEditForm(INITIAL_EDIT_FORM);
+      setEditError('');
+    },
+    onError: (err: any) => {
+      setEditError(err.response?.data?.detail ?? 'Failed to update doctor');
+    },
+  });
+
+  const openEdit = (doctor: any) => {
+    setEditDoctorId(doctor.id);
+    setEditUserId(doctor.user_id);
+    setEditForm({
+      first_name: doctor.first_name ?? '',
+      last_name: doctor.last_name ?? '',
+      phone: doctor.phone ?? '',
+      registration_number: doctor.registration_number ?? '',
+      specialization: doctor.primary_specialization ?? '',
+      experience_years: doctor.experience_years != null ? String(doctor.experience_years) : '',
+      consultation_fee: doctor.consultation_fee != null ? String(doctor.consultation_fee) : '',
+      follow_up_fee: doctor.follow_up_fee != null ? String(doctor.follow_up_fee) : '',
+      default_slot_duration: doctor.default_slot_duration != null ? String(doctor.default_slot_duration) : '',
+      biography: doctor.biography ?? '',
+      is_accepting_new_patients: doctor.is_accepting_new_patients ?? true,
+      telemedicine_enabled: doctor.telemedicine_enabled ?? false,
+    });
+    setEditError('');
+    setEditOpen(true);
+  };
+
+  const handleEditSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editDoctorId || !editUserId) return;
+    setEditError('');
+    updateMutation.mutate({ doctorId: editDoctorId, userId: editUserId, form: editForm });
+  };
+
+  const setEditField = (field: keyof Omit<EditDoctorForm, 'is_accepting_new_patients' | 'telemedicine_enabled'>) =>
+    (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) =>
+      setEditForm((f) => ({ ...f, [field]: e.target.value }));
 
   const setField = (field: keyof AddDoctorForm) =>
     (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) =>
@@ -228,6 +359,12 @@ export default function DoctorsPage() {
                 <Link to={`/doctors/${doctor.id}/stats`} className="btn-secondary text-center text-xs py-1.5">
                   Stats
                 </Link>
+                <button
+                  onClick={() => openEdit(doctor)}
+                  className="col-span-2 flex items-center justify-center gap-1.5 btn-secondary text-xs py-1.5 text-indigo-600 border-indigo-200 hover:bg-indigo-50"
+                >
+                  <Pencil className="w-3.5 h-3.5" /> Edit
+                </button>
               </div>
             </div>
           ))}
@@ -241,6 +378,152 @@ export default function DoctorsPage() {
       {total > PAGE_SIZE && (
         <div className="mt-4 bg-white rounded-xl border border-slate-200">
           <Pagination page={page} pageSize={PAGE_SIZE} total={total} onPageChange={setPage} />
+        </div>
+      )}
+
+      {/* Edit Doctor Modal */}
+      {editOpen && (
+        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-xl shadow-xl w-full max-w-lg max-h-[90vh] overflow-y-auto">
+            <div className="flex items-center justify-between p-5 border-b border-gray-200 sticky top-0 bg-white">
+              <h2 className="text-lg font-semibold text-gray-900">Edit Doctor</h2>
+              <button
+                onClick={() => { setEditOpen(false); setEditError(''); setEditForm(INITIAL_EDIT_FORM); }}
+                className="text-gray-400 hover:text-gray-600"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <form onSubmit={handleEditSubmit} className="p-5 space-y-5">
+              {/* Personal Info */}
+              <div>
+                <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-3">Personal Info</p>
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="label">First Name</label>
+                    <input className="input" value={editForm.first_name} onChange={setEditField('first_name')} />
+                  </div>
+                  <div>
+                    <label className="label">Last Name</label>
+                    <input className="input" value={editForm.last_name} onChange={setEditField('last_name')} />
+                  </div>
+                  <div className="col-span-2">
+                    <label className="label">Phone</label>
+                    <input className="input" type="tel" value={editForm.phone} onChange={setEditField('phone')} />
+                  </div>
+                </div>
+              </div>
+
+              {/* Professional */}
+              <div>
+                <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-3">Professional</p>
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="col-span-2">
+                    <label className="label">Registration No.</label>
+                    <input className="input" value={editForm.registration_number} onChange={setEditField('registration_number')} />
+                  </div>
+                  <div className="col-span-2">
+                    <label className="label">Specialization</label>
+                    {specializations.length > 0 ? (
+                      <select className="input" value={editForm.specialization} onChange={setEditField('specialization')}>
+                        <option value="">— Select —</option>
+                        {Object.entries(specsByCategory).map(([cat, items]) => (
+                          <optgroup key={cat} label={cat}>
+                            {items.map((s) => (
+                              <option key={s.id} value={s.name}>{s.name}</option>
+                            ))}
+                          </optgroup>
+                        ))}
+                      </select>
+                    ) : (
+                      <input className="input" value={editForm.specialization} onChange={setEditField('specialization')} placeholder="e.g. Cardiology" />
+                    )}
+                  </div>
+                  <div>
+                    <label className="label">Experience (years)</label>
+                    <input className="input" type="number" min={0} value={editForm.experience_years} onChange={setEditField('experience_years')} />
+                  </div>
+                  <div>
+                    <label className="label">Slot Duration (min)</label>
+                    <input className="input" type="number" min={5} step={5} value={editForm.default_slot_duration} onChange={setEditField('default_slot_duration')} />
+                  </div>
+                </div>
+              </div>
+
+              {/* Fees */}
+              <div>
+                <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-3">Fees ({currencySymbol})</p>
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="label">Consultation Fee</label>
+                    <input className="input" type="number" min={0} value={editForm.consultation_fee} onChange={setEditField('consultation_fee')} />
+                  </div>
+                  <div>
+                    <label className="label">Follow-up Fee</label>
+                    <input className="input" type="number" min={0} value={editForm.follow_up_fee} onChange={setEditField('follow_up_fee')} />
+                  </div>
+                </div>
+              </div>
+
+              {/* Biography */}
+              <div>
+                <label className="label">Biography</label>
+                <textarea
+                  className="input min-h-[80px] resize-y"
+                  value={editForm.biography}
+                  onChange={setEditField('biography')}
+                  placeholder="Short professional bio…"
+                />
+              </div>
+
+              {/* Settings */}
+              <div>
+                <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-3">Settings</p>
+                <div className="space-y-2">
+                  <div className="flex items-center gap-3">
+                    <input
+                      id="edit-accepting"
+                      type="checkbox"
+                      className="w-4 h-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
+                      checked={editForm.is_accepting_new_patients}
+                      onChange={(e) => setEditForm((f) => ({ ...f, is_accepting_new_patients: e.target.checked }))}
+                    />
+                    <label htmlFor="edit-accepting" className="text-sm text-gray-700 cursor-pointer">Accepting new patients</label>
+                  </div>
+                  <div className="flex items-center gap-3">
+                    <input
+                      id="edit-telemedicine"
+                      type="checkbox"
+                      className="w-4 h-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
+                      checked={editForm.telemedicine_enabled}
+                      onChange={(e) => setEditForm((f) => ({ ...f, telemedicine_enabled: e.target.checked }))}
+                    />
+                    <label htmlFor="edit-telemedicine" className="text-sm text-gray-700 cursor-pointer">Telemedicine enabled</label>
+                  </div>
+                </div>
+              </div>
+
+              {editError && (
+                <div className="bg-red-50 border border-red-200 text-red-700 px-3 py-2 rounded text-sm">
+                  {editError}
+                </div>
+              )}
+
+              <div className="flex gap-3 pt-2">
+                <button type="submit" disabled={updateMutation.isPending} className="btn-primary flex-1">
+                  {updateMutation.isPending ? 'Saving…' : 'Save Changes'}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => { setEditOpen(false); setEditError(''); setEditForm(INITIAL_EDIT_FORM); }}
+                  className="btn-secondary flex-1"
+                >
+                  Cancel
+                </button>
+              </div>
+            </form>
+          </div>
         </div>
       )}
 

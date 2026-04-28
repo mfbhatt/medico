@@ -1,5 +1,5 @@
 import { useEffect } from "react";
-import { type Country } from "@/utils/addressData";
+import { ALL_COUNTRIES, type Country } from "@/utils/addressData";
 
 export interface AddressValue {
   country: string;
@@ -29,7 +29,10 @@ export default function AddressFields({
   inputCls = "w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500",
   showLabels = true,
 }: AddressFieldsProps) {
-  const selectedCountry = countries.find((c) => c.code === value.country) ?? null;
+  const selectedCountry =
+    countries.find((c) => c.code === value.country) ??
+    ALL_COUNTRIES.find((c) => c.code === value.country) ??
+    null;
 
   // Reset state when country changes
   useEffect(() => {

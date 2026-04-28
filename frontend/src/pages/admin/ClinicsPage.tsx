@@ -285,7 +285,7 @@ function ClinicModal({ isSuperAdmin, clinic, onClose, onSuccess }: { isSuperAdmi
         <div className="space-y-3">
           {isSuperAdmin && !isEdit && (
             <div>
-              <label className="text-xs text-slate-500 mb-1 block">Tenant *</label>
+              <label className="block text-xs font-medium text-slate-600 mb-1">Tenant <span className="text-red-500">*</span></label>
               <select value={form.tenant_id} onChange={f("tenant_id")} className={cls} required>
                 <option value="">Select a tenant…</option>
                 {tenants.map((t: any) => (
@@ -299,17 +299,17 @@ function ClinicModal({ isSuperAdmin, clinic, onClose, onSuccess }: { isSuperAdmi
 
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className="text-xs text-slate-500 mb-1 block">Clinic Name *</label>
+              <label className="block text-xs font-medium text-slate-600 mb-1">Clinic Name <span className="text-red-500">*</span></label>
               <input placeholder="e.g. Downtown Branch" value={form.name} onChange={f("name")} required className={cls} />
             </div>
             <div>
-              <label className="text-xs text-slate-500 mb-1 block">Clinic Code</label>
+              <label className="block text-xs font-medium text-slate-600 mb-1">Clinic Code</label>
               <input placeholder="e.g. CLN-001" value={form.code} onChange={f("code")} className={cls} />
             </div>
           </div>
 
           <div>
-            <label className="text-xs text-slate-500 mb-1 block">Street Address *</label>
+            <label className="block text-xs font-medium text-slate-600 mb-1">Street Address <span className="text-red-500">*</span></label>
             <input placeholder="Street address" value={form.address_line1} onChange={f("address_line1")} required className={cls} />
           </div>
 
@@ -317,18 +317,18 @@ function ClinicModal({ isSuperAdmin, clinic, onClose, onSuccess }: { isSuperAdmi
 
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className="text-xs text-slate-500 mb-1 block">Phone</label>
+              <label className="block text-xs font-medium text-slate-600 mb-1">Phone</label>
               <input placeholder="+1 555 000 0000" value={form.phone} onChange={f("phone")} className={cls} />
             </div>
             <div>
-              <label className="text-xs text-slate-500 mb-1 block">Email</label>
+              <label className="block text-xs font-medium text-slate-600 mb-1">Email</label>
               <input type="email" placeholder="clinic@example.com" value={form.email} onChange={f("email")} className={cls} />
             </div>
           </div>
 
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className="text-xs text-slate-500 mb-1 block">Appointment Slot Duration</label>
+              <label className="block text-xs font-medium text-slate-600 mb-1">Appointment Slot Duration</label>
               <select value={form.appointment_slot_duration} onChange={f("appointment_slot_duration")} className={cls}>
                 {SLOT_OPTIONS.map((m) => (
                   <option key={m} value={m}>
@@ -339,7 +339,7 @@ function ClinicModal({ isSuperAdmin, clinic, onClose, onSuccess }: { isSuperAdmi
             </div>
             {isEdit && (
               <div>
-                <label className="text-xs text-slate-500 mb-1 block">Status</label>
+                <label className="block text-xs font-medium text-slate-600 mb-1">Status</label>
                 <select value={form.status} onChange={f("status")} className={cls}>
                   <option value="active">Active</option>
                   <option value="inactive">Inactive</option>

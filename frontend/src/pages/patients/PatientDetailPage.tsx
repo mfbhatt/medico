@@ -23,6 +23,7 @@ const BLOOD_GROUPS = ['A+', 'A-', 'B+', 'B-', 'AB+', 'AB-', 'O+', 'O-'];
 interface EditForm {
   first_name: string;
   last_name: string;
+  date_of_birth: string;
   phone: string;
   email: string;
   gender: string;
@@ -31,6 +32,9 @@ interface EditForm {
   address_line1: string;
   height_cm: string;
   weight_kg: string;
+  emergency_contact: string;
+  emergency_phone: string;
+  notes: string;
 }
 
 export default function PatientDetailPage() {
@@ -45,9 +49,9 @@ export default function PatientDetailPage() {
   const { countries } = useEnabledCountries();
 
   const [editForm, setEditForm] = useState<EditForm>({
-    first_name: '', last_name: '', phone: '', email: '', gender: '',
+    first_name: '', last_name: '', date_of_birth: '', phone: '', email: '', gender: '',
     marital_status: '', blood_group: '', address_line1: '',
-    height_cm: '', weight_kg: '',
+    height_cm: '', weight_kg: '', emergency_contact: '', emergency_phone: '', notes: '',
   });
 
   const [editAddress, setEditAddress] = useState<AddressValue>({
@@ -66,6 +70,7 @@ export default function PatientDetailPage() {
       setEditForm({
         first_name: patient.first_name ?? '',
         last_name: patient.last_name ?? '',
+        date_of_birth: patient.date_of_birth ?? '',
         phone: patient.phone ?? '',
         email: patient.email ?? '',
         gender: patient.gender ?? '',
@@ -74,6 +79,9 @@ export default function PatientDetailPage() {
         address_line1: patient.address ?? patient.address_line1 ?? '',
         height_cm: patient.height_cm != null ? String(patient.height_cm) : '',
         weight_kg: patient.weight_kg != null ? String(patient.weight_kg) : '',
+        emergency_contact: patient.emergency_contacts?.[0]?.name ?? '',
+        emergency_phone: patient.emergency_contacts?.[0]?.phone ?? '',
+        notes: patient.notes ?? '',
       });
       setEditAddress({
         country: patient.country ?? 'US',
@@ -156,10 +164,17 @@ export default function PatientDetailPage() {
       zip_code: editAddress.postal_code,
       height_cm: editForm.height_cm ? Number(editForm.height_cm) : undefined,
       weight_kg: editForm.weight_kg ? Number(editForm.weight_kg) : undefined,
+      emergency_contacts: editForm.emergency_contact
+        ? [{ name: editForm.emergency_contact, phone: editForm.emergency_phone, relationship: 'Emergency Contact' }]
+        : [],
+      notes: editForm.notes || undefined,
     });
   };
 
-  const setField = (field: keyof EditForm) => (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) =>
+  const ecls = "w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500";
+  const elbl = "block text-xs font-medium text-slate-600 mb-1";
+
+  const setField = (field: keyof EditForm) => (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) =>
     setEditForm((f) => ({ ...f, [field]: e.target.value }));
 
   return (
@@ -551,34 +566,38 @@ export default function PatientDetailPage() {
             <form onSubmit={handleEditSubmit} className="p-5 space-y-4">
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <label className="label">First Name *</label>
-                  <input className="input" value={editForm.first_name} onChange={setField('first_name')} required />
+                  <label className={elbl}>First Name <span className="text-red-500">*</span></label>
+                  <input className={ecls} value={editForm.first_name} onChange={setField('first_name')} required />
                 </div>
                 <div>
-                  <label className="label">Last Name *</label>
-                  <input className="input" value={editForm.last_name} onChange={setField('last_name')} required />
+                  <label className={elbl}>Last Name <span className="text-red-500">*</span></label>
+                  <input className={ecls} value={editForm.last_name} onChange={setField('last_name')} required />
                 </div>
                 <div>
-                  <label className="label">Phone *</label>
-                  <input className="input" value={editForm.phone} onChange={setField('phone')} required />
+                  <label className={elbl}>Date of Birth <span className="text-red-500">*</span></label>
+                  <input className={ecls} type="date" value={editForm.date_of_birth} onChange={setField('date_of_birth')} required />
                 </div>
                 <div>
-                  <label className="label">Email</label>
-                  <input className="input" type="email" value={editForm.email} onChange={setField('email')} />
-                </div>
-                <div>
-                  <label className="label">Gender</label>
-                  <select className="input" value={editForm.gender} onChange={setField('gender')}>
-                    <option value="">Select</option>
+                  <label className={elbl}>Gender <span className="text-red-500">*</span></label>
+                  <select className={ecls} value={editForm.gender} onChange={setField('gender')} required>
+                    <option value="">Select…</option>
                     <option value="male">Male</option>
                     <option value="female">Female</option>
                     <option value="other">Other</option>
                   </select>
                 </div>
                 <div>
-                  <label className="label">Marital Status</label>
-                  <select className="input" value={editForm.marital_status} onChange={setField('marital_status')}>
-                    <option value="">Select</option>
+                  <label className={elbl}>Phone Number <span className="text-red-500">*</span></label>
+                  <input className={ecls} value={editForm.phone} onChange={setField('phone')} required />
+                </div>
+                <div>
+                  <label className={elbl}>Email</label>
+                  <input className={ecls} type="email" value={editForm.email} onChange={setField('email')} />
+                </div>
+                <div>
+                  <label className={elbl}>Marital Status</label>
+                  <select className={ecls} value={editForm.marital_status} onChange={setField('marital_status')}>
+                    <option value="">Select…</option>
                     <option value="single">Single</option>
                     <option value="married">Married</option>
                     <option value="divorced">Divorced</option>
@@ -586,23 +605,31 @@ export default function PatientDetailPage() {
                   </select>
                 </div>
                 <div>
-                  <label className="label">Blood Group</label>
-                  <select className="input" value={editForm.blood_group} onChange={setField('blood_group')}>
+                  <label className={elbl}>Blood Group</label>
+                  <select className={ecls} value={editForm.blood_group} onChange={setField('blood_group')}>
                     <option value="">Unknown</option>
                     {BLOOD_GROUPS.map((bg) => <option key={bg} value={bg}>{bg}</option>)}
                   </select>
                 </div>
+                <div>
+                  <label className={elbl}>Height (cm)</label>
+                  <input className={ecls} type="number" value={editForm.height_cm} onChange={setField('height_cm')} min={0} />
+                </div>
+                <div>
+                  <label className={elbl}>Weight (kg)</label>
+                  <input className={ecls} type="number" value={editForm.weight_kg} onChange={setField('weight_kg')} min={0} />
+                </div>
                 <div className="col-span-2">
-                  <label className="label">Address</label>
-                  <input className="input" value={editForm.address_line1} onChange={setField('address_line1')} placeholder="Street address" />
+                  <label className={elbl}>Street Address</label>
+                  <input className={ecls} value={editForm.address_line1} onChange={setField('address_line1')} />
                 </div>
                 <div>
-                  <label className="label">Height (cm)</label>
-                  <input className="input" type="number" value={editForm.height_cm} onChange={setField('height_cm')} min={0} />
+                  <label className={elbl}>Emergency Contact Name</label>
+                  <input className={ecls} value={editForm.emergency_contact} onChange={setField('emergency_contact')} />
                 </div>
                 <div>
-                  <label className="label">Weight (kg)</label>
-                  <input className="input" type="number" value={editForm.weight_kg} onChange={setField('weight_kg')} min={0} />
+                  <label className={elbl}>Emergency Contact Phone</label>
+                  <input className={ecls} type="tel" value={editForm.emergency_phone} onChange={setField('emergency_phone')} />
                 </div>
               </div>
 
@@ -610,8 +637,13 @@ export default function PatientDetailPage() {
                 value={editAddress}
                 onChange={setEditAddress}
                 countries={countries}
-                inputCls="input"
+                inputCls={ecls}
               />
+
+              <div>
+                <label className={elbl}>Notes</label>
+                <textarea className={ecls} rows={3} value={editForm.notes} onChange={setField('notes')} />
+              </div>
 
               {updateMutation.isError && (
                 <div className="bg-red-50 border border-red-200 text-red-700 px-3 py-2 rounded text-sm">
