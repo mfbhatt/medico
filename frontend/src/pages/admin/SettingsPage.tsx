@@ -1,12 +1,13 @@
 import { useEffect, useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Save, Bell, Lock, User, Eye, DollarSign, Globe, Info } from 'lucide-react';
+import { Save, Bell, Lock, User, Eye, DollarSign, Globe, Info, Palette } from 'lucide-react';
 import api from '@/services/api';
 import { ALL_COUNTRIES } from '@/utils/addressData';
 import { useAppSelector } from '@/store/hooks';
+import ThemeSwitcher from '@/components/ui/ThemeSwitcher';
 
-const INPUT_CLS = "w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500";
-const LABEL_CLS = "block text-gray-700 font-semibold mb-2";
+const INPUT_CLS = "input";
+const LABEL_CLS = "block font-semibold mb-2 text-sm";
 
 /** Returns true if the tenant has its own value for this key (not inherited from platform). */
 function isOverridden(tenantRaw: any, key: string): boolean {
@@ -259,9 +260,9 @@ export default function SettingsPage() {
       <div className="space-y-6">
         {/* Clinic Information — tenant admin only */}
         {!isSuperAdmin && (
-          <div className="bg-white rounded-lg shadow-lg">
+          <div className="card">
             <div className="border-b border-gray-200 px-6 py-4 flex items-center gap-3">
-              <User className="w-6 h-6 text-indigo-600" />
+              <User className="w-6 h-6 text-primary-600" />
               <h2 className="text-2xl font-bold text-gray-900">Clinic Information</h2>
             </div>
             <div className="p-6 space-y-4">
@@ -299,9 +300,9 @@ export default function SettingsPage() {
         )}
 
         {/* Appointment Settings */}
-        <div className="bg-white rounded-lg shadow-lg">
+        <div className="card">
           <div className="border-b border-gray-200 px-6 py-4 flex items-center gap-3">
-            <Eye className="w-6 h-6 text-indigo-600" />
+            <Eye className="w-6 h-6 text-primary-600" />
             <h2 className="text-2xl font-bold text-gray-900">
               Appointment Settings
               {!isSuperAdmin && <span className="ml-2 text-sm text-gray-400 font-normal">(platform default)</span>}
@@ -330,9 +331,9 @@ export default function SettingsPage() {
         </div>
 
         {/* Locale Settings */}
-        <div className="bg-white rounded-lg shadow-lg">
+        <div className="card">
           <div className="border-b border-gray-200 px-6 py-4 flex items-center gap-3">
-            <DollarSign className="w-6 h-6 text-indigo-600" />
+            <DollarSign className="w-6 h-6 text-primary-600" />
             <h2 className="text-2xl font-bold text-gray-900">
               Locale & Billing
               {!isSuperAdmin && <span className="ml-2 text-sm text-gray-400 font-normal">(platform default)</span>}
@@ -386,9 +387,9 @@ export default function SettingsPage() {
         </div>
 
         {/* Address & Location */}
-        <div className="bg-white rounded-lg shadow-lg">
+        <div className="card">
           <div className="border-b border-gray-200 px-6 py-4 flex items-center gap-3">
-            <Globe className="w-6 h-6 text-indigo-600" />
+            <Globe className="w-6 h-6 text-primary-600" />
             <div>
               <h2 className="text-2xl font-bold text-gray-900">Address & Location</h2>
               <p className="text-sm text-gray-500 mt-0.5">
@@ -417,7 +418,7 @@ export default function SettingsPage() {
                     type="checkbox"
                     checked={enabledCountries.includes(c.code)}
                     onChange={() => toggleCountry(c.code)}
-                    className="w-4 h-4 rounded border-gray-300 text-indigo-600 flex-shrink-0"
+                    className="w-4 h-4 rounded border-gray-300 text-primary-600 flex-shrink-0"
                   />
                   <span className="text-sm text-gray-700 truncate" title={c.name}>
                     <span className="font-mono text-xs text-gray-400 mr-1">{c.code}</span>{c.name}
@@ -430,7 +431,7 @@ export default function SettingsPage() {
               <button
                 onClick={() => saveCountryMutation.mutate()}
                 disabled={saveCountryMutation.isPending || enabledCountries.length === 0}
-                className="flex items-center gap-2 bg-indigo-600 hover:bg-indigo-700 disabled:bg-indigo-400 text-white font-medium px-4 py-2 rounded-lg text-sm transition"
+                className="flex items-center gap-2 bg-primary-600 hover:bg-primary-700 disabled:bg-primary-400 text-white font-medium px-4 py-2 rounded-lg text-sm transition"
               >
                 <Save className="w-4 h-4" />
                 {saveCountryMutation.isPending ? 'Saving…' : 'Save Country List'}
@@ -440,9 +441,9 @@ export default function SettingsPage() {
         </div>
 
         {/* Notification Settings */}
-        <div className="bg-white rounded-lg shadow-lg">
+        <div className="card">
           <div className="border-b border-gray-200 px-6 py-4 flex items-center gap-3">
-            <Bell className="w-6 h-6 text-indigo-600" />
+            <Bell className="w-6 h-6 text-primary-600" />
             <h2 className="text-2xl font-bold text-gray-900">
               Notification Settings
               {!isSuperAdmin && <span className="ml-2 text-sm text-gray-400 font-normal">(platform default)</span>}
@@ -451,7 +452,7 @@ export default function SettingsPage() {
           <div className="p-6 space-y-4">
             <label className="flex items-center gap-3 cursor-pointer">
               <input type="checkbox" name="emailNotifications" checked={values.emailNotifications} onChange={onChange}
-                className="w-5 h-5 text-indigo-600 rounded" />
+                className="w-5 h-5 text-primary-600 rounded" />
               <span className="text-gray-900 font-semibold">
                 Enable Email Notifications
                 <OverrideBadge settingKey="email_notifications" />
@@ -459,7 +460,7 @@ export default function SettingsPage() {
             </label>
             <label className="flex items-center gap-3 cursor-pointer">
               <input type="checkbox" name="smsNotifications" checked={values.smsNotifications} onChange={onChange}
-                className="w-5 h-5 text-indigo-600 rounded" />
+                className="w-5 h-5 text-primary-600 rounded" />
               <span className="text-gray-900 font-semibold">
                 Enable SMS Notifications
                 <OverrideBadge settingKey="sms_notifications" />
@@ -469,15 +470,15 @@ export default function SettingsPage() {
         </div>
 
         {/* Security Settings */}
-        <div className="bg-white rounded-lg shadow-lg">
+        <div className="card">
           <div className="border-b border-gray-200 px-6 py-4 flex items-center gap-3">
-            <Lock className="w-6 h-6 text-indigo-600" />
+            <Lock className="w-6 h-6 text-primary-600" />
             <h2 className="text-2xl font-bold text-gray-900">Security Settings</h2>
           </div>
           <div className="p-6 space-y-4">
             <label className="flex items-center gap-3 cursor-pointer">
               <input type="checkbox" name="twoFactorAuth" checked={values.twoFactorAuth} onChange={onChange}
-                className="w-5 h-5 text-indigo-600 rounded" />
+                className="w-5 h-5 text-primary-600 rounded" />
               <span className="text-gray-900 font-semibold">
                 Require Two-Factor Authentication
                 <OverrideBadge settingKey="two_factor_auth" />
@@ -491,12 +492,23 @@ export default function SettingsPage() {
           </div>
         </div>
 
+        {/* Appearance */}
+        <div className="card">
+          <div className="border-b border-gray-200 px-6 py-4 flex items-center gap-3">
+            <Palette className="w-6 h-6 text-primary-600" />
+            <h2 className="text-2xl font-bold text-gray-900">Appearance</h2>
+          </div>
+          <div className="p-6">
+            <ThemeSwitcher variant="popup" />
+          </div>
+        </div>
+
         {/* Save Button */}
         <div className="flex gap-4">
           <button
             onClick={handleSave}
             disabled={isPending}
-            className="flex-1 flex items-center justify-center gap-2 bg-indigo-600 hover:bg-indigo-700 disabled:bg-indigo-400 text-white font-semibold py-3 rounded-lg transition"
+            className="flex-1 flex items-center justify-center gap-2 bg-primary-600 hover:bg-primary-700 disabled:bg-primary-400 text-white font-semibold py-3 rounded-lg transition"
           >
             <Save className="w-5 h-5" />
             {isPending ? 'Saving…' : isSuperAdmin ? 'Save Platform Defaults' : 'Save Settings'}

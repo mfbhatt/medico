@@ -56,7 +56,7 @@ export default function BillingPage() {
       {/* Filters */}
       <div className="bg-white rounded-xl border border-slate-200 p-4 mb-6 flex gap-3 items-center">
         <select
-          className="px-3 py-2.5 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+          className="input py-2.5"
           value={status}
           onChange={(e) => { setStatus(e.target.value); setPage(1); }}
         >
@@ -251,7 +251,7 @@ function NewInvoiceModal({ onClose, onSuccess }: { onClose: () => void; onSucces
     }
   };
 
-  const cls = 'w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500';
+  const cls = 'input';
 
   return (
     <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">

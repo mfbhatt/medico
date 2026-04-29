@@ -55,7 +55,7 @@ export default function MedicalRecordPage() {
     },
   });
 
-  const cls = "w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500";
+  const cls = "input";
 
   return (
     <div className="max-w-3xl mx-auto">

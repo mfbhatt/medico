@@ -1,5 +1,6 @@
 import { Link } from "react-router-dom";
 import { Shield } from "lucide-react";
+import appConfig from "../../config/app";
 
 const LAST_UPDATED = "April 25, 2026";
 
@@ -178,7 +179,7 @@ export default function PrivacyPolicyPage() {
             prose-strong:text-gray-800
             prose-a:text-blue-600 prose-a:no-underline hover:prose-a:underline">
             <p className="text-gray-600 text-base leading-relaxed mb-10">
-              ClinicHub ("we", "our", or "us") is committed to protecting your privacy. This policy explains what data we collect, how we use it, and the choices you have.
+              {appConfig.name} ("we", "our", or "us") is committed to protecting your privacy. This policy explains what data we collect, how we use it, and the choices you have.
             </p>
 
             {sections.map((s) => (

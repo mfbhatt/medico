@@ -196,13 +196,13 @@ export default function UsersPage() {
             placeholder="Search by name or email…"
             value={searchInput}
             onChange={(e) => handleSearchInput(e.target.value)}
-            className="w-full pl-10 pr-4 py-2.5 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+            className="input pl-10 pr-4 py-2.5"
           />
         </div>
 
         {/* Tenant filter — super admin only */}
         {isSuperAdmin && (
-          <select value={tenantFilter} onChange={(e) => handleTenantFilter(e.target.value)} className="px-3 py-2.5 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 min-w-44">
+          <select value={tenantFilter} onChange={(e) => handleTenantFilter(e.target.value)} className="input py-2.5 min-w-44">
             <option value="">All Tenants</option>
             {tenants.map((t) => (
               <option key={t.id} value={t.id}>
@@ -214,7 +214,7 @@ export default function UsersPage() {
 
         {/* Clinic filter — tenant users always; super admin when tenant is selected */}
         {(!isSuperAdmin || tenantFilter) && (
-          <select value={clinicFilter} onChange={(e) => handleClinicFilter(e.target.value)} className="px-3 py-2.5 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 min-w-40">
+          <select value={clinicFilter} onChange={(e) => handleClinicFilter(e.target.value)} className="input py-2.5 min-w-40">
             <option value="">All Clinics</option>
             {(isSuperAdmin ? tenantClinics : clinics).map((c) => (
               <option key={c.id} value={c.id}>
@@ -226,7 +226,7 @@ export default function UsersPage() {
 
         {/* Role filter — not needed for global super admin view */}
         {(!isSuperAdmin || tenantFilter) && (
-          <select value={roleFilter} onChange={(e) => handleRoleFilter(e.target.value)} className="px-3 py-2.5 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 min-w-36">
+          <select value={roleFilter} onChange={(e) => handleRoleFilter(e.target.value)} className="input py-2.5 min-w-36">
             <option value="">All Roles</option>
             {(isSuperAdmin ? [...ROLES, "tenant_admin"] : ROLES).map((r) => (
               <option key={r} value={r}>
@@ -238,7 +238,7 @@ export default function UsersPage() {
 
         {/* Status filter */}
         {(!isSuperAdmin || tenantFilter) && (
-          <select value={statusFilter} onChange={(e) => handleStatusFilter(e.target.value)} className="px-3 py-2.5 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 min-w-36">
+          <select value={statusFilter} onChange={(e) => handleStatusFilter(e.target.value)} className="input py-2.5 min-w-36">
             <option value="">All Statuses</option>
             <option value="active">Active</option>
             <option value="inactive">Inactive</option>
@@ -455,7 +455,7 @@ function UserFormModal({ user, isSuperAdmin, clinics, onClose, onSuccess }: { us
     onSuccess: (res) => onSuccess(res?.data?.message),
   });
 
-  const cls = "w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500";
+  const cls = "input";
 
   return (
     <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">

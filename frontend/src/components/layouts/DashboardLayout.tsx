@@ -3,6 +3,8 @@ import { Outlet, NavLink, Link, useNavigate } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { STORAGE_KEYS, API_BASE_URL } from "../../utils/constants";
 import api from "../../services/api";
+import appConfig from "../../config/app";
+import AppLogo from "../ui/AppLogo";
 import { useDispatch, useSelector } from "react-redux";
 import { switchTenantThunk, setActivePatient, ActivePatient } from "../../store/slices/authSlice";
 import {
@@ -100,47 +102,47 @@ const ROLE_META: Record<string, { label: string; badgeClass: string; sidebarAcce
   super_admin: {
     label: "Platform Admin",
     badgeClass: "bg-purple-500/20 text-purple-200 border border-purple-500/30",
-    sidebarAccent: "bg-purple-600",
+    sidebarAccent: "bg-primary-600",
   },
   tenant_admin: {
     label: "Tenant Admin",
     badgeClass: "bg-blue-500/20 text-blue-200 border border-blue-500/30",
-    sidebarAccent: "bg-blue-600",
+    sidebarAccent: "bg-primary-600",
   },
   clinic_admin: {
     label: "Clinic Admin",
     badgeClass: "bg-teal-500/20 text-teal-200 border border-teal-500/30",
-    sidebarAccent: "bg-teal-600",
+    sidebarAccent: "bg-primary-600",
   },
   doctor: {
     label: "Doctor",
     badgeClass: "bg-green-500/20 text-green-200 border border-green-500/30",
-    sidebarAccent: "bg-blue-600",
+    sidebarAccent: "bg-primary-600",
   },
   nurse: {
     label: "Nurse",
     badgeClass: "bg-sky-500/20 text-sky-200 border border-sky-500/30",
-    sidebarAccent: "bg-blue-600",
+    sidebarAccent: "bg-primary-600",
   },
   receptionist: {
     label: "Receptionist",
     badgeClass: "bg-amber-500/20 text-amber-200 border border-amber-500/30",
-    sidebarAccent: "bg-blue-600",
+    sidebarAccent: "bg-primary-600",
   },
   pharmacist: {
     label: "Pharmacist",
     badgeClass: "bg-orange-500/20 text-orange-200 border border-orange-500/30",
-    sidebarAccent: "bg-blue-600",
+    sidebarAccent: "bg-primary-600",
   },
   lab_technician: {
     label: "Lab Tech",
     badgeClass: "bg-cyan-500/20 text-cyan-200 border border-cyan-500/30",
-    sidebarAccent: "bg-blue-600",
+    sidebarAccent: "bg-primary-600",
   },
   patient: {
     label: "Patient",
     badgeClass: "bg-emerald-500/20 text-emerald-200 border border-emerald-500/30",
-    sidebarAccent: "bg-emerald-600",
+    sidebarAccent: "bg-primary-600",
   },
 };
 
@@ -195,13 +197,13 @@ function AccountingSubNav({ collapsed }: { collapsed: boolean }) {
     <div>
       <button
         onClick={() => setOpen(o => !o)}
-        className="w-full flex items-center justify-between px-3 py-1.5 text-xs text-slate-400 hover:text-slate-200 font-semibold uppercase tracking-wider"
+        className="w-full flex items-center justify-between px-3 py-1.5 text-xs text-white/50 hover:text-white/90 font-semibold uppercase tracking-wider"
       >
         <span className="flex items-center gap-2"><BookOpen className="h-3.5 w-3.5" /> Accounting</span>
         <ChevronDown className={`h-3.5 w-3.5 transition-transform ${open ? 'rotate-180' : ''}`} />
       </button>
       {open && (
-        <div className="ml-3 border-l border-slate-700 pl-3 mt-0.5">
+        <div className="ml-3 border-l border-white/10 pl-3 mt-0.5">
           {/* Dashboard (no group) */}
           {ACCOUNTING_SUB_NAV.filter(i => !i.group).map(item => (
             <NavLink
@@ -210,7 +212,7 @@ function AccountingSubNav({ collapsed }: { collapsed: boolean }) {
               end
               className={({ isActive }) =>
                 `block px-2 py-1.5 rounded text-xs font-medium transition-colors ${
-                  isActive ? 'text-white bg-slate-700' : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800'
+                  isActive ? 'text-white bg-white/10' : 'text-white/60 hover:text-white/90 hover:bg-white/[0.07]'
                 }`
               }
             >
@@ -220,7 +222,7 @@ function AccountingSubNav({ collapsed }: { collapsed: boolean }) {
           {/* Grouped items */}
           {groups.map(grp => (
             <div key={grp} className="mt-2">
-              <p className="px-2 py-1 text-[10px] uppercase tracking-widest text-slate-600 font-semibold">
+              <p className="px-2 py-1 text-[10px] uppercase tracking-widest text-white/30 font-semibold">
                 {groupLabels[grp] ?? grp}
               </p>
               {ACCOUNTING_SUB_NAV.filter(i => i.group === grp).map(item => (
@@ -230,7 +232,7 @@ function AccountingSubNav({ collapsed }: { collapsed: boolean }) {
                   end={item.href === '/accounting'}
                   className={({ isActive }) =>
                     `block px-2 py-1.5 rounded text-xs font-medium transition-colors ${
-                      isActive ? 'text-white bg-slate-700' : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800'
+                      isActive ? 'text-white bg-white/10' : 'text-white/60 hover:text-white/90 hover:bg-white/[0.07]'
                     }`
                   }
                 >
@@ -265,7 +267,7 @@ function NavItem({
         `flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
           isActive
             ? `${accentClass} text-white`
-            : "text-slate-300 hover:bg-slate-700 hover:text-white"
+            : "text-white/70 hover:bg-white/10 hover:text-white"
         }`
       }
     >
@@ -292,7 +294,7 @@ export default function DashboardLayout() {
   const queryClient = useQueryClient();
 
   const role = user?.role || "";
-  const meta = ROLE_META[role] ?? { label: role, badgeClass: "bg-slate-700 text-slate-200", sidebarAccent: "bg-blue-600" };
+  const meta = ROLE_META[role] ?? { label: role, badgeClass: "bg-white/10 text-white/80", sidebarAccent: "bg-primary-600" };
 
   const handleLogout = async () => {
     queryClient.clear();
@@ -411,7 +413,7 @@ export default function DashboardLayout() {
   const showClinicAdminExtra = role === "clinic_admin";
 
   return (
-    <div className="flex h-screen bg-slate-100 overflow-hidden">
+    <div className="flex h-screen bg-slate-100 dark:bg-slate-900 overflow-hidden">
       {/* Mobile overlay */}
       {sidebarOpen && (
         <div
@@ -422,25 +424,22 @@ export default function DashboardLayout() {
 
       {/* Sidebar */}
       <aside
-        className={`print:hidden fixed inset-y-0 left-0 z-50 flex flex-col bg-slate-900 transition-all duration-300 lg:static lg:z-auto
+        className={`print:hidden fixed inset-y-0 left-0 z-50 flex flex-col transition-all duration-300 lg:static lg:z-auto
           ${sidebarOpen ? "w-64" : "-translate-x-full lg:translate-x-0"}
           ${sidebarCollapsed ? "lg:w-16" : "lg:w-64"}
         `}
+        style={{ background: "var(--sidebar-bg)" }}
       >
         {/* Logo / brand */}
-        <div className="flex h-16 items-center justify-between px-4 border-b border-slate-700 flex-shrink-0">
+        <div className="flex h-16 items-center justify-between px-4 border-b border-white/10 flex-shrink-0">
           {!sidebarCollapsed && (
             <div className="flex items-center gap-2 min-w-0">
-              <div className={`w-8 h-8 ${meta.sidebarAccent} rounded-lg flex items-center justify-center flex-shrink-0`}>
-                {role === "super_admin" ? (
-                  <Shield className="h-5 w-5 text-white" />
-                ) : (
-                  <Building2 className="h-5 w-5 text-white" />
-                )}
+              <div className={`w-12 h-12 rounded-lg flex items-center justify-center flex-shrink-0`}>
+                <AppLogo iconSize={32} />
               </div>
               <div className="min-w-0">
                 <p className="text-white font-bold text-sm leading-tight truncate">
-                  {role === "super_admin" ? "ClinicHub" : "ClinicHub"}
+                  {appConfig.name}
                 </p>
                 <span className={`text-[10px] px-1.5 py-0.5 rounded font-semibold ${meta.badgeClass}`}>
                   {meta.label}
@@ -448,24 +447,20 @@ export default function DashboardLayout() {
               </div>
             </div>
           )}
-          {sidebarCollapsed && (
+          {/* {sidebarCollapsed && (
             <div className={`w-8 h-8 ${meta.sidebarAccent} rounded-lg flex items-center justify-center mx-auto`}>
-              {role === "super_admin" ? (
-                <Shield className="h-5 w-5 text-white" />
-              ) : (
-                <Building2 className="h-5 w-5 text-white" />
-              )}
+              <AppLogo iconSize={20} />
             </div>
-          )}
+          )} */}
           <button
             onClick={() => setSidebarCollapsed(!sidebarCollapsed)}
-            className="hidden lg:flex text-slate-400 hover:text-white flex-shrink-0"
+            className="hidden lg:flex text-white/50 hover:text-white flex-shrink-0"
           >
             <Menu className="h-5 w-5" />
           </button>
           <button
             onClick={() => setSidebarOpen(false)}
-            className="lg:hidden text-slate-400 hover:text-white"
+            className="lg:hidden text-white/50 hover:text-white"
           >
             <X className="h-5 w-5" />
           </button>
@@ -500,7 +495,7 @@ export default function DashboardLayout() {
         </nav>
 
         {/* User / logout */}
-        <div className="border-t border-slate-700 p-3 flex-shrink-0">
+        <div className="border-t border-white/10 p-3 flex-shrink-0">
           {!sidebarCollapsed && (
             <div className="flex items-center gap-3 px-3 py-2 mb-1">
               <div className={`w-7 h-7 ${meta.sidebarAccent} rounded-full flex items-center justify-center text-white text-xs font-bold flex-shrink-0`}>
@@ -508,13 +503,13 @@ export default function DashboardLayout() {
               </div>
               <div className="min-w-0 flex-1">
                 <p className="text-white text-xs font-medium truncate">{user?.full_name}</p>
-                <p className="text-slate-400 text-[10px] truncate">{user?.email}</p>
+                <p className="text-white/40 text-[10px] truncate">{user?.email}</p>
               </div>
             </div>
           )}
           <button
             onClick={handleLogout}
-            className="flex w-full items-center gap-3 px-3 py-2 text-sm text-slate-300 hover:text-white hover:bg-slate-700 rounded-lg transition-colors"
+            className="flex w-full items-center gap-3 px-3 py-2 text-sm text-white/70 hover:text-white hover:bg-white/10 rounded-lg transition-colors"
           >
             <LogOut className="h-5 w-5 flex-shrink-0" />
             {!sidebarCollapsed && <span>Sign Out</span>}
@@ -525,7 +520,7 @@ export default function DashboardLayout() {
       {/* Main */}
       <div className="flex flex-1 flex-col overflow-hidden">
         {/* Topbar */}
-        <header className="print:hidden flex h-16 items-center justify-between bg-white px-4 shadow-sm border-b border-slate-200 flex-shrink-0">
+        <header className="print:hidden flex h-16 items-center justify-between bg-white dark:bg-slate-800 px-4 shadow-sm border-b border-slate-200 dark:border-slate-700 flex-shrink-0">
           <button
             onClick={() => setSidebarOpen(true)}
             className="lg:hidden text-slate-500 hover:text-slate-700"
@@ -541,7 +536,7 @@ export default function DashboardLayout() {
               <div className="relative">
                 <button
                   onClick={() => setProfileMenuOpen((v) => !v)}
-                  className="flex items-center gap-2 px-3 py-1.5 rounded-lg border border-slate-200 bg-white hover:border-blue-400 text-sm text-slate-700 transition"
+                  className="flex items-center gap-2 px-3 py-1.5 rounded-lg border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-700 hover:border-blue-400 text-sm text-slate-700 dark:text-slate-200 transition"
                 >
                   {activePatient ? (
                     <Baby className="h-4 w-4 text-blue-500 flex-shrink-0" />
@@ -557,21 +552,21 @@ export default function DashboardLayout() {
                 {profileMenuOpen && (
                   <>
                     <div className="fixed inset-0 z-40" onClick={() => setProfileMenuOpen(false)} />
-                    <div className="absolute right-0 mt-2 w-56 bg-white rounded-lg shadow-lg border border-slate-200 z-50 py-1">
-                      <p className="px-3 py-1.5 text-[10px] font-semibold text-slate-400 uppercase tracking-wider">
+                    <div className="absolute right-0 mt-2 w-56 bg-white dark:bg-slate-800 rounded-lg shadow-lg border border-slate-200 dark:border-slate-700 z-50 py-1">
+                      <p className="px-3 py-1.5 text-[10px] font-semibold text-slate-400 dark:text-slate-500 uppercase tracking-wider">
                         Book appointment for
                       </p>
                       {/* Self */}
                       <button
                         onClick={() => handleSwitchProfile(null)}
-                        className={`flex w-full items-center gap-2.5 px-3 py-2.5 text-sm hover:bg-slate-50 transition ${!activePatient ? "bg-blue-50" : ""}`}
+                        className={`flex w-full items-center gap-2.5 px-3 py-2.5 text-sm hover:bg-slate-50 dark:hover:bg-slate-700 transition ${!activePatient ? "bg-blue-50 dark:bg-blue-900/20" : ""}`}
                       >
-                        <UserCircle className={`h-4 w-4 flex-shrink-0 ${!activePatient ? "text-blue-600" : "text-slate-400"}`} />
+                        <UserCircle className={`h-4 w-4 flex-shrink-0 ${!activePatient ? "text-blue-600" : "text-slate-400 dark:text-slate-500"}`} />
                         <div className="text-left min-w-0">
-                          <p className={`font-medium truncate ${!activePatient ? "text-blue-700" : "text-slate-800"}`}>
+                          <p className={`font-medium truncate ${!activePatient ? "text-blue-700 dark:text-blue-400" : "text-slate-800 dark:text-slate-200"}`}>
                             My Profile
                           </p>
-                          <p className="text-xs text-slate-400">Self</p>
+                          <p className="text-xs text-slate-400 dark:text-slate-500">Self</p>
                         </div>
                         {!activePatient && <Check className="h-4 w-4 text-blue-600 ml-auto flex-shrink-0" />}
                       </button>
@@ -580,14 +575,14 @@ export default function DashboardLayout() {
                         <button
                           key={m.id}
                           onClick={() => handleSwitchProfile(m)}
-                          className={`flex w-full items-center gap-2.5 px-3 py-2.5 text-sm hover:bg-slate-50 transition ${activePatient?.id === m.id ? "bg-blue-50" : ""}`}
+                          className={`flex w-full items-center gap-2.5 px-3 py-2.5 text-sm hover:bg-slate-50 dark:hover:bg-slate-700 transition ${activePatient?.id === m.id ? "bg-blue-50 dark:bg-blue-900/20" : ""}`}
                         >
-                          <Baby className={`h-4 w-4 flex-shrink-0 ${activePatient?.id === m.id ? "text-blue-600" : "text-slate-400"}`} />
+                          <Baby className={`h-4 w-4 flex-shrink-0 ${activePatient?.id === m.id ? "text-blue-600" : "text-slate-400 dark:text-slate-500"}`} />
                           <div className="text-left min-w-0">
-                            <p className={`font-medium truncate ${activePatient?.id === m.id ? "text-blue-700" : "text-slate-800"}`}>
+                            <p className={`font-medium truncate ${activePatient?.id === m.id ? "text-blue-700 dark:text-blue-400" : "text-slate-800 dark:text-slate-200"}`}>
                               {m.name}
                             </p>
-                            <p className="text-xs text-slate-400 capitalize">{m.relationship_type.replace(/_/g, " ")}</p>
+                            <p className="text-xs text-slate-400 dark:text-slate-500 capitalize">{m.relationship_type.replace(/_/g, " ")}</p>
                           </div>
                           {activePatient?.id === m.id && <Check className="h-4 w-4 text-blue-600 ml-auto flex-shrink-0" />}
                         </button>
@@ -599,7 +594,7 @@ export default function DashboardLayout() {
             )}
 
             {/* Notifications */}
-            <Link to="/notifications" className="relative text-slate-500 hover:text-slate-700">
+            <Link to="/notifications" className="relative text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200">
               <Bell className="h-5 w-5" />
               {unreadCount > 0 && (
                 <span className="absolute -top-1 -right-1 min-w-[1rem] h-4 px-0.5 bg-red-500 rounded-full text-white text-[10px] flex items-center justify-center font-medium">
@@ -612,14 +607,14 @@ export default function DashboardLayout() {
             <div className="relative">
               <button
                 onClick={() => setUserMenuOpen(!userMenuOpen)}
-                className="flex items-center gap-2 text-sm font-medium text-slate-700 hover:text-slate-900"
+                className="flex items-center gap-2 text-sm font-medium text-slate-700 dark:text-slate-200 hover:text-slate-900 dark:hover:text-white"
               >
                 <div className={`w-8 h-8 ${meta.sidebarAccent} rounded-full flex items-center justify-center text-white text-xs font-bold`}>
                   {user?.full_name?.charAt(0) ?? "U"}
                 </div>
                 <div className="hidden md:block text-left">
-                  <p className="text-sm font-medium text-slate-800 leading-tight">{user?.full_name}</p>
-                  <p className="text-xs text-slate-500 leading-tight">
+                  <p className="text-sm font-medium text-slate-800 dark:text-slate-100 leading-tight">{user?.full_name}</p>
+                  <p className="text-xs text-slate-500 dark:text-slate-400 leading-tight">
                     {currentTenantName ? `${currentTenantName} · ${meta.label}` : meta.label}
                   </p>
                 </div>
@@ -627,11 +622,11 @@ export default function DashboardLayout() {
               </button>
 
               {userMenuOpen && (
-                <div className="absolute right-0 mt-2 w-60 bg-white rounded-lg shadow-lg border border-slate-200 z-50 py-1">
+                <div className="absolute right-0 mt-2 w-60 bg-white dark:bg-slate-800 rounded-lg shadow-lg border border-slate-200 dark:border-slate-700 z-50 py-1">
                   {/* User info */}
-                  <div className="px-4 py-3 border-b border-slate-100">
-                    <p className="text-sm font-semibold text-slate-800">{user?.full_name}</p>
-                    <p className="text-xs text-slate-500 mt-0.5">{user?.email}</p>
+                  <div className="px-4 py-3 border-b border-slate-100 dark:border-slate-700">
+                    <p className="text-sm font-semibold text-slate-800 dark:text-slate-100">{user?.full_name}</p>
+                    <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">{user?.email}</p>
                     <div className="flex items-center gap-1.5 mt-1.5 flex-wrap">
                       <span className={`text-[11px] px-2 py-0.5 rounded-full font-semibold ${
                         role === "super_admin" ? "bg-purple-100 text-purple-700" :
@@ -654,7 +649,7 @@ export default function DashboardLayout() {
                       <div className="py-1">
                         <button
                           onClick={() => setTenantMenuOpen((v) => !v)}
-                          className="flex w-full items-center justify-between px-4 py-2 text-sm text-slate-700 hover:bg-slate-50"
+                          className="flex w-full items-center justify-between px-4 py-2 text-sm text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-700"
                         >
                           <div className="flex items-center gap-2">
                             <ArrowLeftRight className="h-4 w-4 text-slate-400" />
@@ -664,23 +659,23 @@ export default function DashboardLayout() {
                         </button>
 
                         {tenantMenuOpen && (
-                          <div className="mx-2 mb-1 border border-slate-100 rounded-lg overflow-hidden bg-slate-50">
+                          <div className="mx-2 mb-1 border border-slate-100 dark:border-slate-700 rounded-lg overflow-hidden bg-slate-50 dark:bg-slate-900">
                             {myTenants.map((t: any) => (
                               <button
                                 key={t.tenant_id}
                                 onClick={() => !t.is_current && handleSwitchTenant(t.tenant_id)}
                                 disabled={t.is_current || switchingTenant === t.tenant_id}
-                                className={`flex w-full items-center justify-between px-3 py-2.5 text-sm border-b last:border-0 border-slate-100 transition-colors
+                                className={`flex w-full items-center justify-between px-3 py-2.5 text-sm border-b last:border-0 border-slate-100 dark:border-slate-700 transition-colors
                                   ${t.is_current
-                                    ? "bg-blue-50 cursor-default"
-                                    : "hover:bg-white cursor-pointer"
+                                    ? "bg-blue-50 dark:bg-blue-900/20 cursor-default"
+                                    : "hover:bg-white dark:hover:bg-slate-700 cursor-pointer"
                                   }`}
                               >
                                 <div className="text-left min-w-0">
-                                  <p className={`font-medium truncate ${t.is_current ? "text-blue-700" : "text-slate-800"}`}>
+                                  <p className={`font-medium truncate ${t.is_current ? "text-blue-700 dark:text-blue-400" : "text-slate-800 dark:text-slate-200"}`}>
                                     {t.tenant_name}
                                   </p>
-                                  <p className="text-xs text-slate-400 capitalize">{t.role.replace(/_/g, " ")}</p>
+                                  <p className="text-xs text-slate-400 dark:text-slate-500 capitalize">{t.role.replace(/_/g, " ")}</p>
                                 </div>
                                 {switchingTenant === t.tenant_id ? (
                                   <Loader2 className="h-4 w-4 text-blue-500 animate-spin flex-shrink-0 ml-2" />
@@ -692,7 +687,7 @@ export default function DashboardLayout() {
                           </div>
                         )}
                       </div>
-                      <hr className="border-slate-100" />
+                      <hr className="border-slate-100 dark:border-slate-700" />
                     </>
                   )}
 

@@ -171,8 +171,8 @@ export default function PatientDetailPage() {
     });
   };
 
-  const ecls = "w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500";
-  const elbl = "block text-xs font-medium text-slate-600 mb-1";
+  const ecls = "input";
+  const elbl = "block text-xs font-medium mb-1 text-slate-600";
 
   const setField = (field: keyof EditForm) => (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) =>
     setEditForm((f) => ({ ...f, [field]: e.target.value }));

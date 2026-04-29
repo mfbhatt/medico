@@ -4,10 +4,132 @@
 @tailwind components;
 @tailwind utilities;
 
+/* ─── Theme variables ──────────────────────────────────────────────────────── */
+
+/* Dark mode surface tokens — applied when <html class="dark"> */
+.dark {
+  --bg-page:      #0F172A;
+  --bg-surface:   #1E293B;
+  --bg-surface-2: #334155;
+  --text-base:    #E5E7EB;
+  --text-muted:   #D1D5DB;
+  --text-subtle:  #9CA3AF;
+  --border-ui:    #334155;
+  /* semantic tokens — dark */
+  --token-secondary: #2DD4BF;
+  --token-success:   #4ADE80;
+  --token-warning:   #FBBF24;
+  --token-error:     #F87171;
+}
+
+/* Ocean (default) — sky blue */
+:root,
+[data-theme="sky"] {
+  --p-50:  240 249 255;
+  --p-100: 224 242 254;
+  --p-200: 186 230 253;
+  --p-300: 125 211 252;
+  --p-400:  56 189 248;
+  --p-500:  14 165 233;
+  --p-600:   2 132 199;
+  --p-700:   3 105 161;
+  --p-800:   7  89 133;
+  --p-900:  12  74 110;
+  --sidebar-bg: #0f172a;
+}
+
+/* Indigo */
+[data-theme="indigo"] {
+  --p-50:  238 242 255;
+  --p-100: 224 231 255;
+  --p-200: 199 210 254;
+  --p-300: 165 180 252;
+  --p-400: 129 140 248;
+  --p-500:  99 102 241;
+  --p-600:  79  70 229;
+  --p-700:  67  56 202;
+  --p-800:  55  48 163;
+  --p-900:  49  46 129;
+  --sidebar-bg: #1e1b4b;
+}
+
+/* Forest — emerald */
+[data-theme="emerald"] {
+  --p-50:  236 253 245;
+  --p-100: 209 250 229;
+  --p-200: 167 243 208;
+  --p-300: 110 231 183;
+  --p-400:  52 211 153;
+  --p-500:  16 185 129;
+  --p-600:   5 150 105;
+  --p-700:   4 120  87;
+  --p-800:   6  95  70;
+  --p-900:   6  78  59;
+  --sidebar-bg: #022c22;
+}
+
+/* Violet — purple */
+[data-theme="violet"] {
+  --p-50:  245 243 255;
+  --p-100: 237 233 254;
+  --p-200: 221 214 254;
+  --p-300: 196 181 253;
+  --p-400: 167 139 250;
+  --p-500: 139  92 246;
+  --p-600: 124  58 237;
+  --p-700: 109  40 217;
+  --p-800:  91  33 182;
+  --p-900:  76  29 149;
+  --sidebar-bg: #2e1065;
+}
+
+/* Rose */
+[data-theme="rose"] {
+  --p-50:  255 241 242;
+  --p-100: 255 228 230;
+  --p-200: 254 205 211;
+  --p-300: 253 164 175;
+  --p-400: 251 113 133;
+  --p-500: 244  63  94;
+  --p-600: 225  29  72;
+  --p-700: 190  18  60;
+  --p-800: 159  18  57;
+  --p-900: 136  19  55;
+  --sidebar-bg: #4c0519;
+}
+
+/* Warm — amber */
+[data-theme="amber"] {
+  --p-50:  255 251 235;
+  --p-100: 254 243 199;
+  --p-200: 253 230 138;
+  --p-300: 252 211  77;
+  --p-400: 251 191  36;
+  --p-500: 245 158  11;
+  --p-600: 217 119   6;
+  --p-700: 180  83   9;
+  --p-800: 146  64  14;
+  --p-900: 120  53  15;
+  --sidebar-bg: #1c1917;
+}
+
 @layer base {
   :root {
     --sidebar-width: 260px;
     --topbar-height: 64px;
+    /* surface tokens — light (from theme-tokens.ts) */
+    --bg-page:      #F7F9FB;
+    --bg-surface:   #FFFFFF;
+    --bg-surface-2: #EEF3F8;
+    --text-base:    #1F2937;
+    --text-muted:   #6B7280;
+    --text-subtle:  #9CA3AF;
+    --border-ui:    #E5E7EB;
+    /* semantic tokens — light */
+    --token-secondary: #2EC4B6;
+    --token-success:   #22C55E;
+    --token-warning:   #F59E0B;
+    --token-error:     #EF4444;
   }
 
   html {
@@ -15,7 +137,9 @@
   }
 
   body {
-    @apply bg-gray-50 text-gray-900 font-sans;
+    background-color: var(--bg-page);
+    color: var(--text-base);
+    @apply font-sans;
   }
 
   * {
@@ -46,38 +170,54 @@
     @apply btn bg-primary-600 text-white hover:bg-primary-700 focus:ring-primary-500;
   }
   .btn-secondary {
-    @apply btn bg-white text-gray-700 border border-gray-300 hover:bg-gray-50 focus:ring-primary-500;
+    @apply btn border focus:ring-primary-500;
+    background-color: var(--bg-surface);
+    color: var(--text-base);
+    border-color: var(--border-ui);
   }
+  .btn-secondary:hover:not(:disabled) { background-color: var(--bg-surface-2); }
   .btn-danger {
     @apply btn bg-red-600 text-white hover:bg-red-700 focus:ring-red-500;
   }
   .btn-ghost {
-    @apply btn bg-transparent text-gray-600 hover:bg-gray-100 focus:ring-gray-300;
+    @apply btn bg-transparent focus:ring-gray-300;
+    color: var(--text-muted);
+  }
+  .btn-ghost:hover:not(:disabled) {
+    background-color: var(--bg-surface-2);
+    color: var(--text-base);
   }
 
   .card {
-    @apply bg-white rounded-xl border border-gray-200 shadow-sm;
+    @apply rounded-xl border shadow-sm;
+    background-color: var(--bg-surface);
+    border-color: var(--border-ui);
   }
 
   .input {
-    @apply block w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm
-           placeholder-gray-400 shadow-sm transition-colors
+    @apply block w-full rounded-lg border px-3 py-2 text-sm shadow-sm transition-colors
            focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500
-           disabled:bg-gray-50 disabled:cursor-not-allowed;
+           disabled:cursor-not-allowed;
+    background-color: var(--bg-surface);
+    border-color: var(--border-ui);
+    color: var(--text-base);
   }
+  .input::placeholder { color: var(--text-subtle); }
+  .input:disabled { background-color: var(--bg-surface-2); opacity: 0.7; }
 
   .label {
-    @apply block text-sm font-medium text-gray-700 mb-1;
+    @apply block text-sm font-medium mb-1;
+    color: var(--text-base);
   }
 
   .badge {
     @apply inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-xs font-medium;
   }
-  .badge-green  { @apply badge bg-green-100 text-green-800; }
-  .badge-yellow { @apply badge bg-yellow-100 text-yellow-800; }
-  .badge-red    { @apply badge bg-red-100 text-red-800; }
-  .badge-blue   { @apply badge bg-blue-100 text-blue-800; }
-  .badge-gray   { @apply badge bg-gray-100 text-gray-600; }
+  .badge-green  { @apply badge bg-green-100 text-green-800 dark:bg-green-900/40 dark:text-green-300; }
+  .badge-yellow { @apply badge bg-yellow-100 text-yellow-800 dark:bg-yellow-900/40 dark:text-yellow-300; }
+  .badge-red    { @apply badge bg-red-100 text-red-800 dark:bg-red-900/40 dark:text-red-300; }
+  .badge-blue   { @apply badge bg-blue-100 text-blue-800 dark:bg-blue-900/40 dark:text-blue-300; }
+  .badge-gray   { @apply badge bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-300; }
 
   .stat-card {
     @apply card p-5 flex items-center gap-4;
@@ -88,7 +228,8 @@
   }
 
   .page-title {
-    @apply text-2xl font-bold text-gray-900;
+    @apply text-2xl font-bold;
+    color: var(--text-base);
   }
 }
 
@@ -101,3 +242,171 @@
     display: none;
   }
 }
+
+/* ─── Global dark-mode overrides ─────────────────────────────────────────────
+   Placed outside @layer so they cascade above all utility classes.
+   Converts common light-mode gray/slate Tailwind classes to themed tokens,
+   giving every page consistent dark mode without touching them individually. */
+
+/* ── Neutral backgrounds ────────────────────────────────────── */
+.dark .bg-white                { background-color: var(--bg-surface); }
+.dark .bg-gray-50,
+.dark .bg-gray-100             { background-color: var(--bg-surface-2); }
+.dark .bg-gray-200             { background-color: #475569; } /* slate-600 */
+.dark .bg-slate-50,
+.dark .bg-slate-100            { background-color: var(--bg-surface-2); }
+.dark .bg-slate-200            { background-color: #475569; }
+
+/* ── Semantic colored backgrounds (tinted dark equivalents) ─── */
+.dark .bg-red-50               { background-color: rgb(248 113 113 / 0.1); }
+.dark .bg-red-100              { background-color: rgb(248 113 113 / 0.15); }
+.dark .bg-blue-50              { background-color: rgb(96 165 250 / 0.1); }
+.dark .bg-blue-100             { background-color: rgb(96 165 250 / 0.15); }
+.dark .bg-green-50             { background-color: rgb(74 222 128 / 0.1); }
+.dark .bg-green-100            { background-color: rgb(74 222 128 / 0.15); }
+.dark .bg-emerald-50           { background-color: rgb(52 211 153 / 0.1); }
+.dark .bg-amber-50             { background-color: rgb(251 191 36 / 0.1); }
+.dark .bg-amber-100            { background-color: rgb(251 191 36 / 0.15); }
+.dark .bg-yellow-50            { background-color: rgb(250 204 21 / 0.1); }
+.dark .bg-yellow-100           { background-color: rgb(250 204 21 / 0.15); }
+.dark .bg-indigo-50            { background-color: rgb(129 140 248 / 0.1); }
+.dark .bg-indigo-100           { background-color: rgb(129 140 248 / 0.15); }
+.dark .bg-purple-50            { background-color: rgb(192 132 252 / 0.1); }
+.dark .bg-orange-50            { background-color: rgb(251 146 60 / 0.1); }
+
+/* ── Neutral text ───────────────────────────────────────────── */
+.dark .text-gray-900,
+.dark .text-gray-800           { color: var(--text-base); }
+.dark .text-gray-700,
+.dark .text-gray-600           { color: var(--text-muted); }
+.dark .text-gray-500,
+.dark .text-gray-400           { color: var(--text-subtle); }
+.dark .text-slate-900,
+.dark .text-slate-800          { color: var(--text-base); }
+.dark .text-slate-700,
+.dark .text-slate-600          { color: var(--text-muted); }
+.dark .text-slate-500,
+.dark .text-slate-400          { color: var(--text-subtle); }
+
+/* ── Semantic colored text (promote to lighter shades) ──────── */
+.dark .text-blue-600,
+.dark .text-blue-700           { color: #60a5fa; } /* blue-400 */
+.dark .text-blue-800,
+.dark .text-blue-900           { color: #93c5fd; } /* blue-300 */
+.dark .text-red-500,
+.dark .text-red-600,
+.dark .text-red-700            { color: #f87171; } /* red-400 */
+.dark .text-red-800            { color: #fca5a5; } /* red-300 */
+.dark .text-green-600,
+.dark .text-green-700          { color: #4ade80; } /* green-400 */
+.dark .text-green-800          { color: #86efac; } /* green-300 */
+.dark .text-emerald-600,
+.dark .text-emerald-700        { color: #34d399; } /* emerald-400 */
+.dark .text-amber-600,
+.dark .text-amber-700          { color: #fbbf24; } /* amber-400 */
+.dark .text-amber-800          { color: #fcd34d; } /* amber-300 */
+.dark .text-yellow-600,
+.dark .text-yellow-700         { color: #fde68a; } /* yellow-200 */
+.dark .text-indigo-600,
+.dark .text-indigo-700         { color: #818cf8; } /* indigo-400 */
+.dark .text-indigo-800         { color: #a5b4fc; } /* indigo-300 */
+.dark .text-purple-600,
+.dark .text-purple-700         { color: #c084fc; } /* purple-400 */
+.dark .text-orange-600,
+.dark .text-orange-700         { color: #fb923c; } /* orange-400 */
+
+/* ── Neutral borders ────────────────────────────────────────── */
+.dark .border-gray-100,
+.dark .border-gray-200,
+.dark .border-gray-300         { border-color: var(--border-ui); }
+.dark .border-slate-100,
+.dark .border-slate-200,
+.dark .border-slate-300        { border-color: var(--border-ui); }
+
+/* ── Semantic colored borders ───────────────────────────────── */
+.dark .border-red-200,
+.dark .border-red-300          { border-color: rgb(248 113 113 / 0.3); }
+.dark .border-blue-200,
+.dark .border-blue-300         { border-color: rgb(96 165 250 / 0.3); }
+.dark .border-green-200,
+.dark .border-green-300        { border-color: rgb(74 222 128 / 0.3); }
+.dark .border-amber-200,
+.dark .border-amber-300        { border-color: rgb(251 191 36 / 0.3); }
+.dark .border-indigo-200,
+.dark .border-indigo-300       { border-color: rgb(129 140 248 / 0.3); }
+.dark .border-yellow-200,
+.dark .border-yellow-300       { border-color: rgb(250 204 21 / 0.3); }
+
+/* ── Hover backgrounds ──────────────────────────────────────── */
+.dark .hover\:bg-gray-50:hover,
+.dark .hover\:bg-gray-100:hover   { background-color: var(--bg-surface-2); }
+.dark .hover\:bg-slate-50:hover,
+.dark .hover\:bg-slate-100:hover  { background-color: var(--bg-surface-2); }
+.dark .hover\:bg-red-50:hover     { background-color: rgb(248 113 113 / 0.1); }
+.dark .hover\:bg-blue-50:hover    { background-color: rgb(96 165 250 / 0.1); }
+.dark .hover\:bg-green-50:hover   { background-color: rgb(74 222 128 / 0.1); }
+.dark .hover\:bg-amber-50:hover   { background-color: rgb(251 191 36 / 0.1); }
+.dark .hover\:bg-indigo-50:hover  { background-color: rgb(129 140 248 / 0.1); }
+.dark .hover\:bg-indigo-100:hover { background-color: rgb(129 140 248 / 0.15); }
+.dark .hover\:bg-amber-100:hover  { background-color: rgb(251 191 36 / 0.15); }
+.dark .hover\:bg-gray-200:hover   { background-color: #475569; }
+.dark .hover\:bg-slate-200:hover  { background-color: #475569; }
+
+/* ── Divide borders ─────────────────────────────────────────── */
+.dark .divide-gray-100 > :not([hidden]) ~ :not([hidden]),
+.dark .divide-gray-200 > :not([hidden]) ~ :not([hidden]),
+.dark .divide-slate-100 > :not([hidden]) ~ :not([hidden]),
+.dark .divide-slate-200 > :not([hidden]) ~ :not([hidden]) { border-color: var(--border-ui); }
+
+/* ── Ring / outline ─────────────────────────────────────────── */
+.dark .ring-gray-200,
+.dark .ring-slate-200          { --tw-ring-color: var(--border-ui); }
+
+/* ─── Primary-action color remapping ─────────────────────────────────────────
+   Routes all hardcoded blue action classes through the selected accent palette
+   (--p-*). Tinted blues (50–300) are intentionally left as semantic info color.
+   This means every page's buttons, links and focus rings change with the theme
+   switcher without touching individual components.                              */
+
+/* ── Action backgrounds ─────────────────────────────────────── */
+.bg-blue-400  { background-color: rgb(var(--p-400) / 1); }
+.bg-blue-500  { background-color: rgb(var(--p-500) / 1); }
+.bg-blue-600  { background-color: rgb(var(--p-600) / 1); }
+.bg-blue-700  { background-color: rgb(var(--p-700) / 1); }
+.bg-blue-800  { background-color: rgb(var(--p-800) / 1); }
+
+.hover\:bg-blue-400:hover { background-color: rgb(var(--p-400) / 1); }
+.hover\:bg-blue-500:hover { background-color: rgb(var(--p-500) / 1); }
+.hover\:bg-blue-600:hover { background-color: rgb(var(--p-600) / 1); }
+.hover\:bg-blue-700:hover { background-color: rgb(var(--p-700) / 1); }
+.hover\:bg-blue-800:hover { background-color: rgb(var(--p-800) / 1); }
+
+.disabled\:bg-blue-300:disabled { background-color: rgb(var(--p-300) / 1); }
+.disabled\:bg-blue-400:disabled { background-color: rgb(var(--p-400) / 1); }
+
+/* ── Action borders & focus rings ───────────────────────────── */
+.border-blue-500               { border-color: rgb(var(--p-500) / 1); }
+.border-blue-600               { border-color: rgb(var(--p-600) / 1); }
+.focus\:border-blue-500:focus  { border-color: rgb(var(--p-500) / 1); }
+.focus\:border-blue-600:focus  { border-color: rgb(var(--p-600) / 1); }
+
+.ring-blue-500                          { --tw-ring-color: rgb(var(--p-500) / 1); }
+.focus\:ring-blue-500:focus             { --tw-ring-color: rgb(var(--p-500) / 1); }
+.focus\:ring-blue-600:focus             { --tw-ring-color: rgb(var(--p-600) / 1); }
+.focus-within\:ring-blue-500:focus-within { --tw-ring-color: rgb(var(--p-500) / 1); }
+
+/* ── Action text (links, icon-buttons) ──────────────────────── */
+.text-blue-500                 { color: rgb(var(--p-500) / 1); }
+.text-blue-600                 { color: rgb(var(--p-600) / 1); }
+.hover\:text-blue-600:hover    { color: rgb(var(--p-600) / 1); }
+.hover\:text-blue-700:hover    { color: rgb(var(--p-700) / 1); }
+
+/* ── Semantic token utilities ───────────────────────────────── */
+.bg-success                    { background-color: var(--token-success); }
+.bg-warning                    { background-color: var(--token-warning); }
+.bg-danger                     { background-color: var(--token-error); }
+.bg-secondary                  { background-color: var(--token-secondary); }
+.text-success                  { color: var(--token-success); }
+.text-warning                  { color: var(--token-warning); }
+.text-danger                   { color: var(--token-error); }
+.text-secondary                { color: var(--token-secondary); }

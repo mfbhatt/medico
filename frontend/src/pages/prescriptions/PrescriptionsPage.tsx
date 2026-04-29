@@ -60,7 +60,7 @@ export default function PrescriptionsPage() {
               placeholder="Search patient by name, phone, or MRN…"
               value={selectedPatient ? `${selectedPatient.first_name} ${selectedPatient.last_name}` : patientSearch}
               onChange={(e) => { setPatientSearch(e.target.value); setSelectedPatient(null); }}
-              className="w-full pl-10 pr-4 py-2.5 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+              className="input pl-10 pr-4 py-2.5"
             />
             {selectedPatient && (
               <button onClick={() => { setSelectedPatient(null); setPatientSearch(""); }} className="absolute right-3 top-1/2 -translate-y-1/2">
@@ -68,7 +68,7 @@ export default function PrescriptionsPage() {
               </button>
             )}
           </div>
-          <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)} className="px-3 py-2.5 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
+          <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)} className="input py-2.5">
             <option value="">All Status</option>
             <option value="active">Active</option>
             <option value="completed">Completed</option>
@@ -189,7 +189,7 @@ function NewPrescriptionModal({ patient, onClose, onSuccess }: { patient: any; o
     onSuccess,
   });
 
-  const cls = "w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500";
+  const cls = "input";
 
   return (
     <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">

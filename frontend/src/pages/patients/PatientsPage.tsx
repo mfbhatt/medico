@@ -134,7 +134,7 @@ export default function PatientsPage() {
                   <tr
                     className={`transition-colors ${
                       p.family_members?.length > 0
-                        ? 'bg-blue-50/40 hover:bg-blue-50/70 border-b-0'
+                        ? 'bg-blue-50/40 hover:bg-blue-50/70 dark:bg-blue-500/10 dark:hover:bg-blue-500/15 border-b-0'
                         : 'hover:bg-gray-50'
                     }`}
                   >
@@ -183,7 +183,7 @@ export default function PatientsPage() {
                   {p.family_members?.map((fm, idx) => (
                     <tr
                       key={fm.id}
-                      className={`bg-blue-50/60 hover:bg-blue-100/70 transition-colors ${idx === p.family_members.length - 1 ? 'border-b-2 border-b-blue-200' : 'border-b-0'}`}
+                      className={`bg-blue-50/60 hover:bg-blue-100/70 dark:bg-blue-500/15 dark:hover:bg-blue-500/25 transition-colors ${idx === p.family_members.length - 1 ? 'border-b-2 border-b-blue-200' : 'border-b-0'}`}
                     >
                       <td className="pl-7 pr-4 py-2.5 font-mono text-xs text-gray-400 border-l-4 border-l-blue-300">{fm.mrn}</td>
                       <td className="px-4 py-2.5">

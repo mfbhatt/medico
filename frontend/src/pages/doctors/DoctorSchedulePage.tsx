@@ -127,7 +127,7 @@ export default function DoctorSchedulePage() {
 
   const removeEntry = (idx: number) => setSchedules((prev) => prev.filter((_, i) => i !== idx));
 
-  const cls = "px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500";
+  const cls = "input";
   const doctorName = doctor?.full_name ? `Dr. ${doctor.full_name}` : "Doctor";
 
   return (

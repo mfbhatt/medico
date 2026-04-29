@@ -57,7 +57,7 @@ export default function LabOrdersPage() {
             placeholder="Search patient by name, phone, or MRN…"
             value={selectedPatient ? `${selectedPatient.first_name} ${selectedPatient.last_name}` : patientSearch}
             onChange={(e) => { setPatientSearch(e.target.value); setSelectedPatient(null); }}
-            className="w-full pl-10 pr-10 py-2.5 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+            className="input pl-10 pr-10 py-2.5"
           />
           {selectedPatient && (
             <button onClick={() => { setSelectedPatient(null); setPatientSearch(""); }} className="absolute right-3 top-1/2 -translate-y-1/2">
@@ -295,7 +295,7 @@ function NewLabOrderModal({ patient, onClose, onSuccess }: { patient: any; onClo
     onSuccess,
   });
 
-  const cls = "w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500";
+  const cls = "input";
 
   return (
     <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">

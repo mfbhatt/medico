@@ -97,7 +97,7 @@ export default function ClinicsPage() {
               placeholder="Search by name or city…"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              className="w-full pl-10 pr-8 py-2.5 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+              className="input pl-10 pr-8 py-2.5"
             />
             {search && (
               <button onClick={() => setSearch("")} className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600">
@@ -112,7 +112,7 @@ export default function ClinicsPage() {
                 setFilterTenantId(e.target.value);
                 setPage(1);
               }}
-              className="px-3 py-2.5 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 text-slate-700"
+              className="input py-2.5"
             >
               <option value="">All tenants</option>
               {tenants.map((t: any) => (
@@ -263,7 +263,7 @@ function ClinicModal({ isSuperAdmin, clinic, onClose, onSuccess }: { isSuperAdmi
     onSuccess,
   });
 
-  const cls = "w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500";
+  const cls = "input";
   const f = (field: keyof typeof form) => (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => setForm((p) => ({ ...p, [field]: e.target.value }));
 
   const canSubmit = form.name && form.address_line1 && address.country && address.city && address.postal_code && (!isSuperAdmin || isEdit || form.tenant_id);

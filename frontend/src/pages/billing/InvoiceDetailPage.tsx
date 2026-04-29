@@ -192,7 +192,7 @@ function RecordPaymentModal({ invoice, onClose, onSuccess }: { invoice: any; onC
     onSuccess,
   });
 
-  const cls = "w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500";
+  const cls = "input";
 
   return (
     <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">

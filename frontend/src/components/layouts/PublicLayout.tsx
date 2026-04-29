@@ -1,8 +1,10 @@
 import { Link, Outlet } from "react-router-dom";
 import { useSelector } from "react-redux";
-import { Building2, LogIn, LayoutDashboard, Menu, X } from "lucide-react";
+import { LogIn, LayoutDashboard, Menu, X } from "lucide-react";
 import { useState } from "react";
 import { RootState } from "../../store";
+import appConfig from "../../config/app";
+import AppLogo from "../ui/AppLogo";
 
 export default function PublicLayout() {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
@@ -14,15 +16,15 @@ export default function PublicLayout() {
   return (
     <div className="min-h-screen bg-white flex flex-col">
       {/* Header */}
-      <header className="sticky top-0 z-50 bg-white border-b border-gray-200 shadow-sm">
+      <header className="sticky top-0 z-50 bg-white border-b border-gray-600 shadow-sm">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex h-16 items-center justify-between">
             {/* Logo */}
             <Link to="/" className="flex items-center gap-2 flex-shrink-0">
-              <div className="w-8 h-8 bg-blue-600 rounded-lg flex items-center justify-center">
-                <Building2 className="h-5 w-5 text-white" />
+              <div className="w-8 h-8  rounded-lg flex items-center justify-center">
+                <AppLogo iconSize={20} />
               </div>
-              <span className="text-xl font-bold text-gray-900">ClinicHub</span>
+              <span className="text-xl font-bold text-gray-900">{appConfig.name}</span>
             </Link>
 
             {/* Desktop nav */}
@@ -131,10 +133,10 @@ export default function PublicLayout() {
           <div className="grid grid-cols-2 md:grid-cols-4 gap-8 mb-8">
             <div className="col-span-2 md:col-span-1">
               <div className="flex items-center gap-2 mb-3">
-                <div className="w-7 h-7 bg-blue-500 rounded-lg flex items-center justify-center">
-                  <Building2 className="h-4 w-4 text-white" />
+                <div className="w-7 h-7 bg-primary-600 rounded-lg flex items-center justify-center">
+                  <AppLogo iconSize={16} />
                 </div>
-                <span className="text-white font-bold">ClinicHub</span>
+                <span className="text-white font-bold">{appConfig.name}</span>
               </div>
               <p className="text-sm leading-relaxed">
                 Find and book appointments at verified clinics near you.
@@ -185,7 +187,7 @@ export default function PublicLayout() {
             </div>
           </div>
           <div className="border-t border-gray-800 pt-6 text-sm flex flex-col sm:flex-row items-center justify-between gap-3">
-            <span>© {new Date().getFullYear()} ClinicHub. All rights reserved.</span>
+            <span>© {new Date().getFullYear()} {appConfig.copyrightHolder}. All rights reserved.</span>
             <div className="flex gap-4">
               <Link to="/privacy-policy" className="hover:text-white transition-colors">Privacy Policy</Link>
               <Link to="/data-deletion" className="hover:text-white transition-colors">Data Deletion</Link>

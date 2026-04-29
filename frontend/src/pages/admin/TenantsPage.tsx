@@ -104,7 +104,7 @@ export default function TenantsPage() {
           <input
             type="text" placeholder="Search by name or email…" value={search}
             onChange={(e) => setSearch(e.target.value)}
-            className="w-full pl-10 pr-8 py-2.5 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+            className="input pl-10 pr-8 py-2.5"
           />
           {search && (
             <button
@@ -329,7 +329,7 @@ function NewTenantModal({ onClose, onSuccess }: { onClose: () => void; onSuccess
     onSuccess,
   });
 
-  const cls = "w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500";
+  const cls = "input";
   const canSubmit =
     orgName &&
     contactEmail &&
@@ -578,7 +578,7 @@ function EditTenantModal({ tenant, onClose, onSuccess }: { tenant: any; onClose:
     onSuccess,
   });
 
-  const cls = "w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500";
+  const cls = "input";
 
   return (
     <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
@@ -717,7 +717,7 @@ function EditTenantModal({ tenant, onClose, onSuccess }: { tenant: any; onClose:
               value={newAdminId}
               onChange={(e) => setNewAdminId(e.target.value)}
               disabled={usersLoading}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:bg-slate-50 disabled:text-slate-400"
+              className="input"
             >
               <option value="">— Keep current admin —</option>
               {allUsers
