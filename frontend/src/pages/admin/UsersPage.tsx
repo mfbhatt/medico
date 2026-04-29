@@ -188,21 +188,21 @@ export default function UsersPage() {
       </div>
 
       {/* Filters */}
-      <div className="bg-white rounded-xl border border-slate-200 p-4 mb-6 flex flex-wrap gap-3 items-end">
-        <div className="relative flex-1 min-w-48">
+      <div className="bg-white rounded-xl border border-slate-200 p-4 mb-6 flex gap-3 items-center">
+        <div className="relative flex-1 min-w-0">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
           <input
             type="text"
             placeholder="Search by name or email…"
             value={searchInput}
             onChange={(e) => handleSearchInput(e.target.value)}
-            className="input pl-10 pr-4 py-2.5"
+            className="input pl-10 pr-4 py-2.5 w-full"
           />
         </div>
 
         {/* Tenant filter — super admin only */}
         {isSuperAdmin && (
-          <select value={tenantFilter} onChange={(e) => handleTenantFilter(e.target.value)} className="input py-2.5 min-w-44">
+          <select value={tenantFilter} onChange={(e) => handleTenantFilter(e.target.value)} className="input py-2.5 w-56 shrink-0">
             <option value="">All Tenants</option>
             {tenants.map((t) => (
               <option key={t.id} value={t.id}>
@@ -214,7 +214,7 @@ export default function UsersPage() {
 
         {/* Clinic filter — tenant users always; super admin when tenant is selected */}
         {(!isSuperAdmin || tenantFilter) && (
-          <select value={clinicFilter} onChange={(e) => handleClinicFilter(e.target.value)} className="input py-2.5 min-w-40">
+          <select value={clinicFilter} onChange={(e) => handleClinicFilter(e.target.value)} className="input py-2.5 w-56 shrink-0">
             <option value="">All Clinics</option>
             {(isSuperAdmin ? tenantClinics : clinics).map((c) => (
               <option key={c.id} value={c.id}>
@@ -226,7 +226,7 @@ export default function UsersPage() {
 
         {/* Role filter — not needed for global super admin view */}
         {(!isSuperAdmin || tenantFilter) && (
-          <select value={roleFilter} onChange={(e) => handleRoleFilter(e.target.value)} className="input py-2.5 min-w-36">
+          <select value={roleFilter} onChange={(e) => handleRoleFilter(e.target.value)} className="input py-2.5 w-56 shrink-0">
             <option value="">All Roles</option>
             {(isSuperAdmin ? [...ROLES, "tenant_admin"] : ROLES).map((r) => (
               <option key={r} value={r}>
@@ -238,7 +238,7 @@ export default function UsersPage() {
 
         {/* Status filter */}
         {(!isSuperAdmin || tenantFilter) && (
-          <select value={statusFilter} onChange={(e) => handleStatusFilter(e.target.value)} className="input py-2.5 min-w-36">
+          <select value={statusFilter} onChange={(e) => handleStatusFilter(e.target.value)} className="input py-2.5 w-56 shrink-0">
             <option value="">All Statuses</option>
             <option value="active">Active</option>
             <option value="inactive">Inactive</option>
@@ -247,7 +247,6 @@ export default function UsersPage() {
           </select>
         )}
 
-        {/* Active filter count badge */}
         {(tenantFilter || clinicFilter || roleFilter || statusFilter || search) && (
           <button
             onClick={() => {
@@ -259,9 +258,9 @@ export default function UsersPage() {
               setSearchInput("");
               setPage(1);
             }}
-            className="px-3 py-2.5 text-sm text-red-600 hover:text-red-800 hover:bg-red-50 rounded-lg border border-red-200 whitespace-nowrap"
+            className="px-3 py-2.5 text-sm text-red-600 hover:text-red-800 hover:bg-red-50 rounded-lg border border-red-200 whitespace-nowrap shrink-0"
           >
-            Clear filters
+            Clear
           </button>
         )}
       </div>
