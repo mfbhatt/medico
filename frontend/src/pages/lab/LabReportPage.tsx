@@ -34,7 +34,7 @@ export default function LabReportPage() {
   if (isError || !report) return (
     <div className="max-w-3xl mx-auto py-12 text-center">
       <p className="text-slate-500 mb-4">Lab report not found or not available. Please access reports through the patient's lab order history.</p>
-      <button onClick={() => navigate("/lab")} className="text-blue-600 hover:text-blue-700 text-sm font-medium">← Back to Lab Orders</button>
+      <button onClick={() => navigate("/lab")} className="text-primary-600 hover:text-primary-700 text-sm font-medium">← Back to Lab Orders</button>
     </div>
   );
 
@@ -44,7 +44,7 @@ export default function LabReportPage() {
 
   return (
     <div className="max-w-3xl mx-auto">
-      <button onClick={() => navigate("/lab")} className="flex items-center gap-2 text-blue-600 hover:text-blue-700 mb-6 text-sm font-medium">
+      <button onClick={() => navigate("/lab")} className="flex items-center gap-2 text-primary-600 hover:text-primary-700 mb-6 text-sm font-medium">
         <ArrowLeft className="h-4 w-4" /> Back to Lab Orders
       </button>
 
@@ -54,7 +54,7 @@ export default function LabReportPage() {
             <h1 className="text-xl font-bold text-slate-900">Lab Report</h1>
             <p className="text-sm text-slate-500 mt-0.5 font-mono">#{report.order_number ?? id?.slice(0, 8)}</p>
           </div>
-          <button onClick={handlePrint} className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white font-medium px-4 py-2 rounded-lg text-sm">
+          <button onClick={handlePrint} className="btn-primary">
             <Download className="h-4 w-4" /> Download / Print
           </button>
         </div>

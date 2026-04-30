@@ -216,7 +216,7 @@ export default function NewPatientPage() {
         </div>
 
         <div className="flex gap-3 pt-2 border-t border-slate-100">
-          <button type="submit" disabled={mutation.isPending} className="bg-blue-600 hover:bg-blue-700 disabled:bg-blue-400 text-white font-medium px-6 py-2.5 rounded-lg text-sm transition">
+          <button type="submit" disabled={mutation.isPending} className="btn-primary px-6">
             {mutation.isPending ? "Registering…" : "Register Patient"}
           </button>
           <button type="button" onClick={() => navigate("/patients")} className="bg-white hover:bg-slate-50 text-slate-700 border border-slate-200 font-medium px-6 py-2.5 rounded-lg text-sm transition">

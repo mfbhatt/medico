@@ -1,5 +1,6 @@
 import { useState, useCallback } from 'react';
 import { useQuery, useMutation, useQueryClient, keepPreviousData } from '@tanstack/react-query';
+import { useAppSelector } from '@/store/hooks';
 import {
   Chart as ChartJS,
   CategoryScale, LinearScale, BarElement, ArcElement,
@@ -155,12 +156,12 @@ function printReceipt(sale: any, clinicName: string) {
 
 // ─── Add Drug Modal ────────────────────────────────────────────────────────────
 
-function AddDrugModal({ onClose, clinics }: { onClose: () => void; clinics: { id: string; name: string }[] }) {
+function AddDrugModal({ onClose, clinics, defaultClinicId }: { onClose: () => void; clinics: { id: string; name: string }[]; defaultClinicId?: string }) {
   const qc = useQueryClient();
   const [form, setForm] = useState({
     name: '', generic_name: '', brand_name: '', form: 'tablet',
     strength: '', unit: 'mg', category: '', manufacturer: '',
-    clinic_id: clinics[0]?.id ?? '', selling_price: '',
+    clinic_id: defaultClinicId || (clinics[0]?.id ?? ''), selling_price: '',
     unit_cost: '', reorder_level: '10', reorder_quantity: '100',
     requires_prescription: true, is_controlled: false,
     storage_conditions: '',
@@ -498,10 +499,10 @@ function AdjustmentModal({ drug, onClose }: { drug: Drug; onClose: () => void })
 
 interface POItem { drug_id: string; drug_name: string; quantity: number; unit_cost: number }
 
-function PurchaseOrderModal({ onClose, clinics, drugs }: { onClose: () => void; clinics: { id: string; name: string }[]; drugs: Drug[] }) {
+function PurchaseOrderModal({ onClose, clinics, drugs, defaultClinicId }: { onClose: () => void; clinics: { id: string; name: string }[]; drugs: Drug[]; defaultClinicId?: string }) {
   const qc = useQueryClient();
   const [form, setForm] = useState({
-    clinic_id: clinics[0]?.id ?? '',
+    clinic_id: defaultClinicId || (clinics[0]?.id ?? ''),
     supplier_name: '', supplier_contact: '', expected_delivery_date: '', notes: '',
   });
   const [items, setItems] = useState<POItem[]>([]);
@@ -836,7 +837,7 @@ function SaleDetailModal({ saleId, onClose }: { saleId: string; onClose: () => v
 
 // ─── POS Panel ────────────────────────────────────────────────────────────────
 
-function POSPanel({ clinics }: { clinics: { id: string; name: string }[] }) {
+function POSPanel({ clinicId }: { clinicId: string }) {
   const fmt = useCurrency();
   const qc = useQueryClient();
   const [search, setSearch] = useState('');
@@ -851,13 +852,12 @@ function POSPanel({ clinics }: { clinics: { id: string; name: string }[] }) {
   const [completedSale, setCompletedSale] = useState<any>(null);
   const [error, setError] = useState('');
 
-  const clinicId = clinics[0]?.id ?? '';
-
   const { data: drugsData, isLoading, isFetching, isError: drugsError, error: drugsErrorObj } = useQuery({
-    queryKey: ['pharmacy-pos-drugs', debouncedSearch],
+    queryKey: ['pharmacy-pos-drugs', debouncedSearch, clinicId],
     queryFn: () =>
-      api.get('/inventory/drugs', { params: { q: debouncedSearch || undefined, page_size: 30 } })
+      api.get('/inventory/drugs', { params: { q: debouncedSearch || undefined, page_size: 30, ...(clinicId ? { clinic_id: clinicId } : {}) } })
         .then((r) => r.data.data ?? []),
+    enabled: !!clinicId,
     placeholderData: keepPreviousData,
     staleTime: 30_000,
   });
@@ -1006,20 +1006,26 @@ function POSPanel({ clinics }: { clinics: { id: string; name: string }[] }) {
                     key={drug.id}
                     onClick={() => addToCart(drug)}
                     disabled={isOut}
-                    className={`w-full text-left px-4 py-3 transition-colors ${isOut ? 'opacity-40 cursor-not-allowed bg-gray-50' : 'hover:bg-primary-50 cursor-pointer'} ${inCart ? 'bg-primary-50' : ''}`}
+                    className={`group w-full text-left px-4 py-3 transition-colors border-l-2
+                      ${isOut ? 'opacity-40 cursor-not-allowed bg-gray-50 border-transparent' : 'cursor-pointer'}
+                      ${inCart ? 'bg-primary-100 border-primary-500 hover:bg-primary-100' : 'border-transparent hover:bg-primary-100'}`}
                   >
                     <div className="flex items-start justify-between gap-2">
                       <div className="min-w-0">
-                        <p className="font-medium text-gray-900 text-sm truncate">{drug.name}</p>
-                        <p className="text-xs text-gray-500">{drug.form} · {drug.strength} {drug.unit}</p>
-                        {drug.generic_name && <p className="text-xs text-gray-400">{drug.generic_name}</p>}
+                        <p className={`font-semibold text-sm truncate ${inCart ? 'text-primary-900' : 'text-gray-900 group-hover:text-primary-900'}`}>{drug.name}</p>
+                        <p className={`text-xs ${inCart ? 'text-primary-700' : 'text-gray-500 group-hover:text-primary-700'}`}>{drug.form} · {drug.strength} {drug.unit}</p>
+                        {drug.generic_name && <p className={`text-xs ${inCart ? 'text-primary-600' : 'text-gray-400 group-hover:text-primary-600'}`}>{drug.generic_name}</p>}
                       </div>
                       <div className="text-right shrink-0">
-                        <p className="font-semibold text-gray-900 text-sm">{fmt(drug.selling_price)}</p>
-                        <p className={`text-xs ${isOut ? 'text-red-500' : drug.is_low_stock ? 'text-amber-600' : 'text-gray-400'}`}>
+                        <p className={`font-semibold text-sm ${inCart ? 'text-primary-900' : 'text-gray-900 group-hover:text-primary-900'}`}>{fmt(drug.selling_price)}</p>
+                        <p className={`text-xs ${isOut ? 'text-red-500' : drug.is_low_stock ? 'text-amber-600' : inCart ? 'text-primary-600' : 'text-gray-400 group-hover:text-primary-600'}`}>
                           Stock: {drug.total_stock}
                         </p>
-                        {inCart && <span className="text-xs text-primary-600 font-medium">In cart ({inCart.quantity})</span>}
+                        {inCart && (
+                          <span className="inline-flex items-center gap-1 mt-0.5 text-xs font-semibold bg-primary-600 text-white px-2 py-0.5 rounded-full">
+                            In cart · {inCart.quantity}
+                          </span>
+                        )}
                       </div>
                     </div>
                   </button>
@@ -1211,7 +1217,7 @@ function POSPanel({ clinics }: { clinics: { id: string; name: string }[] }) {
 
 // ─── Inventory Tab ────────────────────────────────────────────────────────────
 
-function InventoryTab({ clinics }: { clinics: { id: string; name: string }[] }) {
+function InventoryTab({ clinics, clinicId }: { clinics: { id: string; name: string }[]; clinicId: string }) {
   const fmt = useCurrency();
   const [search, setSearch] = useState('');
   const [page, setPage] = useState(0);
@@ -1222,10 +1228,11 @@ function InventoryTab({ clinics }: { clinics: { id: string; name: string }[] }) 
   const debouncedSearch = useDebounce(search, 300);
 
   const { data, isLoading, isError, error } = useQuery({
-    queryKey: ['pharmacy-drugs', debouncedSearch, page],
+    queryKey: ['pharmacy-drugs', debouncedSearch, page, clinicId],
     queryFn: () =>
-      api.get('/inventory/drugs', { params: { q: debouncedSearch || undefined, page: page + 1, page_size: limit } })
+      api.get('/inventory/drugs', { params: { q: debouncedSearch || undefined, page: page + 1, page_size: limit, ...(clinicId ? { clinic_id: clinicId } : {}) } })
         .then((r) => r.data),
+    enabled: !!clinicId,
     placeholderData: keepPreviousData,
     staleTime: 30_000,
   });
@@ -1322,7 +1329,7 @@ function InventoryTab({ clinics }: { clinics: { id: string; name: string }[] }) 
         )}
       </div>
 
-      {addDrugOpen && <AddDrugModal onClose={() => setAddDrugOpen(false)} clinics={clinics} />}
+      {addDrugOpen && <AddDrugModal onClose={() => setAddDrugOpen(false)} clinics={clinics} defaultClinicId={clinicId} />}
       {stockDrug && <AddStockModal drug={stockDrug} onClose={() => setStockDrug(null)} />}
       {adjustDrug && <AdjustmentModal drug={adjustDrug} onClose={() => setAdjustDrug(null)} />}
     </>
@@ -1331,7 +1338,7 @@ function InventoryTab({ clinics }: { clinics: { id: string; name: string }[] }) 
 
 // ─── Purchase Orders Tab ──────────────────────────────────────────────────────
 
-function PurchaseOrdersTab({ clinics, drugs }: { clinics: { id: string; name: string }[]; drugs: Drug[] }) {
+function PurchaseOrdersTab({ clinics, clinicId, drugs }: { clinics: { id: string; name: string }[]; clinicId: string; drugs: Drug[] }) {
   const fmt = useCurrency();
   const [page, setPage] = useState(0);
   const [poOpen, setPoOpen] = useState(false);
@@ -1339,10 +1346,11 @@ function PurchaseOrdersTab({ clinics, drugs }: { clinics: { id: string; name: st
   const limit = 20;
 
   const { data, isLoading } = useQuery({
-    queryKey: ['pharmacy-pos', page],
+    queryKey: ['pharmacy-pos', page, clinicId],
     queryFn: () =>
-      api.get('/inventory/purchase-orders', { params: { page: page + 1, page_size: limit } })
+      api.get('/inventory/purchase-orders', { params: { page: page + 1, page_size: limit, ...(clinicId ? { clinic_id: clinicId } : {}) } })
         .then((r) => r.data),
+    enabled: !!clinicId,
   });
 
   const { data: poDetail } = useQuery({
@@ -1429,7 +1437,7 @@ function PurchaseOrdersTab({ clinics, drugs }: { clinics: { id: string; name: st
         )}
       </div>
 
-      {poOpen && <PurchaseOrderModal onClose={() => setPoOpen(false)} clinics={clinics} drugs={drugs} />}
+      {poOpen && <PurchaseOrderModal onClose={() => setPoOpen(false)} clinics={clinics} drugs={drugs} defaultClinicId={clinicId} />}
       {receiveItem && poDetail && <ReceivePOModal po={poDetail} onClose={() => setReceiveItem(null)} />}
     </>
   );
@@ -1437,7 +1445,7 @@ function PurchaseOrdersTab({ clinics, drugs }: { clinics: { id: string; name: st
 
 // ─── Sales History Tab ────────────────────────────────────────────────────────
 
-function SalesTab() {
+function SalesTab({ clinicId }: { clinicId: string }) {
   const fmt = useCurrency();
   const [page, setPage] = useState(0);
   const [dateFrom, setDateFrom] = useState('');
@@ -1446,15 +1454,17 @@ function SalesTab() {
   const limit = 25;
 
   const { data, isLoading, isError, error } = useQuery({
-    queryKey: ['pharmacy-sales', page, dateFrom, dateTo],
+    queryKey: ['pharmacy-sales', page, dateFrom, dateTo, clinicId],
     queryFn: () =>
       api.get('/inventory/sales', {
         params: {
           page: page + 1, page_size: limit,
           ...(dateFrom ? { date_from: dateFrom } : {}),
           ...(dateTo ? { date_to: dateTo } : {}),
+          ...(clinicId ? { clinic_id: clinicId } : {}),
         },
       }).then((r) => r.data),
+    enabled: !!clinicId,
     retry: 1,
   });
 
@@ -1553,12 +1563,13 @@ const CHART_COLORS = [
   '#06b6d4', '#f97316', '#84cc16', '#ec4899', '#14b8a6',
 ];
 
-function ReportsTab() {
+function ReportsTab({ clinicId }: { clinicId: string }) {
   const fmt = useCurrency();
 
   const { data: analytics, isLoading } = useQuery({
-    queryKey: ['pharmacy-analytics'],
-    queryFn: () => api.get('/inventory/reports/analytics').then((r) => r.data.data),
+    queryKey: ['pharmacy-analytics', clinicId],
+    queryFn: () => api.get('/inventory/reports/analytics', { params: clinicId ? { clinic_id: clinicId } : {} }).then((r) => r.data.data),
+    enabled: !!clinicId,
     refetchInterval: 60_000,
   });
 
@@ -1701,12 +1712,13 @@ function ReportsTab() {
 
 // ─── Alerts Tab ───────────────────────────────────────────────────────────────
 
-function AlertsTab() {
+function AlertsTab({ clinicId }: { clinicId: string }) {
   const [stockDrug, setStockDrug] = useState<Drug | null>(null);
 
   const { data: alerts, isLoading } = useQuery({
-    queryKey: ['pharmacy-alerts'],
-    queryFn: () => api.get('/inventory/stock-alerts').then((r) => r.data.data ?? []),
+    queryKey: ['pharmacy-alerts', clinicId],
+    queryFn: () => api.get('/inventory/stock-alerts', { params: clinicId ? { clinic_id: clinicId } : {} }).then((r) => r.data.data ?? []),
+    enabled: !!clinicId,
     refetchInterval: 300_000,
   });
 
@@ -1779,7 +1791,7 @@ function AlertsTab() {
                     <span className="badge-blue flex items-center gap-1"><AlertTriangle className="w-3 h-3" /> Low Stock</span>
                     <button
                       onClick={() => openAddStock(alert)}
-                      className="flex items-center gap-1 text-xs font-medium text-white bg-blue-600 hover:bg-blue-700 px-2.5 py-1 rounded-lg transition-colors"
+                      className="flex items-center gap-1 text-xs font-medium text-white bg-primary-600 hover:bg-primary-700 px-2.5 py-1 rounded-lg transition-colors"
                     >
                       <Plus className="w-3 h-3" /> Add Stock
                     </button>
@@ -1799,6 +1811,11 @@ function AlertsTab() {
 
 export default function PharmacyPage() {
   const [tab, setTab] = useState<Tab>('pos');
+  const [selectedClinicId, setSelectedClinicId] = useState('');
+
+  const userClinicId = useAppSelector((s) => (s.auth.user as any)?.clinic_id as string | undefined);
+  const role = useAppSelector((s) => s.auth.user?.role);
+  const isAdminRole = role === 'super_admin' || role === 'tenant_admin' || role === 'clinic_admin';
 
   const { data: clinicsData } = useQuery({
     queryKey: ['clinics-list'],
@@ -1808,15 +1825,25 @@ export default function PharmacyPage() {
     ? clinicsData
     : (clinicsData?.clinics ?? []);
 
+  const effectiveClinicId = isAdminRole
+    ? (selectedClinicId || clinics[0]?.id || '')
+    : (userClinicId || clinics[0]?.id || '');
+
   const { data: drugsData } = useQuery({
-    queryKey: ['pharmacy-drugs-all'],
-    queryFn: () => api.get('/inventory/drugs', { params: { page_size: 200 } }).then((r) => r.data.data ?? []),
+    queryKey: ['pharmacy-drugs-all', effectiveClinicId],
+    queryFn: () =>
+      api.get('/inventory/drugs', { params: { page_size: 200, ...(effectiveClinicId ? { clinic_id: effectiveClinicId } : {}) } })
+        .then((r) => r.data.data ?? []),
+    enabled: !!effectiveClinicId,
   });
   const allDrugs: Drug[] = drugsData ?? [];
 
   const { data: alertsData } = useQuery({
-    queryKey: ['pharmacy-alerts-count'],
-    queryFn: () => api.get('/inventory/stock-alerts').then((r) => r.data.data ?? []),
+    queryKey: ['pharmacy-alerts-count', effectiveClinicId],
+    queryFn: () =>
+      api.get('/inventory/stock-alerts', { params: effectiveClinicId ? { clinic_id: effectiveClinicId } : {} })
+        .then((r) => r.data.data ?? []),
+    enabled: !!effectiveClinicId,
     refetchInterval: 300_000,
   });
   const alertCount = alertsData?.length ?? 0;
@@ -1832,8 +1859,19 @@ export default function PharmacyPage() {
 
   return (
     <div>
-      <div className="page-header">
+      <div className="page-header flex items-center justify-between flex-wrap gap-3">
         <h1 className="page-title">Pharmacy</h1>
+        {isAdminRole && clinics.length > 1 && (
+          <select
+            className="input w-52"
+            value={effectiveClinicId}
+            onChange={(e) => setSelectedClinicId(e.target.value)}
+          >
+            {clinics.map((c) => (
+              <option key={c.id} value={c.id}>{c.name}</option>
+            ))}
+          </select>
+        )}
       </div>
 
       {/* Tabs */}
@@ -1860,12 +1898,12 @@ export default function PharmacyPage() {
         </nav>
       </div>
 
-      {tab === 'pos' && <POSPanel clinics={clinics} />}
-      {tab === 'inventory' && <InventoryTab clinics={clinics} />}
-      {tab === 'orders' && <PurchaseOrdersTab clinics={clinics} drugs={allDrugs} />}
-      {tab === 'sales' && <SalesTab />}
-      {tab === 'reports' && <ReportsTab />}
-      {tab === 'alerts' && <AlertsTab />}
+      {tab === 'pos' && <POSPanel clinicId={effectiveClinicId} />}
+      {tab === 'inventory' && <InventoryTab clinics={clinics} clinicId={effectiveClinicId} />}
+      {tab === 'orders' && <PurchaseOrdersTab clinics={clinics} clinicId={effectiveClinicId} drugs={allDrugs} />}
+      {tab === 'sales' && <SalesTab clinicId={effectiveClinicId} />}
+      {tab === 'reports' && <ReportsTab clinicId={effectiveClinicId} />}
+      {tab === 'alerts' && <AlertsTab clinicId={effectiveClinicId} />}
     </div>
   );
 }

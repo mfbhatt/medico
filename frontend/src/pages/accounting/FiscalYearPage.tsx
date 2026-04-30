@@ -117,7 +117,7 @@ export default function FiscalYearPage() {
                   <td className="px-4 py-3 text-right space-x-2">
                     {!fy.is_closed && (
                       <>
-                        <button onClick={() => openEdit(fy)} className="text-xs text-blue-600 hover:underline">Edit</button>
+                        <button onClick={() => openEdit(fy)} className="text-xs text-primary-600 hover:underline">Edit</button>
                         <button
                           onClick={() => { if (confirm(`Close "${fy.name}"? This cannot be undone.`)) closeMutation.mutate(fy.id); }}
                           className="text-xs text-red-500 hover:underline"

@@ -42,7 +42,7 @@ export default function LabOrdersPage() {
           <p className="text-sm text-slate-500 mt-1">Search a patient to view their lab orders and reports</p>
         </div>
         {selectedPatient && (
-          <button onClick={() => setShowNewModal(true)} className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white font-medium px-4 py-2.5 rounded-lg text-sm">
+          <button onClick={() => setShowNewModal(true)} className="btn-primary">
             <Plus className="h-4 w-4" /> New Lab Order
           </button>
         )}
@@ -121,7 +121,7 @@ export default function LabOrdersPage() {
                       {r.status}
                     </span>
                     {r.id && (
-                      <a href={`/lab/reports/${r.id}`} className="text-xs text-blue-600 hover:text-blue-700 font-medium">
+                      <a href={`/lab/reports/${r.id}`} className="text-xs text-primary-600 hover:text-primary-700 font-medium">
                         View →
                       </a>
                     )}
@@ -353,7 +353,7 @@ function NewLabOrderModal({ patient, onClose, onSuccess }: { patient: any; onClo
         </div>
 
         <div className="flex gap-3 mt-5">
-          <button onClick={() => mutation.mutate()} disabled={mutation.isPending || selectedTests.length === 0 || !doctorId || !clinicId} className="flex-1 bg-blue-600 hover:bg-blue-700 disabled:bg-blue-400 text-white font-medium py-2.5 rounded-lg text-sm">
+          <button onClick={() => mutation.mutate()} disabled={mutation.isPending || selectedTests.length === 0 || !doctorId || !clinicId} className="btn-primary flex-1">
             {mutation.isPending ? "Ordering…" : "Create Order"}
           </button>
           <button onClick={onClose} className="flex-1 bg-white border border-slate-200 hover:bg-slate-50 text-slate-700 font-medium py-2.5 rounded-lg text-sm">Cancel</button>

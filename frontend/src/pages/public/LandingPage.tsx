@@ -125,7 +125,7 @@ export default function LandingPage() {
               </div>
               <Link
                 to="/clinics"
-                className="text-sm font-medium text-blue-600 hover:text-blue-700 flex items-center gap-1"
+                className="text-sm font-medium text-primary-600 hover:text-primary-700 flex items-center gap-1"
               >
                 View all <ChevronRight className="h-4 w-4" />
               </Link>

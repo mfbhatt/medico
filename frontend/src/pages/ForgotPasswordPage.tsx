@@ -47,7 +47,7 @@ export default function ForgotPasswordPage() {
   return (
     <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-50 to-indigo-100 px-4">
       <div className="bg-white rounded-lg shadow-lg p-8 max-w-md w-full">
-        <button onClick={() => navigate("/login")} className="flex items-center text-indigo-600 hover:text-indigo-700 mb-6 transition">
+        <button onClick={() => navigate("/login")} className="flex items-center text-primary-600 hover:text-primary-700 mb-6 transition">
           <ArrowLeft className="w-4 h-4 mr-2" />
           Back to Login
         </button>

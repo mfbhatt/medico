@@ -92,7 +92,7 @@ export default function TenantsPage() {
           <h1 className="text-2xl font-bold text-slate-900">Tenant Management</h1>
           <p className="text-sm text-slate-500 mt-1">Manage clinic organizations and subscriptions</p>
         </div>
-        <button onClick={() => setShowNewModal(true)} className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white font-medium px-4 py-2.5 rounded-lg text-sm">
+        <button onClick={() => setShowNewModal(true)} className="btn-primary">
           <Plus className="h-4 w-4" /> New Tenant
         </button>
       </div>
@@ -521,7 +521,7 @@ function NewTenantModal({ onClose, onSuccess }: { onClose: () => void; onSuccess
           <button
             onClick={() => mutation.mutate()}
             disabled={mutation.isPending || !canSubmit}
-            className="flex-1 bg-blue-600 hover:bg-blue-700 disabled:bg-blue-400 text-white font-medium py-2.5 rounded-lg text-sm"
+            className="btn-primary flex-1"
           >
             {mutation.isPending ? "Creating…" : "Create Tenant"}
           </button>
@@ -738,7 +738,7 @@ function EditTenantModal({ tenant, onClose, onSuccess }: { tenant: any; onClose:
           <button
             onClick={() => mutation.mutate()}
             disabled={mutation.isPending || !name || !email}
-            className="flex-1 bg-blue-600 hover:bg-blue-700 disabled:bg-blue-400 text-white font-medium py-2.5 rounded-lg text-sm"
+            className="btn-primary flex-1"
           >
             {mutation.isPending ? "Saving…" : "Save Changes"}
           </button>

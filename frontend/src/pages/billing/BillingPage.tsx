@@ -48,7 +48,7 @@ export default function BillingPage() {
           <h1 className="text-2xl font-bold text-slate-900">Billing</h1>
           <p className="text-sm text-slate-500 mt-1">Manage invoices and payments</p>
         </div>
-        <button onClick={() => setShowNewModal(true)} className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white font-medium px-4 py-2.5 rounded-lg text-sm">
+        <button onClick={() => setShowNewModal(true)} className="btn-primary">
           <Plus className="h-4 w-4" /> New Invoice
         </button>
       </div>
@@ -391,7 +391,7 @@ function NewInvoiceModal({ onClose, onSuccess }: { onClose: () => void; onSucces
               <button
                 onClick={() => mutation.mutate()}
                 disabled={mutation.isPending || !selectedPatient || !clinicId || !items.some((i) => i.description && i.unit_price)}
-                className="flex-1 bg-blue-600 hover:bg-blue-700 disabled:bg-blue-400 text-white font-medium py-2.5 rounded-lg text-sm"
+                className="btn-primary flex-1"
               >
                 {mutation.isPending ? 'Creating…' : 'Create Invoice'}
               </button>

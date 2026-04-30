@@ -25,7 +25,7 @@ export default function VoucherDetailPage() {
 
   return (
     <div className="max-w-3xl mx-auto">
-      <button onClick={() => navigate(-1)} className="print:hidden flex items-center gap-2 text-blue-600 hover:text-blue-700 mb-5 text-sm font-medium">
+      <button onClick={() => navigate(-1)} className="print:hidden flex items-center gap-2 text-primary-600 hover:text-primary-700 mb-5 text-sm font-medium">
         ← Back
       </button>
 

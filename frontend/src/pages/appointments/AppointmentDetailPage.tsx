@@ -123,7 +123,7 @@ export default function AppointmentDetailPage() {
 
   return (
     <div className="max-w-3xl mx-auto">
-      <button onClick={() => navigate("/appointments")} className="flex items-center gap-2 text-blue-600 hover:text-blue-700 mb-6 text-sm font-medium">
+      <button onClick={() => navigate("/appointments")} className="flex items-center gap-2 text-primary-600 hover:text-primary-700 mb-6 text-sm font-medium">
         <ArrowLeft className="h-4 w-4" /> Back to Appointments
       </button>
 
@@ -320,7 +320,7 @@ export default function AppointmentDetailPage() {
               <button
                 onClick={() => handlePay("razorpay")}
                 disabled={paying}
-                className="w-full bg-blue-600 hover:bg-blue-700 disabled:bg-blue-300 text-white font-medium py-2.5 rounded-lg text-sm"
+                className="btn-primary w-full"
               >
                 💳 Pay with Razorpay
               </button>

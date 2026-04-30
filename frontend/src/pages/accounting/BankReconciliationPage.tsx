@@ -238,7 +238,7 @@ export default function BankReconciliationPage() {
                     <td className="px-4 py-2 text-right space-x-2">
                       {line.status === 'unmatched' ? (
                         <button
-                          className="text-xs text-blue-600 hover:underline"
+                          className="text-xs text-primary-600 hover:underline"
                           onClick={() => setSelectedRecon(selectedRecon === line.id ? null : line.id)}
                         >
                           Match

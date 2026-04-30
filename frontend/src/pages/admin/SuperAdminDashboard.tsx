@@ -132,7 +132,7 @@ export default function SuperAdminDashboard() {
           <h3 className="font-semibold text-slate-900">All Tenants</h3>
           <Link
             to="/admin/tenants"
-            className="text-sm text-blue-600 hover:text-blue-700 flex items-center gap-1"
+            className="text-sm text-primary-600 hover:text-primary-700 flex items-center gap-1"
           >
             View all <ChevronRight className="h-4 w-4" />
           </Link>
@@ -180,7 +180,7 @@ export default function SuperAdminDashboard() {
                   <td className="px-5 py-3.5 text-right">
                     <Link
                       to={`/admin/tenants`}
-                      className="text-xs text-blue-600 hover:text-blue-700 font-medium"
+                      className="text-xs text-primary-600 hover:text-primary-700 font-medium"
                     >
                       Manage
                     </Link>

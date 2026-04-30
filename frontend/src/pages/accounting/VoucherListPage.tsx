@@ -150,7 +150,7 @@ export default function VoucherListPage() {
                     <Link to={`/accounting/vouchers/${v.id}`} className="text-primary-600 hover:text-primary-800 text-sm font-medium">View</Link>
                     {!v.source_type && (
                       <>
-                        <button onClick={() => navigate(`/accounting/vouchers/${v.id}/edit`)} className="text-blue-500 hover:text-blue-700 text-sm font-medium">Edit</button>
+                        <button onClick={() => navigate(`/accounting/vouchers/${v.id}/edit`)} className="text-primary-600 hover:text-primary-700 text-sm font-medium">Edit</button>
                         <button onClick={() => { if (confirm('Delete this voucher?')) deleteMutation.mutate(v.id); }} className="text-red-500 hover:text-red-700 text-sm font-medium">Delete</button>
                       </>
                     )}

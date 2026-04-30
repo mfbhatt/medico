@@ -314,7 +314,7 @@ export default function AppointmentsPage() {
                     {canReschedule(appt.status) && (
                       <button
                         onClick={() => { setRescheduleAppt(appt); setRescheduleDate(appt.appointment_date ?? today); setRescheduleTime(appt.start_time ?? ''); }}
-                        className="text-blue-600 hover:text-blue-800 text-sm font-medium"
+                        className="text-primary-600 hover:text-primary-800 text-sm font-medium"
                       >
                         Reschedule
                       </button>
@@ -453,7 +453,7 @@ export default function AppointmentsPage() {
                 <button
                   onClick={() => handlePay(payAppt, 'razorpay')}
                   disabled={paying}
-                  className="w-full bg-blue-600 hover:bg-blue-700 disabled:bg-blue-300 text-white font-medium py-2.5 rounded-lg text-sm flex items-center justify-center gap-2"
+                  className="btn-primary w-full"
                 >
                   💳 Pay with Razorpay
                 </button>
@@ -500,7 +500,7 @@ export default function AppointmentsPage() {
                 <button
                   onClick={() => rescheduleMutation.mutate({ id: rescheduleAppt.id, appointment_date: rescheduleDate, start_time: rescheduleTime })}
                   disabled={rescheduleMutation.isPending || !rescheduleDate || !rescheduleTime}
-                  className="flex-1 bg-blue-600 hover:bg-blue-700 disabled:bg-blue-300 text-white font-medium py-2 px-4 rounded-lg text-sm transition"
+                  className="btn-primary flex-1"
                 >
                   {rescheduleMutation.isPending ? 'Saving…' : 'Confirm Reschedule'}
                 </button>

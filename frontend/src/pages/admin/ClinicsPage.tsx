@@ -83,7 +83,7 @@ export default function ClinicsPage() {
           <h1 className="text-2xl font-bold text-slate-900">Clinics</h1>
           <p className="text-sm text-slate-500 mt-1">Manage clinic branches and locations</p>
         </div>
-        <button onClick={() => setShowNewModal(true)} className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white font-medium px-4 py-2.5 rounded-lg text-sm">
+        <button onClick={() => setShowNewModal(true)} className="btn-primary">
           <Plus className="h-4 w-4" /> Add Clinic
         </button>
       </div>
@@ -354,7 +354,7 @@ function ClinicModal({ isSuperAdmin, clinic, onClose, onSuccess }: { isSuperAdmi
           <button
             onClick={() => mutation.mutate()}
             disabled={mutation.isPending || !canSubmit}
-            className="flex-1 bg-blue-600 hover:bg-blue-700 disabled:bg-blue-400 text-white font-medium py-2.5 rounded-lg text-sm"
+            className="btn-primary flex-1"
           >
             {mutation.isPending ? "Saving…" : isEdit ? "Save Changes" : "Create Clinic"}
           </button>

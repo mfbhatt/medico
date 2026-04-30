@@ -132,7 +132,7 @@ export default function DoctorSchedulePage() {
 
   return (
     <div className="max-w-3xl mx-auto">
-      <button onClick={() => navigate(`/doctors/${id}`)} className="flex items-center gap-2 text-blue-600 hover:text-blue-700 mb-6 text-sm font-medium">
+      <button onClick={() => navigate(`/doctors/${id}`)} className="flex items-center gap-2 text-primary-600 hover:text-primary-700 mb-6 text-sm font-medium">
         <ArrowLeft className="h-4 w-4" /> Back to Doctor
       </button>
 
@@ -252,7 +252,7 @@ export default function DoctorSchedulePage() {
           <p className="mt-2 text-xs text-red-600">{addError}</p>
         )}
 
-        <button onClick={addEntry} className="mt-3 bg-blue-600 hover:bg-blue-700 text-white font-medium px-4 py-2 rounded-lg text-sm">
+        <button onClick={addEntry} className="btn-primary mt-3">
           {newEntry.selected_days.length > 1
             ? `Apply to ${newEntry.selected_days.length} days`
             : "Add Slot"}
@@ -305,7 +305,7 @@ export default function DoctorSchedulePage() {
         <button
           onClick={() => saveMutation.mutate()}
           disabled={saveMutation.isPending || schedules.length === 0}
-          className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 disabled:bg-blue-400 text-white font-medium px-5 py-2.5 rounded-lg text-sm"
+          className="btn-primary px-5"
         >
           <Save className="h-4 w-4" />
           {saveMutation.isPending ? "Saving…" : "Save Schedule"}

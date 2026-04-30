@@ -178,7 +178,7 @@ export default function BudgetPage() {
                   </td>
                   <td className="px-4 py-3 text-right space-x-2">
                     <button
-                      className="text-xs text-blue-600 hover:underline"
+                      className="text-xs text-primary-600 hover:underline"
                       onClick={() => {
                         setSelectedBudgetId(b.id);
                         setView('editor');

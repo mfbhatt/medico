@@ -181,7 +181,7 @@ export default function UsersPage() {
           <p className="text-sm text-slate-500 mt-1">Manage staff accounts and access</p>
         </div>
         {!isSuperAdmin && (
-          <button onClick={() => setShowNewModal(true)} className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white font-medium px-4 py-2.5 rounded-lg text-sm">
+          <button onClick={() => setShowNewModal(true)} className="btn-primary">
             <Plus className="h-4 w-4" /> Add User
           </button>
         )}
@@ -521,7 +521,7 @@ function UserFormModal({ user, isSuperAdmin, clinics, onClose, onSuccess }: { us
           <button
             onClick={() => mutation.mutate()}
             disabled={mutation.isPending || !form.first_name || !form.last_name || (!isEdit && (!form.email || !form.password))}
-            className="flex-1 bg-blue-600 hover:bg-blue-700 disabled:bg-blue-400 text-white font-medium py-2.5 rounded-lg text-sm"
+            className="btn-primary flex-1"
           >
             {mutation.isPending ? "Saving…" : isEdit ? "Save Changes" : "Create User"}
           </button>

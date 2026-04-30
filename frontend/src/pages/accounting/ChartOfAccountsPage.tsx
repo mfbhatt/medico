@@ -22,7 +22,7 @@ function AccountRow({ account, onEdit, onDelete }: { account: any; onEdit: (a: a
         <span className={`${typeColors[account.account_type] ?? 'badge-gray'} text-xs`}>{account.account_type}</span>
         {!account.is_system && (
           <div className="flex gap-2">
-            <button onClick={() => onEdit(account)} className="text-xs text-blue-600 hover:text-blue-800">Edit</button>
+            <button onClick={() => onEdit(account)} className="text-xs text-primary-600 hover:text-primary-800">Edit</button>
             <button onClick={() => onDelete(account)} className="text-xs text-red-500 hover:text-red-700">Delete</button>
           </div>
         )}

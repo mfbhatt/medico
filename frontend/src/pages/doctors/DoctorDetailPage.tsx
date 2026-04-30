@@ -201,7 +201,7 @@ export default function DoctorDetailPage() {
     <div className="max-w-3xl mx-auto">
       <button
         onClick={() => navigate("/doctors")}
-        className="flex items-center gap-2 text-blue-600 hover:text-blue-700 mb-6 text-sm font-medium"
+        className="flex items-center gap-2 text-primary-600 hover:text-primary-700 mb-6 text-sm font-medium"
       >
         <ArrowLeft className="h-4 w-4" /> Back to Doctors
       </button>
@@ -363,7 +363,7 @@ export default function DoctorDetailPage() {
             </button>
             <Link
               to={`/doctors/${id}/schedule`}
-              className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white font-medium px-4 py-2.5 rounded-lg text-sm"
+              className="btn-primary"
             >
               <Calendar className="h-4 w-4" /> Manage Schedule
             </Link>

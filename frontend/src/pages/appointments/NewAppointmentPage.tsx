@@ -438,7 +438,7 @@ export default function NewAppointmentPage() {
                     type="button"
                     onClick={handleRegisterPatient}
                     disabled={registerLoading || !registerForm.first_name || !registerForm.last_name || !registerForm.date_of_birth || !registerForm.gender}
-                    className="w-full bg-blue-600 hover:bg-blue-700 disabled:bg-blue-400 text-white text-sm font-medium py-2 rounded-lg transition"
+                    className="btn-primary w-full"
                   >
                     {registerLoading ? "Registering…" : "Register & Book for Them"}
                   </button>
@@ -622,7 +622,7 @@ export default function NewAppointmentPage() {
                   type="button"
                   onClick={handleRegisterPatient}
                   disabled={registerLoading || !registerForm.first_name || !registerForm.last_name || !registerForm.date_of_birth || !registerForm.gender}
-                  className="w-full bg-blue-600 hover:bg-blue-700 disabled:bg-blue-400 text-white text-sm font-medium py-2 rounded-lg transition"
+                  className="btn-primary w-full"
                 >
                   {registerLoading ? "Registering…" : "Register & Select Patient"}
                 </button>
@@ -832,7 +832,7 @@ export default function NewAppointmentPage() {
           <button
             type="submit"
             disabled={mutation.isPending || paying || !form.startTime || (patientAlreadyBooked && form.appointmentType !== "emergency")}
-            className="bg-blue-600 hover:bg-blue-700 disabled:bg-blue-400 text-white font-medium px-6 py-2.5 rounded-lg text-sm transition"
+            className="btn-primary px-6"
           >
             {mutation.isPending || paying
               ? (paymentChoice === "razorpay" ? "Preparing payment…" : "Booking…")

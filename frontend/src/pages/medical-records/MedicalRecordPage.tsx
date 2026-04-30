@@ -70,7 +70,7 @@ export default function MedicalRecordPage() {
           </h1>
           <p className="text-sm text-slate-500 mt-1 font-mono">Patient ID: {recordId?.slice(0, 16)}</p>
         </div>
-        <button onClick={() => setShowAddNote(true)} className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white font-medium px-4 py-2.5 rounded-lg text-sm">
+        <button onClick={() => setShowAddNote(true)} className="btn-primary">
           <Plus className="h-4 w-4" /> Add SOAP Note
         </button>
       </div>
@@ -106,7 +106,7 @@ export default function MedicalRecordPage() {
             </div>
           </div>
           <div className="flex gap-3 mt-4">
-            <button onClick={() => createMutation.mutate()} disabled={createMutation.isPending || !noteForm.subjective} className="bg-blue-600 hover:bg-blue-700 disabled:bg-blue-400 text-white font-medium px-4 py-2 rounded-lg text-sm">
+            <button onClick={() => createMutation.mutate()} disabled={createMutation.isPending || !noteForm.subjective} className="btn-primary">
               {createMutation.isPending ? "Saving…" : "Save Note"}
             </button>
             <button onClick={() => setShowAddNote(false)} className="bg-white border border-slate-200 hover:bg-slate-50 text-slate-700 font-medium px-4 py-2 rounded-lg text-sm">Cancel</button>

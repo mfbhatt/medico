@@ -105,7 +105,7 @@ export default function PublicClinicsPage() {
             </div>
             <button
               type="submit"
-              className="bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium px-5 py-2.5 rounded-lg transition-colors"
+              className="btn-primary px-5"
             >
               Search
             </button>
@@ -240,7 +240,7 @@ export default function PublicClinicsPage() {
                 setCity("");
                 setSearchParams({});
               }}
-              className="text-blue-600 hover:text-blue-700 text-sm font-medium"
+              className="text-primary-600 hover:text-primary-700 text-sm font-medium"
             >
               Clear filters
             </button>

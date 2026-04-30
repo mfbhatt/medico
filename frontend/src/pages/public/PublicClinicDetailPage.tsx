@@ -448,7 +448,7 @@ export default function PublicClinicDetailPage() {
                                   state: { from: { pathname: `/clinics/${clinicId}` } },
                                 })
                               }
-                              className="inline-flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium px-5 py-2.5 rounded-lg transition-colors"
+                              className="btn-primary px-5"
                             >
                               Sign in to confirm booking
                             </button>
@@ -456,7 +456,7 @@ export default function PublicClinicDetailPage() {
                             <button
                               onClick={handleBook}
                               disabled={booking}
-                              className="inline-flex items-center gap-2 bg-blue-600 hover:bg-blue-700 disabled:opacity-60 text-white text-sm font-medium px-5 py-2.5 rounded-lg transition-colors"
+                              className="btn-primary px-5"
                             >
                               {booking ? (
                                 <>
