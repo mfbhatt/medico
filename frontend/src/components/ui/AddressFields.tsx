@@ -1,4 +1,5 @@
-import { useEffect } from "react";
+import { useQuery } from "@tanstack/react-query";
+import api from "@/services/api";
 import { ALL_COUNTRIES, type Country } from "@/utils/addressData";
 
 export interface AddressValue {
@@ -8,16 +9,26 @@ export interface AddressValue {
   postal_code: string;
 }
 
+interface ApiState {
+  id: string;
+  code: string;
+  name: string;
+  country_code: string;
+}
+
+interface ApiCity {
+  id: string;
+  name: string;
+  state_id: string;
+  country_code: string;
+}
+
 interface AddressFieldsProps {
   value: AddressValue;
   onChange: (val: AddressValue) => void;
-  /** List of countries to show in the dropdown (from useEnabledCountries) */
   countries: Country[];
-  /** Field-level required flags */
   required?: { country?: boolean; state?: boolean; city?: boolean; postal_code?: boolean };
-  /** Tailwind class applied to each input/select */
   inputCls?: string;
-  /** Show inline labels above each field */
   showLabels?: boolean;
 }
 
@@ -34,14 +45,37 @@ export default function AddressFields({
     ALL_COUNTRIES.find((c) => c.code === value.country) ??
     null;
 
-  // Reset state when country changes
-  useEffect(() => {
-    if (value.state && selectedCountry && selectedCountry.states.length > 0) {
-      const valid = selectedCountry.states.some((s) => s.code === value.state);
-      if (!valid) onChange({ ...value, state: "" });
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [value.country]);
+  // Fetch states from DB for the selected country
+  const { data: statesData = [] } = useQuery<ApiState[]>({
+    queryKey: ["location-states", value.country],
+    queryFn: () =>
+      api
+        .get(`/locations/countries/${value.country}/states`)
+        .then((r) => r.data.data),
+    enabled: !!value.country,
+    staleTime: 10 * 60 * 1000,
+  });
+
+  // Fetch cities from DB for the selected state
+  const { data: citiesData = [] } = useQuery<ApiCity[]>({
+    queryKey: ["location-cities", value.country, value.state],
+    queryFn: () =>
+      api
+        .get(`/locations/countries/${value.country}/states/${value.state}/cities`)
+        .then((r) => r.data.data),
+    enabled: !!value.country && !!value.state,
+    staleTime: 10 * 60 * 1000,
+  });
+
+  // When country changes: clear state, city, and postal_code
+  const handleCountryChange = (countryCode: string) => {
+    onChange({ country: countryCode, state: "", city: "", postal_code: "" });
+  };
+
+  // When state changes: clear city
+  const handleStateChange = (stateCode: string) => {
+    onChange({ ...value, state: stateCode, city: "" });
+  };
 
   const set = (field: keyof AddressValue) =>
     (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) =>
@@ -49,7 +83,8 @@ export default function AddressFields({
 
   const stateLabel = selectedCountry?.stateLabel ?? "State / Region";
   const postalLabel = selectedCountry?.postalLabel ?? "Postal Code";
-  const hasStateList = (selectedCountry?.states.length ?? 0) > 0;
+  const hasStates = statesData.length > 0;
+  const hasCities = citiesData.length > 0;
 
   const labelCls = "text-xs text-slate-500 mb-1 block";
 
@@ -64,7 +99,7 @@ export default function AddressFields({
         )}
         <select
           value={value.country}
-          onChange={(e) => onChange({ ...value, country: e.target.value, state: "" })}
+          onChange={(e) => handleCountryChange(e.target.value)}
           required={required.country}
           className={inputCls}
         >
@@ -77,39 +112,24 @@ export default function AddressFields({
         </select>
       </div>
 
-      {/* City / State / Postal in a row */}
+      {/* State / City / Postal in a row — order: State, City, Postal */}
       <div className="grid grid-cols-3 gap-3">
-        <div>
-          {showLabels && (
-            <label className={labelCls}>
-              City{required.city ? " *" : ""}
-            </label>
-          )}
-          <input
-            type="text"
-            placeholder="City"
-            value={value.city}
-            onChange={set("city")}
-            required={required.city}
-            className={inputCls}
-          />
-        </div>
-
+        {/* State */}
         <div>
           {showLabels && (
             <label className={labelCls}>
               {stateLabel}{required.state ? " *" : ""}
             </label>
           )}
-          {hasStateList ? (
+          {hasStates ? (
             <select
               value={value.state}
-              onChange={set("state")}
+              onChange={(e) => handleStateChange(e.target.value)}
               required={required.state}
               className={inputCls}
             >
               <option value="">Select…</option>
-              {selectedCountry!.states.map((s) => (
+              {statesData.map((s) => (
                 <option key={s.code} value={s.code}>
                   {s.name}
                 </option>
@@ -127,6 +147,40 @@ export default function AddressFields({
           )}
         </div>
 
+        {/* City */}
+        <div>
+          {showLabels && (
+            <label className={labelCls}>
+              City{required.city ? " *" : ""}
+            </label>
+          )}
+          {hasCities ? (
+            <select
+              value={value.city}
+              onChange={set("city")}
+              required={required.city}
+              className={inputCls}
+            >
+              <option value="">Select…</option>
+              {citiesData.map((c) => (
+                <option key={c.id} value={c.name}>
+                  {c.name}
+                </option>
+              ))}
+            </select>
+          ) : (
+            <input
+              type="text"
+              placeholder="City"
+              value={value.city}
+              onChange={set("city")}
+              required={required.city}
+              className={inputCls}
+            />
+          )}
+        </div>
+
+        {/* Postal code */}
         <div>
           {showLabels && (
             <label className={labelCls}>

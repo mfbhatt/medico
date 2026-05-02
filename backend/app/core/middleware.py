@@ -213,6 +213,12 @@ TENANT_EXEMPT_PATHS = {
     "/api/v1/tenants/onboard",
 }
 
+TENANT_EXEMPT_PREFIXES = (
+    "/api/v1/public/",
+    "/api/v1/admin/",
+    "/api/v1/locations/",  # global reference data, no tenant context needed
+)
+
 
 # ✅ Tenant Middleware
 class TenantMiddleware(BaseHTTPMiddleware):
@@ -221,8 +227,7 @@ class TenantMiddleware(BaseHTTPMiddleware):
         if (
             request.method == "OPTIONS"
             or path in TENANT_EXEMPT_PATHS
-            or path.startswith("/api/v1/public/")
-            or path.startswith("/api/v1/admin/")
+            or any(path.startswith(p) for p in TENANT_EXEMPT_PREFIXES)
         ):
             return await call_next(request)
 

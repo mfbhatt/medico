@@ -41,6 +41,7 @@ from app.models.inventory import (  # noqa: F401
 from app.models.notification import Notification, AuditLog  # noqa: F401
 from app.models.specialization import Specialization  # noqa: F401
 from app.models.platform_config import PlatformConfig  # noqa: F401
+from app.models.location import Country, State, City  # noqa: F401
 from app.models.accounting import (  # noqa: F401
     AccountGroup, Account, Voucher, VoucherLine,
     FiscalYear, BankReconciliation, Budget, BudgetLine,
