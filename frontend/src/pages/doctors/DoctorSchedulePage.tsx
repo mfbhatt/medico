@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Calendar, Clock, Plus, Trash2, ArrowLeft, Save } from "lucide-react";
@@ -48,27 +48,41 @@ export default function DoctorSchedulePage() {
     enabled: !!id,
   });
 
-  // Populate from doctor's existing schedules if available
-  const existingSchedules: ScheduleEntry[] = (doctor?.schedules ?? []).map((s: any) => ({
-    clinic_id: s.clinic_id,
-    day_of_week: s.day_of_week,
-    start_time: s.start_time,
-    end_time: s.end_time,
-    slot_duration_minutes: s.slot_duration_minutes ?? 30,
-    max_patients: s.max_patients ?? 20,
-  }));
+  const [schedules, setSchedules] = useState<ScheduleEntry[]>([]);
+  const [schedulesInitialized, setSchedulesInitialized] = useState(false);
 
-  const [schedules, setSchedules] = useState<ScheduleEntry[]>(existingSchedules);
+  useEffect(() => {
+    if (doctor && !schedulesInitialized) {
+      setSchedules(
+        (doctor.schedules ?? []).map((s: any) => ({
+          clinic_id: s.clinic_id,
+          day_of_week: s.day_of_week,
+          start_time: s.start_time,
+          end_time: s.end_time,
+          slot_duration_minutes: s.slot_duration_minutes ?? 30,
+          max_patients: s.max_patients ?? 20,
+        }))
+      );
+      setSchedulesInitialized(true);
+    }
+  }, [doctor, schedulesInitialized]);
   const [saveSuccess, setSaveSuccess] = useState(false);
   const [addError, setAddError] = useState("");
   const [newEntry, setNewEntry] = useState<NewEntryForm>({
-    clinic_id: clinics[0]?.id ?? "",
+    clinic_id: "",
     selected_days: ["monday"],
     start_time: "09:00",
     end_time: "17:00",
     slot_duration_minutes: 30,
     max_patients: 20,
   });
+
+  // Auto-select clinic when there is exactly one
+  useEffect(() => {
+    if (clinics.length === 1 && !newEntry.clinic_id) {
+      setNewEntry((p) => ({ ...p, clinic_id: clinics[0].id }));
+    }
+  }, [clinics]);
 
   const saveMutation = useMutation({
     mutationFn: () =>
@@ -115,13 +129,18 @@ export default function DoctorSchedulePage() {
       max_patients: newEntry.max_patients,
     }));
 
-    // Replace existing entries for the same clinic+day combination
     setSchedules((prev) => {
-      const replaced = new Set(newEntry.selected_days.map((d) => `${newEntry.clinic_id}::${d}`));
-      return [
-        ...prev.filter((s) => !replaced.has(`${s.clinic_id}::${s.day_of_week}`)),
-        ...newRows,
-      ];
+      // Skip rows that are exact duplicates (same clinic + day + start + end)
+      const deduped = newRows.filter(
+        (nr) => !prev.some(
+          (s) =>
+            s.clinic_id === nr.clinic_id &&
+            s.day_of_week === nr.day_of_week &&
+            s.start_time === nr.start_time &&
+            s.end_time === nr.end_time
+        )
+      );
+      return [...prev, ...deduped];
     });
   };
 
