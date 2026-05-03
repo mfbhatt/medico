@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, useMemo } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Calendar, Clock, AlertCircle, Lock, CreditCard, Banknote, Search, X } from "lucide-react";
@@ -147,7 +147,44 @@ export default function NewAppointmentPage() {
     queryKey: ["clinics-list"],
     queryFn: () => api.get("/clinics/", { params: { limit: 50 } }).then((r) => r.data.data),
   });
-  const clinics = clinicsData?.clinics ?? clinicsData ?? [];
+  const clinics: any[] = clinicsData?.clinics ?? clinicsData ?? [];
+
+  // Fetch selected doctor's detail to get their clinic assignments
+  const { data: selectedDoctorDetail } = useQuery({
+    queryKey: ["doctor", form.doctorId],
+    queryFn: () => api.get(`/doctors/${form.doctorId}`).then((r) => r.data.data),
+    enabled: !!form.doctorId,
+    staleTime: 5 * 60 * 1000,
+  });
+
+  // Clinics where the doctor has a schedule (unique clinic_ids from schedules)
+  const doctorClinicIds = useMemo(() => {
+    if (!selectedDoctorDetail) return null;
+    const ids = [
+      ...new Set<string>(
+        (selectedDoctorDetail.schedules ?? []).map((s: any) => s.clinic_id as string).filter(Boolean)
+      ),
+    ];
+    return ids.length > 0 ? ids : null;
+  }, [selectedDoctorDetail]);
+
+  const doctorClinics = doctorClinicIds
+    ? clinics.filter((c: any) => doctorClinicIds.includes(c.id))
+    : clinics;
+
+  // Auto-select clinic when doctor has exactly one clinic, or clear if current clinic
+  // doesn't belong to the newly selected doctor
+  useEffect(() => {
+    if (!form.doctorId) return;
+    if (doctorClinics.length === 1) {
+      if (form.clinicId !== doctorClinics[0].id) {
+        setBookingError(null);
+        setForm((p) => ({ ...p, clinicId: doctorClinics[0].id, startTime: "" }));
+      }
+    } else if (doctorClinicIds && form.clinicId && !doctorClinicIds.includes(form.clinicId)) {
+      setForm((p) => ({ ...p, clinicId: "", startTime: "" }));
+    }
+  }, [doctorClinics, doctorClinicIds]);
 
   const [bookingError, setBookingError] = useState<string | null>(null);
   const [, setBookedApptId] = useState<string | null>(null);
@@ -651,7 +688,7 @@ export default function NewAppointmentPage() {
           <label className="block text-sm font-medium text-slate-700 mb-1">Clinic *</label>
           <select value={form.clinicId} onChange={(e) => set("clinicId", e.target.value)} required className={cls}>
             <option value="">Select clinic…</option>
-            {clinics.map((c: any) => (
+            {doctorClinics.map((c: any) => (
               <option key={c.id} value={c.id}>{c.name}</option>
             ))}
           </select>
