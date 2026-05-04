@@ -33,7 +33,9 @@ interface EditDoctorForm {
   first_name: string;
   middle_name: string;
   last_name: string;
+  email: string;
   phone: string;
+  new_password: string;
   // Doctor profile fields
   registration_number: string;
   specialization: string;
@@ -50,7 +52,9 @@ const INITIAL_EDIT_FORM: EditDoctorForm = {
   first_name: '',
   middle_name: '',
   last_name: '',
+  email: '',
   phone: '',
+  new_password: '',
   registration_number: '',
   specialization: '',
   experience_years: '',
@@ -152,7 +156,9 @@ export default function DoctorsPage() {
           first_name: form.first_name || undefined,
           middle_name: form.middle_name || undefined,
           last_name: form.last_name || undefined,
+          email: form.email || undefined,
           phone: form.phone || undefined,
+          new_password: form.new_password || undefined,
         }),
       ]);
     },
@@ -205,7 +211,9 @@ export default function DoctorsPage() {
       first_name: doctor.first_name ?? '',
       middle_name: doctor.middle_name ?? '',
       last_name: doctor.last_name ?? '',
+      email: doctor.email ?? '',
       phone: doctor.phone ?? '',
+      new_password: '',
       registration_number: doctor.registration_number ?? '',
       specialization: doctor.primary_specialization ?? '',
       experience_years: doctor.experience_years != null ? String(doctor.experience_years) : '',
@@ -421,9 +429,29 @@ export default function DoctorsPage() {
                     <input className="input" value={editForm.last_name} onChange={setEditField('last_name')} />
                   </div>
                 </div>
-                <div className="mt-4">
-                  <label className="label">Phone</label>
-                  <input className="input" type="tel" value={editForm.phone} onChange={setEditField('phone')} />
+                <div className="grid grid-cols-2 gap-4 mt-4">
+                  <div>
+                    <label className="label">Phone</label>
+                    <input className="input" type="tel" value={editForm.phone} onChange={setEditField('phone')} />
+                  </div>
+                  <div>
+                    <label className="label">Email</label>
+                    <input className="input" type="email" value={editForm.email} onChange={setEditField('email')} />
+                  </div>
+                  <div className="col-span-2">
+                    <label className="label">
+                      New Password <span className="text-slate-400 font-normal">(leave blank to keep current)</span>
+                    </label>
+                    <input
+                      className="input"
+                      type="password"
+                      value={editForm.new_password}
+                      onChange={setEditField('new_password')}
+                      placeholder="Minimum 8 characters"
+                      minLength={editForm.new_password ? 8 : undefined}
+                      autoComplete="new-password"
+                    />
+                  </div>
                 </div>
               </div>
 
