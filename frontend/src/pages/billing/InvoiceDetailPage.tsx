@@ -196,7 +196,7 @@ function RecordPaymentModal({ invoice, onClose, onSuccess }: { invoice: any; onC
 
   return (
     <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-      <div className="bg-white rounded-xl w-full max-w-sm p-6">
+      <div className="bg-white rounded-xl w-full max-w-md p-6">
         <div className="flex items-center justify-between mb-5">
           <h3 className="text-base font-semibold text-slate-900">Record Payment</h3>
           <button onClick={onClose}><X className="h-5 w-5 text-slate-400 hover:text-slate-600" /></button>

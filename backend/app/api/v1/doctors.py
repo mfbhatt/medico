@@ -87,6 +87,7 @@ def _doctor_response(d: Doctor) -> dict:
         # User fields
         "full_name": u.full_name if u else None,
         "first_name": u.first_name if u else None,
+        "middle_name": u.middle_name if u else None,
         "last_name": u.last_name if u else None,
         "email": u.email if u else None,
         "phone": u.phone if u else None,

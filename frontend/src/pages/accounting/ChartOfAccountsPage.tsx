@@ -224,7 +224,7 @@ export default function ChartOfAccountsPage() {
       {/* Account Modal */}
       {showAccountModal && (
         <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-xl shadow-xl w-full max-w-md p-6">
+          <div className="bg-white rounded-xl shadow-xl w-full max-w-lg p-6">
             <h2 className="text-lg font-semibold mb-4">{editAccount ? 'Edit Account' : 'New Account'}</h2>
             <div className="space-y-3">
               <div>
@@ -295,7 +295,7 @@ export default function ChartOfAccountsPage() {
       {/* Group Modal */}
       {showGroupModal && (
         <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-xl shadow-xl w-full max-w-sm p-6">
+          <div className="bg-white rounded-xl shadow-xl w-full max-w-md p-6">
             <h2 className="text-lg font-semibold mb-4">{editGroup ? 'Edit Group' : 'New Group'}</h2>
             <div className="space-y-3">
               <div>

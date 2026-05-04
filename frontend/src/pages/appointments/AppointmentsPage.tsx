@@ -380,7 +380,7 @@ export default function AppointmentsPage() {
       {/* Cancel / Check-In confirmation dialog */}
       {confirm && (
         <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-xl shadow-xl w-full max-w-sm">
+          <div className="bg-white rounded-xl shadow-xl w-full max-w-md">
             <div className="p-5">
               <h2 className="text-lg font-semibold text-gray-900 mb-1">
                 {confirm.type === 'cancel' ? 'Cancel Appointment' : 'Check In Patient'}
@@ -431,7 +431,7 @@ export default function AppointmentsPage() {
       {/* Payment dialog */}
       {payAppt && (
         <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-xl shadow-xl w-full max-w-sm">
+          <div className="bg-white rounded-xl shadow-xl w-full max-w-md">
             <div className="p-5">
               <h2 className="text-lg font-semibold text-gray-900 mb-1">Pay for Appointment</h2>
               <p className="text-sm text-gray-500 mb-1">Dr. {payAppt.doctor_name}</p>
@@ -469,7 +469,7 @@ export default function AppointmentsPage() {
       {/* Reschedule dialog */}
       {rescheduleAppt && (
         <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-xl shadow-xl w-full max-w-sm">
+          <div className="bg-white rounded-xl shadow-xl w-full max-w-md">
             <div className="p-5">
               <h2 className="text-lg font-semibold text-gray-900 mb-1">Reschedule Appointment</h2>
               <p className="text-sm text-gray-500 mb-4">
