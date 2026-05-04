@@ -16,15 +16,15 @@ export default function AuthLayout() {
               />
             </svg>
           </div>
-          <h1 className="text-2xl font-bold text-gray-900">ClinicManagement</h1>
-          <p className="text-sm text-gray-500 mt-1">Enterprise Health Center Platform</p>
+          <h1 className="text-2xl font-bold text-primary-900">ClinicManagement</h1>
+          <p className="text-sm text-primary-500 mt-1">Enterprise Health Center Platform</p>
         </div>
 
         <div className="card p-8 shadow-xl">
           <Outlet />
         </div>
 
-        <p className="text-center text-xs text-gray-400 mt-6">
+        <p className="text-center text-xs text-primary-400 mt-6">
           &copy; {new Date().getFullYear()} ClinicManagement. All rights reserved.
         </p>
       </div>

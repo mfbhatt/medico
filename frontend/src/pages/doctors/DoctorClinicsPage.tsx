@@ -87,6 +87,12 @@ export default function DoctorClinicsPage() {
     onSuccess: () => qc.invalidateQueries({ queryKey: ['doctor-clinics', doctorId] }),
   });
 
+  const setPrimaryMutation = useMutation({
+    mutationFn: (clinicId: string) =>
+      api.patch(`/doctors/${doctorId}/clinics/${clinicId}`, { is_primary_clinic: true }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['doctor-clinics', doctorId] }),
+  });
+
   const removeMutation = useMutation({
     mutationFn: (clinicId: string) => api.delete(`/doctors/${doctorId}/clinics/${clinicId}`),
     onSuccess: () => qc.invalidateQueries({ queryKey: ['doctor-clinics', doctorId] }),
@@ -145,10 +151,18 @@ export default function DoctorClinicsPage() {
             <div key={a.id} className="card p-5">
               <div className="flex items-start justify-between mb-3">
                 <div>
-                  <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-2 flex-wrap">
                     <h3 className="font-semibold text-slate-900">{a.clinic_name}</h3>
-                    {a.is_primary_clinic && (
+                    {a.is_primary_clinic ? (
                       <span className="badge badge-blue text-xs">Primary</span>
+                    ) : canManage && (
+                      <button
+                        onClick={() => setPrimaryMutation.mutate(a.clinic_id)}
+                        disabled={setPrimaryMutation.isPending}
+                        className="text-xs text-slate-400 hover:text-blue-600 underline underline-offset-2"
+                      >
+                        Set as primary
+                      </button>
                     )}
                   </div>
                   <span className={`badge mt-1 ${a.is_active ? 'badge-green' : 'badge-gray'}`}>

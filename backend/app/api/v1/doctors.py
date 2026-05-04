@@ -2,7 +2,7 @@
 from typing import Optional
 
 from fastapi import APIRouter, Depends, Query
-from sqlalchemy import select, func
+from sqlalchemy import select, update, func
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -363,14 +363,34 @@ async def assign_doctor_to_clinic(
         existing.consultation_fee_override = body.get("consultation_fee_override", existing.consultation_fee_override)
         existing.start_date = body.get("start_date", existing.start_date)
         existing.end_date = body.get("end_date", existing.end_date)
+        if existing.is_primary_clinic:
+            await db.execute(
+                update(DoctorClinicAssignment)
+                .where(
+                    DoctorClinicAssignment.doctor_id == doctor_id,
+                    DoctorClinicAssignment.clinic_id != clinic_id,
+                    DoctorClinicAssignment.is_deleted == False,
+                )
+                .values(is_primary_clinic=False)
+            )
         await db.commit()
         return _success({"assignment_id": existing.id}, message="Doctor clinic assignment updated")
 
+    is_primary = body.get("is_primary_clinic", False)
+    if is_primary:
+        await db.execute(
+            update(DoctorClinicAssignment)
+            .where(
+                DoctorClinicAssignment.doctor_id == doctor_id,
+                DoctorClinicAssignment.is_deleted == False,
+            )
+            .values(is_primary_clinic=False)
+        )
     assignment = DoctorClinicAssignment(
         tenant_id=current_user.tenant_id,
         doctor_id=doctor_id,
         clinic_id=clinic_id,
-        is_primary_clinic=body.get("is_primary_clinic", False),
+        is_primary_clinic=is_primary,
         consultation_fee_override=body.get("consultation_fee_override"),
         is_active=body.get("is_active", True),
         start_date=body.get("start_date"),
@@ -404,6 +424,17 @@ async def update_doctor_clinic_assignment(
     for field in ["is_active", "is_primary_clinic", "consultation_fee_override", "start_date", "end_date"]:
         if field in body:
             setattr(assignment, field, body[field])
+
+    if body.get("is_primary_clinic"):
+        await db.execute(
+            update(DoctorClinicAssignment)
+            .where(
+                DoctorClinicAssignment.doctor_id == doctor_id,
+                DoctorClinicAssignment.clinic_id != clinic_id,
+                DoctorClinicAssignment.is_deleted == False,
+            )
+            .values(is_primary_clinic=False)
+        )
 
     await db.commit()
     return _success({"assignment_id": assignment.id}, message="Assignment updated")

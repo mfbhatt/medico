@@ -308,7 +308,7 @@ export default function LoginPage() {
           type="button"
           onClick={handleFacebookLogin}
           disabled={loading}
-          className="w-full flex items-center justify-center gap-3 px-4 py-2.5 border border-gray-300 rounded-lg bg-[#1877F2] hover:bg-[#166fe5] text-sm font-medium text-white transition disabled:opacity-60"
+          className="w-full flex items-center justify-center gap-3 px-4 py-2.5 border border-gray-300 rounded-lg btn-primary text-sm font-medium text-white transition disabled:opacity-60"
         >
           <svg className="w-5 h-5 fill-white" viewBox="0 0 24 24">
             <path d="M24 12.073C24 5.405 18.627 0 12 0S0 5.405 0 12.073C0 18.1 4.388 23.094 10.125 24v-8.437H7.078v-3.49h3.047V9.41c0-3.025 1.792-4.697 4.533-4.697 1.312 0 2.686.236 2.686.236v2.97h-1.513c-1.491 0-1.956.93-1.956 1.883v2.25h3.328l-.532 3.49h-2.796V24C19.612 23.094 24 18.1 24 12.073z" />
