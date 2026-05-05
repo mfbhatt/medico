@@ -1,4 +1,5 @@
 import { Outlet } from 'react-router-dom';
+import appConfig from '@/config/app';
 
 export default function AuthLayout() {
   return (
@@ -16,7 +17,7 @@ export default function AuthLayout() {
               />
             </svg>
           </div>
-          <h1 className="text-2xl font-bold text-primary-900">ClinicManagement</h1>
+          <h1 className="text-2xl font-bold text-primary-900">{appConfig.name}</h1>
           <p className="text-sm text-primary-500 mt-1">Enterprise Health Center Platform</p>
         </div>
 
@@ -25,7 +26,7 @@ export default function AuthLayout() {
         </div>
 
         <p className="text-center text-xs text-primary-400 mt-6">
-          &copy; {new Date().getFullYear()} ClinicManagement. All rights reserved.
+          &copy; {new Date().getFullYear()} {appConfig.copyrightHolder}. All rights reserved.
         </p>
       </div>
     </div>

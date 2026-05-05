@@ -1,4 +1,5 @@
 import { LogOut, Settings, Bell } from "lucide-react";
+import appConfig from "@/config/app";
 import { useState } from "react";
 
 interface TopbarProps {
@@ -14,7 +15,7 @@ export default function Topbar({ userName = "Admin User", userRole = "Admin", on
   return (
     <div className="bg-white border-b border-gray-200 px-6 py-4 flex items-center justify-between">
       <div className="flex items-center gap-4">
-        <h1 className="text-2xl font-bold text-gray-900">Clinic Management</h1>
+        <h1 className="text-2xl font-bold text-gray-900">{appConfig.name}</h1>
       </div>
 
       <div className="flex items-center gap-6">

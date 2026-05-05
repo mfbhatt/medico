@@ -3,6 +3,7 @@ import { Link, useSearchParams } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Plus, X } from 'lucide-react';
 import api from '@/services/api';
+import appConfig from '@/config/app';
 
 const STATUS_COLORS: Record<string, string> = {
   draft: 'bg-gray-100 text-gray-600',
@@ -224,7 +225,7 @@ function NewInvoiceModal({ onClose, onSuccess }: { onClose: () => void; onSucces
         key: key_id,
         amount: Math.round(amount * 100),
         currency,
-        name: 'Clinic Management',
+        name: appConfig.name,
         description: `Invoice ${invoice_number}`,
         order_id: razorpay_order_id,
         handler: async (response: any) => {
