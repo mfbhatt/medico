@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { X, Search, Pencil } from 'lucide-react';
+import { X, Search, Pencil, Trash2, Building2 } from 'lucide-react';
 import api from '@/services/api';
 import Pagination from '@/components/ui/Pagination';
 import { useDebounce } from '@/hooks/useDebounce';
@@ -81,6 +81,18 @@ export default function DoctorsPage() {
   const [editForm, setEditForm] = useState<EditDoctorForm>(INITIAL_EDIT_FORM);
   const [editError, setEditError] = useState('');
   const qc = useQueryClient();
+
+  const { data: editDoctorClinics = [] } = useQuery({
+    queryKey: ['doctor-clinics', editDoctorId],
+    queryFn: () => api.get(`/doctors/${editDoctorId}/clinics`).then((r) => r.data.data),
+    enabled: !!editDoctorId,
+  });
+
+  const removeClinicMutation = useMutation({
+    mutationFn: ({ doctorId, clinicId }: { doctorId: string; clinicId: string }) =>
+      api.delete(`/doctors/${doctorId}/clinics/${clinicId}`),
+    onSuccess: (_data, vars) => qc.invalidateQueries({ queryKey: ['doctor-clinics', vars.doctorId] }),
+  });
 
   // Fetch specialization catalog for dropdowns
   const { data: specsData } = useQuery({
@@ -543,6 +555,39 @@ export default function DoctorsPage() {
                   </div>
                 </div>
               </div>
+
+              {/* Clinic Assignments */}
+              {editDoctorClinics.length > 0 && (
+                <div>
+                  <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-3">Clinic Assignments</p>
+                  <div className="space-y-2">
+                    {editDoctorClinics.map((a: any) => (
+                      <div key={a.id} className="flex items-center justify-between px-3 py-2 bg-slate-50 rounded-lg border border-slate-200">
+                        <div className="flex items-center gap-2 min-w-0">
+                          <Building2 className="w-4 h-4 text-slate-400 flex-shrink-0" />
+                          <span className="text-sm text-slate-700 truncate">{a.clinic_name}</span>
+                          {a.is_primary_clinic && (
+                            <span className="badge badge-blue text-xs flex-shrink-0">Primary</span>
+                          )}
+                        </div>
+                        <button
+                          type="button"
+                          title="Remove clinic"
+                          disabled={removeClinicMutation.isPending}
+                          onClick={() => {
+                            if (confirm(`Remove Dr. from ${a.clinic_name}?`)) {
+                              removeClinicMutation.mutate({ doctorId: editDoctorId!, clinicId: a.clinic_id });
+                            }
+                          }}
+                          className="p-1 ml-2 text-slate-400 hover:text-red-600 rounded flex-shrink-0"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
 
               {editError && (
                 <div className="bg-red-50 border border-red-200 text-red-700 px-3 py-2 rounded text-sm">

@@ -222,7 +222,7 @@ function ClinicModal({ isSuperAdmin, clinic, onClose, onSuccess }: { isSuperAdmi
   });
 
   const [address, setAddress] = useState<AddressValue>({
-    country: clinic?.country ?? "US",
+    country: clinic?.country ?? "",
     state: clinic?.state ?? "",
     city: clinic?.city ?? "",
     postal_code: clinic?.postal_code ?? "",
