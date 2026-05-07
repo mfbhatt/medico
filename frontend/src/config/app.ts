@@ -1,4 +1,4 @@
-const appName = import.meta.env.VITE_APP_NAME || "Mediverse";
+const appName = import.meta.env.VITE_APP_NAME || "MedPortal";
 
 const appConfig = {
   name: appName,
