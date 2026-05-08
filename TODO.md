@@ -39,6 +39,12 @@ cd android
 Email: admin@demo.com
 Password: Admin1234!
 
+Email: tenant@demo.com
+Password: Admin1234!
+
+Email: a@demo.com
+Password: Admin1234!
+
 ## One-time setup each developer runs after pulling:
 
 # Backend (from repo root)

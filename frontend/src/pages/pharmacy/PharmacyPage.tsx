@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useRef, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient, keepPreviousData } from '@tanstack/react-query';
 import { useAppSelector } from '@/store/hooks';
 import {
@@ -59,6 +59,7 @@ interface SaleRecord {
   sale_number: string;
   clinic_id: string;
   patient_name: string | null;
+  patient_id: string | null;
   payment_method: string;
   total_amount: number;
   paid_amount: number;
@@ -129,7 +130,7 @@ function printReceipt(sale: any, clinicName: string) {
   <td>Receipt #:</td><td style="text-align:right"><b>${sale.sale_number}</b></td>
 </tr><tr>
   <td>Date:</td><td style="text-align:right">${new Date(sale.created_at).toLocaleString()}</td>
-</tr>${sale.patient_name ? `<tr><td>Patient:</td><td style="text-align:right">${sale.patient_name}</td></tr>` : ''}
+</tr>${sale.patient_name ? `<tr><td>Patient:</td><td style="text-align:right">${sale.patient_name}</td></tr>` : ''}${sale.patient_id && !sale.patient_name ? `<tr><td>Patient ID:</td><td style="text-align:right">${sale.patient_id}</td></tr>` : ''}
 </table>
 <hr/>
 <table>
@@ -843,7 +844,11 @@ function POSPanel({ clinicId }: { clinicId: string }) {
   const [search, setSearch] = useState('');
   const debouncedSearch = useDebounce(search, 300);
   const [cart, setCart] = useState<CartItem[]>([]);
-  const [patientName, setPatientName] = useState('');
+  const [patientSearch, setPatientSearch] = useState('');
+  const debouncedPatientSearch = useDebounce(patientSearch, 350);
+  const [selectedPatient, setSelectedPatient] = useState<{ id: string; name: string } | null>(null);
+  const [showPatientDropdown, setShowPatientDropdown] = useState(false);
+  const patientRef = useRef<HTMLDivElement>(null);
   const [paymentMethod, setPaymentMethod] = useState('cash');
   const [discountAmount, setDiscountAmount] = useState('');
   const [taxAmount, setTaxAmount] = useState('');
@@ -863,6 +868,29 @@ function POSPanel({ clinicId }: { clinicId: string }) {
   });
   const drugs: Drug[] = drugsData ?? [];
   const posErrorMsg = drugsError ? ((drugsErrorObj as any)?.response?.data?.detail ?? (drugsErrorObj as any)?.message ?? 'Failed to load drugs') : null;
+
+  const { data: patientSearchData, isFetching: searchingPatients } = useQuery({
+    queryKey: ['pharmacy-patient-search', debouncedPatientSearch],
+    queryFn: () =>
+      api.get('/patients/', { params: { q: debouncedPatientSearch, page_size: 10 } })
+        .then((r) => {
+          const raw = r.data.data;
+          return Array.isArray(raw) ? raw : raw?.patients ?? [];
+        }),
+    enabled: debouncedPatientSearch.trim().length >= 2 && !selectedPatient,
+    staleTime: 30_000,
+  });
+  const patientList: any[] = patientSearchData ?? [];
+
+  useEffect(() => {
+    function handleClick(e: MouseEvent) {
+      if (patientRef.current && !patientRef.current.contains(e.target as Node)) {
+        setShowPatientDropdown(false);
+      }
+    }
+    document.addEventListener('mousedown', handleClick);
+    return () => document.removeEventListener('mousedown', handleClick);
+  }, []);
 
   const addToCart = useCallback((drug: Drug) => {
     if (drug.total_stock <= 0) return;
@@ -928,7 +956,9 @@ function POSPanel({ clinicId }: { clinicId: string }) {
     onSuccess: (res) => {
       setCompletedSale(res.data.data);
       setCart([]);
-      setPatientName('');
+      setSelectedPatient(null);
+      setPatientSearch('');
+      setShowPatientDropdown(false);
       setDiscountAmount('');
       setTaxAmount('');
       setPaidAmount('');
@@ -959,7 +989,8 @@ function POSPanel({ clinicId }: { clinicId: string }) {
         unit_price: i.unit_price,
         discount_percent: i.discount_percent,
       })),
-      patient_name: patientName || undefined,
+      patient_id: selectedPatient?.id || (patientSearch.trim() ? patientSearch.trim() : undefined),
+      patient_name: selectedPatient?.name || undefined,
       payment_method: paymentMethod,
       paid_amount: paymentMethod === 'cash' ? paid : total,
       discount_amount: disc,
@@ -1102,9 +1133,70 @@ function POSPanel({ clinicId }: { clinicId: string }) {
 
         {/* Cart footer */}
         <div className="p-3 border-t border-gray-200 bg-gray-50 space-y-2">
-          {/* Patient name + Discount + Tax on one row */}
+          {/* Patient search + Discount + Tax on one row */}
           <div className="grid grid-cols-[1fr_80px_80px] gap-2">
-            <input className="input text-xs py-1" placeholder="Patient name (optional)" value={patientName} onChange={(e) => setPatientName(e.target.value)} />
+            <div className="relative" ref={patientRef}>
+              {selectedPatient ? (
+                <div className="input text-xs py-1 flex items-center justify-between gap-1 bg-primary-50 border-primary-300 cursor-default">
+                  <div className="min-w-0">
+                    <p className="font-medium text-primary-900 text-xs truncate leading-tight">{selectedPatient.name}</p>
+                    <p className="text-[10px] text-primary-600 leading-tight truncate">ID: {selectedPatient.id.slice(0, 8)}…</p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => { setSelectedPatient(null); setPatientSearch(''); }}
+                    className="shrink-0 text-primary-400 hover:text-red-500 ml-1"
+                  >
+                    <X className="w-3 h-3" />
+                  </button>
+                </div>
+              ) : (
+                <>
+                  <div className="relative">
+                    <input
+                      className="input text-xs py-1"
+                      placeholder="Patient name or ID (optional)"
+                      value={patientSearch}
+                      onChange={(e) => { setPatientSearch(e.target.value); setShowPatientDropdown(true); }}
+                      onFocus={() => { if (patientSearch.length >= 2) setShowPatientDropdown(true); }}
+                    />
+                    {searchingPatients && (
+                      <RefreshCw className="absolute right-2 top-1/2 -translate-y-1/2 w-3 h-3 text-gray-400 animate-spin" />
+                    )}
+                  </div>
+                  {showPatientDropdown && patientSearch.trim().length >= 2 && (
+                    <div className="absolute left-0 right-0 bottom-full mb-1 bg-white border border-gray-200 rounded-lg shadow-lg z-50 max-h-40 overflow-y-auto">
+                      {searchingPatients ? (
+                        <div className="px-3 py-2 text-xs text-gray-400">Searching…</div>
+                      ) : patientList.length > 0 ? (
+                        patientList.map((p: any) => (
+                          <button
+                            key={p.id}
+                            type="button"
+                            onMouseDown={() => {
+                              setSelectedPatient({
+                                id: p.id,
+                                name: `${p.first_name ?? ''} ${p.last_name ?? ''}`.trim(),
+                              });
+                              setPatientSearch('');
+                              setShowPatientDropdown(false);
+                            }}
+                            className="w-full text-left px-3 py-2 hover:bg-primary-50 transition-colors border-b border-gray-100 last:border-0"
+                          >
+                            <p className="text-xs font-medium text-gray-900">{p.first_name} {p.last_name}</p>
+                            <p className="text-[10px] text-gray-500">{p.patient_id || p.id?.slice(0, 8)}</p>
+                          </button>
+                        ))
+                      ) : (
+                        <div className="px-3 py-2 text-xs text-gray-500 italic">
+                          No patient found — ID will be saved as entered
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </>
+              )}
+            </div>
             <div>
               <label className="label text-xs mb-0.5">Discount</label>
               <input className="input text-xs py-1" type="number" min={0} step={0.01} placeholder="0.00"
