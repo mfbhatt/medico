@@ -212,6 +212,102 @@ async def get_drug(
     })
 
 
+@router.get("/drugs/{drug_id}/batches")
+async def list_drug_batches(
+    drug_id: str,
+    status: Optional[str] = None,
+    page: int = 1,
+    page_size: int = 50,
+    db: AsyncSession = Depends(get_db),
+    current_user: CurrentUser = Depends(require_perm("inventory:read")),
+):
+    """List all stock batches for a drug with optional status filter.
+
+    status: active | expiring | expired | depleted (omit for all)
+    """
+    drug_res = await db.execute(
+        select(DrugItem).where(
+            DrugItem.id == drug_id,
+            DrugItem.tenant_id == current_user.tenant_id,
+            DrugItem.is_deleted == False,
+        )
+    )
+    if not drug_res.scalar_one_or_none():
+        raise NotFoundException(detail="Drug not found")
+
+    today = date.today().isoformat()
+    expiring_threshold = (date.today() + timedelta(days=60)).isoformat()
+
+    query = select(StockBatch).where(
+        StockBatch.drug_item_id == drug_id,
+        StockBatch.is_deleted == False,
+    )
+
+    if status == "active":
+        query = query.where(
+            StockBatch.is_active == True,
+            StockBatch.quantity_remaining > 0,
+            StockBatch.expiry_date >= today,
+        )
+    elif status == "expiring":
+        query = query.where(
+            StockBatch.is_active == True,
+            StockBatch.quantity_remaining > 0,
+            StockBatch.expiry_date >= today,
+            StockBatch.expiry_date <= expiring_threshold,
+        )
+    elif status == "expired":
+        query = query.where(StockBatch.expiry_date < today)
+    elif status == "depleted":
+        query = query.where(StockBatch.quantity_remaining == 0)
+
+    total = (await db.execute(select(func.count()).select_from(query.subquery()))).scalar()
+    query = query.order_by(StockBatch.expiry_date.desc()).offset((page - 1) * page_size).limit(page_size)
+    result = await db.execute(query)
+    batches = result.scalars().all()
+
+    batch_list = []
+    for b in batches:
+        is_expired = b.expiry_date < today
+        is_depleted = b.quantity_remaining == 0
+        is_expiring_soon = (
+            not is_expired and not is_depleted and b.expiry_date <= expiring_threshold
+        )
+        if is_depleted:
+            batch_status = "depleted"
+        elif is_expired:
+            batch_status = "expired"
+        elif is_expiring_soon:
+            batch_status = "expiring_soon"
+        else:
+            batch_status = "active"
+
+        days_to_expiry = (date.fromisoformat(b.expiry_date) - date.today()).days
+
+        batch_list.append({
+            "id": b.id,
+            "batch_number": b.batch_number,
+            "quantity": b.quantity,
+            "quantity_remaining": b.quantity_remaining,
+            "quantity_used": b.quantity - b.quantity_remaining,
+            "expiry_date": b.expiry_date,
+            "manufacture_date": b.manufacture_date,
+            "supplier_name": b.supplier_name,
+            "received_date": b.received_date,
+            "sku_code": b.sku_code,
+            "barcode": b.barcode,
+            "unit_cost": b.unit_cost,
+            "is_active": b.is_active,
+            "status": batch_status,
+            "days_to_expiry": days_to_expiry,
+        })
+
+    return _success(
+        batch_list,
+        meta={"total": total, "page": page, "page_size": page_size},
+    )
+
+
 @router.patch("/drugs/{drug_id}")
 async def update_drug(
     drug_id: str,
@@ -475,6 +571,117 @@ async def create_adjustment(
         {"new_stock": current_stock + qty},
         message=f"Stock adjusted by {qty:+d}",
     )
+
+
+@router.get("/batches")
+async def list_all_batches(
+    clinic_id: Optional[str] = None,
+    status: Optional[str] = None,
+    q: Optional[str] = None,
+    page: int = 1,
+    page_size: int = 50,
+    db: AsyncSession = Depends(get_db),
+    current_user: CurrentUser = Depends(require_perm("inventory:read")),
+):
+    """List all stock batches across all drugs, joined with drug info.
+
+    status: expired | expiring | active | depleted (omit for all)
+    q: search by drug name / generic name / batch number
+    """
+    today = date.today().isoformat()
+    expiring_threshold = (date.today() + timedelta(days=60)).isoformat()
+
+    query = (
+        select(StockBatch, DrugItem)
+        .join(DrugItem, StockBatch.drug_item_id == DrugItem.id)
+        .where(
+            StockBatch.tenant_id == current_user.tenant_id,
+            StockBatch.is_deleted == False,
+            DrugItem.is_deleted == False,
+        )
+    )
+
+    if clinic_id:
+        query = query.where(DrugItem.clinic_id == clinic_id)
+
+    if q:
+        pattern = f"%{q}%"
+        query = query.where(
+            or_(
+                DrugItem.name.ilike(pattern),
+                DrugItem.generic_name.ilike(pattern),
+                StockBatch.batch_number.ilike(pattern),
+                StockBatch.supplier_name.ilike(pattern),
+            )
+        )
+
+    if status == "expired":
+        query = query.where(StockBatch.expiry_date < today)
+    elif status == "expiring":
+        query = query.where(
+            StockBatch.expiry_date >= today,
+            StockBatch.expiry_date <= expiring_threshold,
+            StockBatch.quantity_remaining > 0,
+        )
+    elif status == "active":
+        query = query.where(
+            StockBatch.expiry_date >= today,
+            StockBatch.expiry_date > expiring_threshold,
+            StockBatch.quantity_remaining > 0,
+            StockBatch.is_active == True,
+        )
+    elif status == "depleted":
+        query = query.where(StockBatch.quantity_remaining == 0)
+
+    count_query = select(func.count()).select_from(query.subquery())
+    total = (await db.execute(count_query)).scalar()
+
+    query = query.order_by(StockBatch.expiry_date.asc()).offset((page - 1) * page_size).limit(page_size)
+    rows = (await db.execute(query)).all()
+
+    result = []
+    for batch, drug in rows:
+        is_expired = batch.expiry_date < today
+        is_depleted = batch.quantity_remaining == 0
+        is_expiring_soon = (
+            not is_expired and not is_depleted and batch.expiry_date <= expiring_threshold
+        )
+        if is_depleted:
+            batch_status = "depleted"
+        elif is_expired:
+            batch_status = "expired"
+        elif is_expiring_soon:
+            batch_status = "expiring_soon"
+        else:
+            batch_status = "active"
+
+        days_to_expiry = (date.fromisoformat(batch.expiry_date) - date.today()).days
+
+        result.append({
+            "id": batch.id,
+            "batch_number": batch.batch_number,
+            "drug_id": drug.id,
+            "drug_name": drug.name,
+            "generic_name": drug.generic_name,
+            "form": drug.form,
+            "strength": drug.strength,
+            "category": drug.category,
+            "is_controlled": drug.is_controlled,
+            "quantity": batch.quantity,
+            "quantity_remaining": batch.quantity_remaining,
+            "quantity_used": batch.quantity - batch.quantity_remaining,
+            "expiry_date": batch.expiry_date,
+            "manufacture_date": batch.manufacture_date,
+            "received_date": batch.received_date,
+            "supplier_name": batch.supplier_name,
+            "sku_code": batch.sku_code,
+            "barcode": batch.barcode,
+            "unit_cost": batch.unit_cost,
+            "status": batch_status,
+            "days_to_expiry": days_to_expiry,
+        })
+
+    return _success(result, meta={"total": total, "page": page, "page_size": page_size})
 
 
 @router.get("/stock-alerts")
