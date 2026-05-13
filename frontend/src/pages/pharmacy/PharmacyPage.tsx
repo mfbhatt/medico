@@ -15,6 +15,7 @@ import {
 import api from '@/services/api';
 import { useDebounce } from '@/hooks/useDebounce';
 import { useCurrency } from '@/hooks/useCurrency';
+import { useNotification } from '@/hooks/useNotification';
 
 ChartJS.register(CategoryScale, LinearScale, BarElement, ArcElement, Title, Tooltip, Legend);
 
@@ -159,6 +160,7 @@ function printReceipt(sale: any, clinicName: string) {
 
 function AddDrugModal({ onClose, clinics, defaultClinicId }: { onClose: () => void; clinics: { id: string; name: string }[]; defaultClinicId?: string }) {
   const qc = useQueryClient();
+  const { success: notify } = useNotification();
   const [form, setForm] = useState({
     name: '', generic_name: '', brand_name: '', form: 'tablet',
     strength: '', unit: 'mg', category: '', manufacturer: '',
@@ -171,7 +173,11 @@ function AddDrugModal({ onClose, clinics, defaultClinicId }: { onClose: () => vo
 
   const mutation = useMutation({
     mutationFn: (data: any) => api.post('/inventory/drugs', data),
-    onSuccess: () => { qc.invalidateQueries({ queryKey: ['pharmacy-drugs'] }); onClose(); },
+    onSuccess: (_: any, variables: any) => {
+      qc.invalidateQueries({ queryKey: ['pharmacy-drugs'] });
+      notify(`${variables.name} added to catalog successfully`);
+      onClose();
+    },
     onError: (err: any) => setError(err.response?.data?.detail ?? 'Failed to add drug'),
   });
 
