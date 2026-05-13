@@ -1,7 +1,12 @@
 import { useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { Download, ArrowLeft, X, DollarSign } from "lucide-react";
+import { Download, ArrowLeft, X, DollarSign, CheckCircle } from "lucide-react";
+
+const CURRENCY_SYMBOLS: Record<string, string> = {
+  INR: "₹", USD: "$", EUR: "€", GBP: "£", AED: "د.إ", SGD: "S$",
+};
+const curSym = (code?: string) => code ? (CURRENCY_SYMBOLS[code] ?? code + " ") : "₹";
 import api from "@/services/api";
 
 const STATUS_COLORS: Record<string, string> = {
@@ -29,7 +34,7 @@ export default function InvoiceDetailPage() {
   if (isError || !invoice) return <div className="text-center py-20 text-slate-400">Invoice not found</div>;
 
   const canPay = ["issued", "partially_paid", "overdue"].includes(invoice.status);
-  const cur = invoice.currency ?? "USD";
+  const cur = curSym(invoice.currency);
 
   return (
     <div className="max-w-3xl mx-auto">
@@ -52,15 +57,31 @@ export default function InvoiceDetailPage() {
         </div>
 
         <div className="p-6 space-y-6">
-          {/* Dates */}
-          <div className="grid grid-cols-2 gap-4 bg-slate-50 rounded-lg p-4">
-            <div>
-              <p className="text-xs text-slate-500 font-medium">Issue Date</p>
-              <p className="text-sm font-semibold text-slate-900 mt-0.5">{invoice.issue_date}</p>
+          {/* Bill cleared banner */}
+          {invoice.status === "paid" && Number(invoice.balance_due) <= 0 && (
+            <div className="flex items-center gap-3 bg-green-50 border border-green-200 rounded-lg px-4 py-3">
+              <CheckCircle className="h-5 w-5 text-green-600 flex-shrink-0" />
+              <p className="text-sm font-semibold text-green-800">Bill fully cleared — this invoice has been paid in full.</p>
             </div>
-            <div>
-              <p className="text-xs text-slate-500 font-medium">Due Date</p>
-              <p className="text-sm font-semibold text-slate-900 mt-0.5">{invoice.due_date}</p>
+          )}
+
+          {/* Patient + Dates */}
+          <div className="bg-slate-50 rounded-lg p-4">
+            {invoice.patient_name && (
+              <div className="mb-3 pb-3 border-b border-slate-200">
+                <p className="text-xs text-slate-500 font-medium">Patient</p>
+                <p className="text-sm font-semibold text-slate-900 mt-0.5">{invoice.patient_name}</p>
+              </div>
+            )}
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <p className="text-xs text-slate-500 font-medium">Issue Date</p>
+                <p className="text-sm font-semibold text-slate-900 mt-0.5">{invoice.issue_date}</p>
+              </div>
+              <div>
+                <p className="text-xs text-slate-500 font-medium">Due Date</p>
+                <p className="text-sm font-semibold text-slate-900 mt-0.5">{invoice.due_date}</p>
+              </div>
             </div>
           </div>
 
@@ -82,8 +103,8 @@ export default function InvoiceDetailPage() {
                     <tr key={item.id}>
                       <td className="px-4 py-3 text-slate-800">{item.description}</td>
                       <td className="px-4 py-3 text-right text-slate-700">{item.quantity}</td>
-                      <td className="px-4 py-3 text-right text-slate-700">{cur} {Number(item.unit_price).toFixed(2)}</td>
-                      <td className="px-4 py-3 text-right font-medium text-slate-900">{cur} {Number(item.line_total).toFixed(2)}</td>
+                      <td className="px-4 py-3 text-right text-slate-700">{cur}{Number(item.unit_price).toFixed(2)}</td>
+                      <td className="px-4 py-3 text-right font-medium text-slate-900">{cur}{Number(item.line_total).toFixed(2)}</td>
                     </tr>
                   ))}
                 </tbody>
@@ -96,34 +117,34 @@ export default function InvoiceDetailPage() {
             <div className="w-64 space-y-2">
               <div className="flex justify-between text-sm">
                 <span className="text-slate-500">Subtotal</span>
-                <span className="text-slate-900 font-medium">{cur} {Number(invoice.subtotal ?? 0).toFixed(2)}</span>
+                <span className="text-slate-900 font-medium">{cur}{Number(invoice.subtotal ?? 0).toFixed(2)}</span>
               </div>
               {invoice.discount_amount > 0 && (
                 <div className="flex justify-between text-sm">
                   <span className="text-slate-500">Discount</span>
-                  <span className="text-green-700">-{cur} {Number(invoice.discount_amount).toFixed(2)}</span>
+                  <span className="text-green-700">-{cur}{Number(invoice.discount_amount).toFixed(2)}</span>
                 </div>
               )}
               {invoice.tax_amount > 0 && (
                 <div className="flex justify-between text-sm">
                   <span className="text-slate-500">Tax ({invoice.tax_rate}%)</span>
-                  <span className="text-slate-900 font-medium">{cur} {Number(invoice.tax_amount).toFixed(2)}</span>
+                  <span className="text-slate-900 font-medium">{cur}{Number(invoice.tax_amount).toFixed(2)}</span>
                 </div>
               )}
               <div className="flex justify-between text-base font-bold border-t border-slate-200 pt-2">
                 <span className="text-slate-900">Total</span>
-                <span className="text-blue-700">{cur} {Number(invoice.total_amount ?? 0).toFixed(2)}</span>
+                <span className="text-blue-700">{cur}{Number(invoice.total_amount ?? 0).toFixed(2)}</span>
               </div>
               {invoice.paid_amount > 0 && (
                 <div className="flex justify-between text-sm text-green-700">
                   <span>Paid</span>
-                  <span>-{cur} {Number(invoice.paid_amount).toFixed(2)}</span>
+                  <span>-{cur}{Number(invoice.paid_amount).toFixed(2)}</span>
                 </div>
               )}
               <div className="flex justify-between text-sm font-semibold">
                 <span className="text-slate-700">Balance Due</span>
                 <span className={invoice.balance_due > 0 ? "text-red-700" : "text-green-700"}>
-                  {cur} {Number(invoice.balance_due ?? 0).toFixed(2)}
+                  {cur}{Number(invoice.balance_due ?? 0).toFixed(2)}
                 </span>
               </div>
             </div>
@@ -137,7 +158,7 @@ export default function InvoiceDetailPage() {
                 {invoice.payments.map((p: any) => (
                   <div key={p.id} className="flex justify-between text-sm bg-green-50 px-4 py-2.5 rounded-lg">
                     <span className="text-slate-600">{p.payment_date} · {p.payment_method}</span>
-                    <span className="font-medium text-green-700">{cur} {Number(p.amount).toFixed(2)}</span>
+                    <span className="font-medium text-green-700">{cur}{Number(p.amount).toFixed(2)}</span>
                   </div>
                 ))}
               </div>
@@ -202,7 +223,7 @@ function RecordPaymentModal({ invoice, onClose, onSuccess }: { invoice: any; onC
           <button onClick={onClose}><X className="h-5 w-5 text-slate-400 hover:text-slate-600" /></button>
         </div>
         <p className="text-sm text-slate-500 mb-4">
-          Balance due: <span className="font-semibold text-slate-900">{invoice.currency ?? "USD"} {Number(invoice.balance_due).toFixed(2)}</span>
+          Balance due: <span className="font-semibold text-slate-900">{curSym(invoice.currency)}{Number(invoice.balance_due).toFixed(2)}</span>
         </p>
 
         {mutation.isError && (

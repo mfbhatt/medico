@@ -34,21 +34,34 @@ async def create_invoice(
     if not items_data:
         raise BadRequestException(detail="Invoice must have at least one item")
 
+    for item in items_data:
+        if item.get("quantity", 1) <= 0:
+            raise BadRequestException(detail="Item quantity must be greater than 0")
+        if item.get("unit_price", 0) < 0:
+            raise BadRequestException(detail="Item price cannot be negative")
+
     subtotal = sum(item.get("line_total", 0) for item in items_data)
     discount = body.get("discount_amount", 0)
     tax_rate = body.get("tax_rate", 0)
     tax_amount = (subtotal - discount) * (tax_rate / 100)
     total = subtotal - discount + tax_amount
 
-    invoice_number = f"INV-{date.today().strftime('%Y%m')}-{str(uuid.uuid4())[:8].upper()}"
-    due_date = (date.today() + timedelta(days=body.get("due_days", 30))).isoformat()
+    # Status: only draft or issued allowed at creation
+    requested_status = body.get("status", "issued")
+    if requested_status not in ("draft", "issued"):
+        requested_status = "issued"
+    invoice_status = InvoiceStatus.DRAFT if requested_status == "draft" else InvoiceStatus.ISSUED
 
-    # Resolve default currency: tenant setting → platform default → "USD"
+    invoice_number = f"INV-{date.today().strftime('%Y%m')}-{str(uuid.uuid4())[:8].upper()}"
+    # Accept explicit due_date, otherwise calculate from due_days (default 30)
+    due_date = body.get("due_date") or (date.today() + timedelta(days=body.get("due_days", 30))).isoformat()
+
+    # Resolve default currency: tenant setting → platform default → "INR"
     tenant_res = await db.execute(select(Tenant).where(Tenant.id == current_user.tenant_id))
     tenant = tenant_res.scalar_one_or_none()
     platform_res = await db.execute(select(PlatformConfig).where(PlatformConfig.id == "default"))
     platform = platform_res.scalar_one_or_none()
-    platform_currency = (platform.settings or {}).get("currency", "USD") if platform else "USD"
+    platform_currency = (platform.settings or {}).get("currency", "INR") if platform else "INR"
     default_currency = (tenant.settings or {}).get("currency") or platform_currency
 
     invoice = Invoice(
@@ -58,7 +71,7 @@ async def create_invoice(
         appointment_id=body.get("appointment_id"),
         clinic_id=body.get("clinic_id") or current_user.clinic_id,
         doctor_id=body.get("doctor_id"),
-        status=InvoiceStatus.ISSUED,
+        status=invoice_status,
         issue_date=date.today().isoformat(),
         due_date=due_date,
         subtotal=round(subtotal, 2),
@@ -201,6 +214,8 @@ async def record_payment(
 async def list_invoices(
     patient_id: Optional[str] = None,
     status: Optional[str] = None,
+    sort_by: Optional[str] = "issue_date",
+    sort_dir: Optional[str] = "desc",
     page: int = 1,
     page_size: int = 20,
     db: AsyncSession = Depends(get_db),
@@ -209,29 +224,48 @@ async def list_invoices(
     """List invoices, optionally filtered by patient or status."""
     from app.models.patient import Patient
 
+    today_str = date.today().isoformat()
+
+    base_where = [
+        Invoice.tenant_id == current_user.tenant_id,
+        Invoice.is_deleted == False,
+    ]
+    if patient_id:
+        base_where.append(Invoice.patient_id == patient_id)
+
+    # "overdue" is a virtual status — match issued/partially_paid past due date
+    if status == "overdue":
+        base_where += [
+            Invoice.status.in_(["issued", "partially_paid"]),
+            Invoice.due_date < today_str,
+            Invoice.balance_due > 0,
+        ]
+    elif status:
+        base_where.append(Invoice.status == status)
+
     query = (
         select(Invoice, Patient)
         .outerjoin(Patient, Invoice.patient_id == Patient.id)
-        .where(
-            Invoice.tenant_id == current_user.tenant_id,
-            Invoice.is_deleted == False,
-        )
+        .where(*base_where)
     )
-    if patient_id:
-        query = query.where(Invoice.patient_id == patient_id)
-    if status:
-        query = query.where(Invoice.status == status)
 
-    query = query.order_by(Invoice.issue_date.desc())
-    total = (await db.execute(select(func.count()).select_from(
-        select(Invoice).where(
-            Invoice.tenant_id == current_user.tenant_id,
-            Invoice.is_deleted == False,
-            *([Invoice.patient_id == patient_id] if patient_id else []),
-            *([Invoice.status == status] if status else []),
-        ).subquery()
-    ))).scalar()
+    sort_col = {
+        "due_date": Invoice.due_date,
+        "total_amount": Invoice.total_amount,
+        "balance_due": Invoice.balance_due,
+    }.get(sort_by, Invoice.issue_date)
+    query = query.order_by(sort_col.asc() if sort_dir == "asc" else sort_col.desc())
+
+    count_query = select(func.count()).select_from(
+        select(Invoice).where(*base_where).subquery()
+    )
+    total = (await db.execute(count_query)).scalar()
     rows = (await db.execute(query.offset((page - 1) * page_size).limit(page_size))).all()
+
+    def eff_status(inv: Invoice) -> str:
+        if inv.status in ("issued", "partially_paid") and inv.due_date and inv.due_date < today_str and inv.balance_due > 0:
+            return "overdue"
+        return inv.status
 
     return _success(
         [
@@ -239,10 +273,10 @@ async def list_invoices(
                 "id": inv.id,
                 "invoice_number": inv.invoice_number,
                 "patient_id": inv.patient_id,
-                "patient_name": f"{pat.first_name} {pat.last_name}" if pat else None,
+                "patient_name": f"{pat.first_name} {pat.last_name}".strip() if pat else None,
                 "issue_date": inv.issue_date,
                 "due_date": inv.due_date,
-                "status": inv.status,
+                "status": eff_status(inv),
                 "total_amount": inv.total_amount,
                 "paid_amount": inv.paid_amount,
                 "balance_due": inv.balance_due,
@@ -282,16 +316,30 @@ async def get_invoice(
     )
     payments = payments_res.scalars().all()
 
+    from app.models.patient import Patient as PatientModel
+    patient_row = (await db.execute(
+        select(PatientModel.first_name, PatientModel.last_name).where(PatientModel.id == inv.patient_id)
+    )).first()
+    patient_name = f"{patient_row.first_name} {patient_row.last_name}".strip() if patient_row else None
+
+    today_str = date.today().isoformat()
+    eff_status = (
+        "overdue"
+        if inv.status in ("issued", "partially_paid") and inv.due_date and inv.due_date < today_str and inv.balance_due > 0
+        else inv.status
+    )
+
     return _success({
         "id": inv.id,
         "invoice_number": inv.invoice_number,
         "patient_id": inv.patient_id,
+        "patient_name": patient_name,
         "appointment_id": inv.appointment_id,
         "clinic_id": inv.clinic_id,
         "doctor_id": inv.doctor_id,
         "issue_date": inv.issue_date,
         "due_date": inv.due_date,
-        "status": inv.status,
+        "status": eff_status,
         "subtotal": inv.subtotal,
         "discount_amount": inv.discount_amount,
         "tax_amount": inv.tax_amount,
