@@ -508,6 +508,7 @@ async def book_appointment(
 # ── Get Appointments ─────────────────────────────────────────────
 @router.get("/")
 async def list_appointments(
+    q: Optional[str] = None,
     clinic_id: Optional[str] = None,
     doctor_id: Optional[str] = None,
     patient_id: Optional[str] = None,
@@ -595,6 +596,31 @@ async def list_appointments(
         query = query.where(Appointment.appointment_date <= date_to)
     if status:
         query = query.where(Appointment.status == status)
+    if q:
+        from app.models.patient import Patient
+        from app.models.user import User as UserModel
+        from sqlalchemy.orm import aliased
+        PatientAlias = aliased(Patient)
+        DoctorUserAlias = aliased(UserModel)
+        term = f"%{q.strip()}%"
+        query = (
+            query
+            .join(PatientAlias, PatientAlias.id == Appointment.patient_id, isouter=True)
+            .join(Doctor, Doctor.id == Appointment.doctor_id, isouter=True)
+            .join(DoctorUserAlias, DoctorUserAlias.id == Doctor.user_id, isouter=True)
+            .where(
+                or_(
+                    func.concat(PatientAlias.first_name, " ", PatientAlias.last_name).ilike(term),
+                    PatientAlias.first_name.ilike(term),
+                    PatientAlias.last_name.ilike(term),
+                    func.concat(DoctorUserAlias.first_name, " ", DoctorUserAlias.last_name).ilike(term),
+                    DoctorUserAlias.first_name.ilike(term),
+                    DoctorUserAlias.last_name.ilike(term),
+                    Appointment.appointment_type.ilike(term),
+                    Appointment.chief_complaint.ilike(term),
+                )
+            )
+        )
 
     # Count
     count_result = await db.execute(select(func.count()).select_from(query.subquery()))
