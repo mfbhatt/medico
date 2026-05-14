@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { X, Search, Pencil } from 'lucide-react';
+import { X, Search, Pencil, Trash2, Building2 } from 'lucide-react';
 import api from '@/services/api';
 import Pagination from '@/components/ui/Pagination';
 import { useDebounce } from '@/hooks/useDebounce';
@@ -11,6 +11,7 @@ const PAGE_SIZE = 20;
 
 interface AddDoctorForm {
   first_name: string;
+  middle_name: string;
   last_name: string;
   email: string;
   phone: string;
@@ -22,7 +23,7 @@ interface AddDoctorForm {
 }
 
 const INITIAL_FORM: AddDoctorForm = {
-  first_name: '', last_name: '', email: '', phone: '',
+  first_name: '', middle_name: '', last_name: '', email: '', phone: '',
   password: '', registration_number: '',
   specialization: '', consultation_fee: '', experience_years: '',
 };
@@ -30,8 +31,11 @@ const INITIAL_FORM: AddDoctorForm = {
 interface EditDoctorForm {
   // User fields
   first_name: string;
+  middle_name: string;
   last_name: string;
+  email: string;
   phone: string;
+  new_password: string;
   // Doctor profile fields
   registration_number: string;
   specialization: string;
@@ -46,8 +50,11 @@ interface EditDoctorForm {
 
 const INITIAL_EDIT_FORM: EditDoctorForm = {
   first_name: '',
+  middle_name: '',
   last_name: '',
+  email: '',
   phone: '',
+  new_password: '',
   registration_number: '',
   specialization: '',
   experience_years: '',
@@ -74,6 +81,18 @@ export default function DoctorsPage() {
   const [editForm, setEditForm] = useState<EditDoctorForm>(INITIAL_EDIT_FORM);
   const [editError, setEditError] = useState('');
   const qc = useQueryClient();
+
+  const { data: editDoctorClinics = [] } = useQuery({
+    queryKey: ['doctor-clinics', editDoctorId],
+    queryFn: () => api.get(`/doctors/${editDoctorId}/clinics`).then((r) => r.data.data),
+    enabled: !!editDoctorId,
+  });
+
+  const removeClinicMutation = useMutation({
+    mutationFn: ({ doctorId, clinicId }: { doctorId: string; clinicId: string }) =>
+      api.delete(`/doctors/${doctorId}/clinics/${clinicId}`),
+    onSuccess: (_data, vars) => qc.invalidateQueries({ queryKey: ['doctor-clinics', vars.doctorId] }),
+  });
 
   // Fetch specialization catalog for dropdowns
   const { data: specsData } = useQuery({
@@ -107,6 +126,7 @@ export default function DoctorsPage() {
     mutationFn: (form: AddDoctorForm) =>
       api.post('/users/', {
         first_name: form.first_name,
+        middle_name: form.middle_name || undefined,
         last_name: form.last_name,
         email: form.email,
         phone: form.phone || undefined,
@@ -146,8 +166,11 @@ export default function DoctorsPage() {
         }),
         api.patch(`/users/${userId}`, {
           first_name: form.first_name || undefined,
+          middle_name: form.middle_name || undefined,
           last_name: form.last_name || undefined,
+          email: form.email || undefined,
           phone: form.phone || undefined,
+          new_password: form.new_password || undefined,
         }),
       ]);
     },
@@ -160,12 +183,14 @@ export default function DoctorsPage() {
           data: old.data.map((d: any) => {
             if (d.id !== doctorId) return d;
             const firstName = form.first_name || d.first_name;
+            const middleName = form.middle_name !== undefined ? form.middle_name : (d.middle_name ?? '');
             const lastName = form.last_name || d.last_name;
             return {
               ...d,
               first_name: firstName,
+              middle_name: middleName,
               last_name: lastName,
-              full_name: `${firstName} ${lastName}`.trim(),
+              full_name: [firstName, middleName, lastName].filter(Boolean).join(' '),
               phone: form.phone || d.phone,
               registration_number: form.registration_number || d.registration_number,
               primary_specialization: form.specialization || d.primary_specialization,
@@ -196,8 +221,11 @@ export default function DoctorsPage() {
     setEditUserId(doctor.user_id);
     setEditForm({
       first_name: doctor.first_name ?? '',
+      middle_name: doctor.middle_name ?? '',
       last_name: doctor.last_name ?? '',
+      email: doctor.email ?? '',
       phone: doctor.phone ?? '',
+      new_password: '',
       registration_number: doctor.registration_number ?? '',
       specialization: doctor.primary_specialization ?? '',
       experience_years: doctor.experience_years != null ? String(doctor.experience_years) : '',
@@ -384,7 +412,7 @@ export default function DoctorsPage() {
       {/* Edit Doctor Modal */}
       {editOpen && (
         <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-xl shadow-xl w-full max-w-lg max-h-[90vh] overflow-y-auto">
+          <div className="bg-white rounded-xl shadow-xl w-full max-w-xl max-h-[90vh] overflow-y-auto">
             <div className="flex items-center justify-between p-5 border-b border-gray-200 sticky top-0 bg-white">
               <h2 className="text-lg font-semibold text-gray-900">Edit Doctor</h2>
               <button
@@ -395,22 +423,46 @@ export default function DoctorsPage() {
               </button>
             </div>
 
-            <form onSubmit={handleEditSubmit} className="p-5 space-y-5">
+            <form onSubmit={handleEditSubmit} className="p-6 space-y-6">
               {/* Personal Info */}
               <div>
                 <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-3">Personal Info</p>
-                <div className="grid grid-cols-2 gap-4">
+                <div className="grid grid-cols-3 gap-4">
                   <div>
                     <label className="label">First Name</label>
                     <input className="input" value={editForm.first_name} onChange={setEditField('first_name')} />
                   </div>
                   <div>
+                    <label className="label">Middle Name <span className="text-slate-400 font-normal">(optional)</span></label>
+                    <input className="input" value={editForm.middle_name} onChange={setEditField('middle_name')} placeholder="Middle name or initial" />
+                  </div>
+                  <div>
                     <label className="label">Last Name</label>
                     <input className="input" value={editForm.last_name} onChange={setEditField('last_name')} />
                   </div>
-                  <div className="col-span-2">
+                </div>
+                <div className="grid grid-cols-2 gap-4 mt-4">
+                  <div>
                     <label className="label">Phone</label>
                     <input className="input" type="tel" value={editForm.phone} onChange={setEditField('phone')} />
+                  </div>
+                  <div>
+                    <label className="label">Email</label>
+                    <input className="input" type="email" value={editForm.email} onChange={setEditField('email')} />
+                  </div>
+                  <div className="col-span-2">
+                    <label className="label">
+                      New Password <span className="text-slate-400 font-normal">(leave blank to keep current)</span>
+                    </label>
+                    <input
+                      className="input"
+                      type="password"
+                      value={editForm.new_password}
+                      onChange={setEditField('new_password')}
+                      placeholder="Minimum 8 characters"
+                      minLength={editForm.new_password ? 8 : undefined}
+                      autoComplete="new-password"
+                    />
                   </div>
                 </div>
               </div>
@@ -504,6 +556,39 @@ export default function DoctorsPage() {
                 </div>
               </div>
 
+              {/* Clinic Assignments */}
+              {editDoctorClinics.length > 0 && (
+                <div>
+                  <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-3">Clinic Assignments</p>
+                  <div className="space-y-2">
+                    {editDoctorClinics.map((a: any) => (
+                      <div key={a.id} className="flex items-center justify-between px-3 py-2 bg-slate-50 rounded-lg border border-slate-200">
+                        <div className="flex items-center gap-2 min-w-0">
+                          <Building2 className="w-4 h-4 text-slate-400 flex-shrink-0" />
+                          <span className="text-sm text-slate-700 truncate">{a.clinic_name}</span>
+                          {a.is_primary_clinic && (
+                            <span className="badge badge-blue text-xs flex-shrink-0">Primary</span>
+                          )}
+                        </div>
+                        <button
+                          type="button"
+                          title="Remove clinic"
+                          disabled={removeClinicMutation.isPending}
+                          onClick={() => {
+                            if (confirm(`Remove Dr. from ${a.clinic_name}?`)) {
+                              removeClinicMutation.mutate({ doctorId: editDoctorId!, clinicId: a.clinic_id });
+                            }
+                          }}
+                          className="p-1 ml-2 text-slate-400 hover:text-red-600 rounded flex-shrink-0"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
               {editError && (
                 <div className="bg-red-50 border border-red-200 text-red-700 px-3 py-2 rounded text-sm">
                   {editError}
@@ -530,7 +615,7 @@ export default function DoctorsPage() {
       {/* Add Doctor Modal */}
       {addOpen && (
         <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-xl shadow-xl w-full max-w-lg max-h-[90vh] overflow-y-auto">
+          <div className="bg-white rounded-xl shadow-xl w-full max-w-xl max-h-[90vh] overflow-y-auto">
             <div className="flex items-center justify-between p-5 border-b border-gray-200 sticky top-0 bg-white">
               <h2 className="text-lg font-semibold text-gray-900">Add Doctor</h2>
               <button
@@ -541,69 +626,86 @@ export default function DoctorsPage() {
               </button>
             </div>
 
-            <form onSubmit={handleAddSubmit} className="p-5 space-y-4">
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="label">First Name *</label>
-                  <input className="input" value={addForm.first_name} onChange={setField('first_name')} required />
+            <form onSubmit={handleAddSubmit} className="p-6 space-y-5">
+              {/* Name */}
+              <div>
+                <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-3">Personal Info</p>
+                <div className="grid grid-cols-3 gap-4">
+                  <div>
+                    <label className="label">First Name *</label>
+                    <input className="input" value={addForm.first_name} onChange={setField('first_name')} required />
+                  </div>
+                  <div>
+                    <label className="label">Middle Name <span className="text-slate-400 font-normal">(optional)</span></label>
+                    <input className="input" value={addForm.middle_name} onChange={setField('middle_name')} placeholder="Middle name or initial" />
+                  </div>
+                  <div>
+                    <label className="label">Last Name *</label>
+                    <input className="input" value={addForm.last_name} onChange={setField('last_name')} required />
+                  </div>
                 </div>
-                <div>
-                  <label className="label">Last Name *</label>
-                  <input className="input" value={addForm.last_name} onChange={setField('last_name')} required />
-                </div>
-                <div>
-                  <label className="label">Email *</label>
-                  <input className="input" type="email" value={addForm.email} onChange={setField('email')} required />
-                </div>
-                <div>
-                  <label className="label">Phone</label>
-                  <input className="input" type="tel" value={addForm.phone} onChange={setField('phone')} />
-                </div>
-                <div className="col-span-2">
-                  <label className="label">Password *</label>
-                  <input
-                    className="input"
-                    type="password"
-                    value={addForm.password}
-                    onChange={setField('password')}
-                    required
-                    minLength={8}
-                    placeholder="Minimum 8 characters"
-                  />
-                </div>
-                <div>
-                  <label className="label">Registration No. *</label>
-                  <input className="input" value={addForm.registration_number} onChange={setField('registration_number')} required />
-                </div>
-                <div>
-                  <label className="label">Specialization</label>
-                  {specializations.length > 0 ? (
-                    <select className="input" value={addForm.specialization} onChange={setField('specialization')}>
-                      <option value="">— Select —</option>
-                      {Object.entries(specsByCategory).map(([cat, items]) => (
-                        <optgroup key={cat} label={cat}>
-                          {items.map((s) => (
-                            <option key={s.id} value={s.name}>{s.name}</option>
-                          ))}
-                        </optgroup>
-                      ))}
-                    </select>
-                  ) : (
+                <div className="grid grid-cols-2 gap-4 mt-4">
+                  <div>
+                    <label className="label">Email *</label>
+                    <input className="input" type="email" value={addForm.email} onChange={setField('email')} required />
+                  </div>
+                  <div>
+                    <label className="label">Phone</label>
+                    <input className="input" type="tel" value={addForm.phone} onChange={setField('phone')} />
+                  </div>
+                  <div className="col-span-2">
+                    <label className="label">Password *</label>
                     <input
                       className="input"
-                      value={addForm.specialization}
-                      onChange={setField('specialization')}
-                      placeholder="e.g. Cardiology"
+                      type="password"
+                      value={addForm.password}
+                      onChange={setField('password')}
+                      required
+                      minLength={8}
+                      placeholder="Minimum 8 characters"
                     />
-                  )}
+                  </div>
                 </div>
-                <div>
-                  <label className="label">Consultation Fee ({currencySymbol})</label>
-                  <input className="input" type="number" min={0} value={addForm.consultation_fee} onChange={setField('consultation_fee')} />
-                </div>
-                <div>
-                  <label className="label">Experience (years)</label>
-                  <input className="input" type="number" min={0} value={addForm.experience_years} onChange={setField('experience_years')} />
+              </div>
+
+              {/* Professional */}
+              <div>
+                <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-3">Professional</p>
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="label">Registration No. *</label>
+                    <input className="input" value={addForm.registration_number} onChange={setField('registration_number')} required />
+                  </div>
+                  <div>
+                    <label className="label">Specialization</label>
+                    {specializations.length > 0 ? (
+                      <select className="input" value={addForm.specialization} onChange={setField('specialization')}>
+                        <option value="">— Select —</option>
+                        {Object.entries(specsByCategory).map(([cat, items]) => (
+                          <optgroup key={cat} label={cat}>
+                            {items.map((s) => (
+                              <option key={s.id} value={s.name}>{s.name}</option>
+                            ))}
+                          </optgroup>
+                        ))}
+                      </select>
+                    ) : (
+                      <input
+                        className="input"
+                        value={addForm.specialization}
+                        onChange={setField('specialization')}
+                        placeholder="e.g. Cardiology"
+                      />
+                    )}
+                  </div>
+                  <div>
+                    <label className="label">Consultation Fee ({currencySymbol})</label>
+                    <input className="input" type="number" min={0} value={addForm.consultation_fee} onChange={setField('consultation_fee')} />
+                  </div>
+                  <div>
+                    <label className="label">Experience (years)</label>
+                    <input className="input" type="number" min={0} value={addForm.experience_years} onChange={setField('experience_years')} />
+                  </div>
                 </div>
               </div>
 

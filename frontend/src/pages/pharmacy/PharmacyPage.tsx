@@ -337,7 +337,7 @@ function AddDrugModal({ onClose, clinics, defaultClinicId }: { onClose: () => vo
 
   return (
     <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
-      <div className="bg-white rounded-xl shadow-xl w-full max-w-lg max-h-[90vh] overflow-y-auto">
+      <div className="bg-white rounded-xl shadow-xl w-full max-w-xl max-h-[90vh] overflow-y-auto">
         <div className="flex items-center justify-between p-5 border-b border-gray-200 sticky top-0 bg-white">
           <h2 className="text-lg font-semibold text-gray-900">Add Drug to Catalog</h2>
           <button onClick={onClose}><X className="w-5 h-5 text-gray-400" /></button>
@@ -468,7 +468,7 @@ function AddStockModal({ drug, onClose }: { drug: Drug; onClose: () => void }) {
 
   return (
     <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
-      <div className="bg-white rounded-xl shadow-xl w-full max-w-lg max-h-[90vh] overflow-y-auto">
+      <div className="bg-white rounded-xl shadow-xl w-full max-w-xl max-h-[90vh] overflow-y-auto">
         <div className="flex items-center justify-between p-5 border-b border-gray-200 sticky top-0 bg-white">
           <div>
             <h2 className="text-lg font-semibold text-gray-900">Receive Stock</h2>
@@ -605,7 +605,7 @@ function AdjustmentModal({ drug, onClose }: { drug: Drug; onClose: () => void })
 
   return (
     <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
-      <div className="bg-white rounded-xl shadow-xl w-full max-w-md">
+      <div className="bg-white rounded-xl shadow-xl w-full max-w-lg">
         <div className="flex items-center justify-between p-5 border-b border-gray-200">
           <div>
             <h2 className="text-lg font-semibold text-gray-900">Stock Adjustment</h2>
@@ -1113,7 +1113,7 @@ function SaleDetailModal({ saleId, onClose, clinicName }: { saleId: string; onCl
 
   return (
     <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
-      <div className="bg-white rounded-xl shadow-xl w-full max-w-lg max-h-[90vh] overflow-y-auto">
+      <div className="bg-white rounded-xl shadow-xl w-full max-w-xl max-h-[90vh] overflow-y-auto">
         <div className="flex items-center justify-between p-5 border-b border-gray-200 sticky top-0 bg-white">
           <div>
             <h2 className="text-lg font-semibold text-gray-900">Sale Receipt</h2>
@@ -1774,7 +1774,7 @@ function POSPanel({ clinicId, clinicName }: { clinicId: string; clinicName: stri
       {/* Sale success modal */}
       {completedSale && (
         <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-xl shadow-xl w-full max-w-md p-6 text-center space-y-4 relative">
+          <div className="bg-white rounded-xl shadow-xl w-full max-w-lg p-6 text-center space-y-4 relative">
             <button
               onClick={() => setCompletedSale(null)}
               className="absolute top-4 right-4 text-gray-400 hover:text-gray-600"

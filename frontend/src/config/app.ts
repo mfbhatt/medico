@@ -1,8 +1,10 @@
+const appName = import.meta.env.VITE_APP_NAME || "MedPortal";
+
 const appConfig = {
-  name: "Smart Clinic",
-  tagline: "Smart Clinic Management",
+  name: appName,
+  tagline: `${appName} - Clinic Management`,
   supportEmail: "support@clinichub.com",
-  copyrightHolder: "Smart Clinic",
+  copyrightHolder: appName,
 };
 
 export default appConfig;

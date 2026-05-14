@@ -387,6 +387,17 @@ async def update_user(
         if field in body:
             setattr(user, field, body[field])
 
+    if "email" in body and body["email"]:
+        new_email = body["email"].lower().strip()
+        if new_email != user.email:
+            conflict = (await db.execute(
+                select(User).where(User.email == new_email, User.is_deleted.isnot(True))
+            )).scalar_one_or_none()
+            if conflict:
+                raise ConflictException(detail="A user with this email already exists")
+            user.email = new_email
+            user.is_email_verified = False
+
     if body.get("new_password"):
         if len(body["new_password"]) < 8:
             raise BadRequestException(detail="Password must be at least 8 characters")

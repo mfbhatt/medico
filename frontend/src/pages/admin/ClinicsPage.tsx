@@ -222,7 +222,7 @@ function ClinicModal({ isSuperAdmin, clinic, onClose, onSuccess }: { isSuperAdmi
   });
 
   const [address, setAddress] = useState<AddressValue>({
-    country: clinic?.country ?? "US",
+    country: clinic?.country ?? "",
     state: clinic?.state ?? "",
     city: clinic?.city ?? "",
     postal_code: clinic?.postal_code ?? "",
@@ -270,7 +270,7 @@ function ClinicModal({ isSuperAdmin, clinic, onClose, onSuccess }: { isSuperAdmi
 
   return (
     <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-      <div className="bg-white rounded-xl w-full max-w-lg p-6 max-h-[90vh] overflow-y-auto">
+      <div className="bg-white rounded-xl w-full max-w-xl p-6 max-h-[90vh] overflow-y-auto">
         <div className="flex items-center justify-between mb-5">
           <h3 className="text-base font-semibold text-slate-900">{isEdit ? "Edit Clinic" : "Add New Clinic"}</h3>
           <button onClick={onClose}>

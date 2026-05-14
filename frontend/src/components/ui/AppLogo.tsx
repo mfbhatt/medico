@@ -1,4 +1,4 @@
-import logoSrc from "../../assets/logo.svg";
+import logoSrc from "../../assets/icon.png";
 import appConfig from "../../config/app";
 
 interface AppLogoProps {

@@ -268,7 +268,7 @@ export default function SpecializationsPage() {
       {/* Create / Edit Modal */}
       {modalSpec !== null && (
         <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-xl shadow-xl w-full max-w-md">
+          <div className="bg-white rounded-xl shadow-xl w-full max-w-lg">
             <div className="flex items-center justify-between p-5 border-b border-gray-200">
               <h2 className="text-lg font-semibold text-gray-900">
                 {modalSpec === 'new' ? 'Add Specialization' : 'Edit Specialization'}
@@ -374,7 +374,7 @@ export default function SpecializationsPage() {
       {/* Delete Confirmation */}
       {deleteTarget && (
         <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-xl shadow-xl w-full max-w-sm p-5">
+          <div className="bg-white rounded-xl shadow-xl w-full max-w-md p-5">
             <h2 className="text-lg font-semibold text-gray-900 mb-1">Delete Specialization</h2>
             <p className="text-sm text-gray-600 mb-4">
               Delete <strong>{deleteTarget.name}</strong>? Doctors currently using this

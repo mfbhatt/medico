@@ -70,7 +70,7 @@ export default function DoctorSchedulePage() {
   const [addError, setAddError] = useState("");
   const [newEntry, setNewEntry] = useState<NewEntryForm>({
     clinic_id: "",
-    selected_days: ["monday"],
+    selected_days: [],
     start_time: "09:00",
     end_time: "17:00",
     slot_duration_minutes: 30,

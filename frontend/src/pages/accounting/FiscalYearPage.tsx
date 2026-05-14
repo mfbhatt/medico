@@ -136,7 +136,7 @@ export default function FiscalYearPage() {
 
       {showModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
-          <div className="bg-white rounded-xl shadow-xl w-full max-w-md p-6">
+          <div className="bg-white rounded-xl shadow-xl w-full max-w-lg p-6">
             <h2 className="text-lg font-semibold mb-4">{editId ? 'Edit Fiscal Year' : 'New Fiscal Year'}</h2>
             <div className="space-y-3">
               <div>

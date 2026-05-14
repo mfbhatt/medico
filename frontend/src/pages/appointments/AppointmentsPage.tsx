@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useSelector, useDispatch } from 'react-redux';
+import { Search } from 'lucide-react';
 import { RootState, AppDispatch } from '@/store';
 import { addToast } from '@/store/slices/uiSlice';
 import api from '@/services/api';
@@ -51,6 +52,7 @@ export default function AppointmentsPage() {
 
   const today = new Date().toISOString().slice(0, 10);
   // Single date picker: when set shows only that day; when empty shows all
+  const [search, setSearch] = useState('');
   const [dateFilter, setDateFilter] = useState(() => today);
   const [status, setStatus] = useState('');
   const [page, setPage] = useState(0);
@@ -75,11 +77,12 @@ export default function AppointmentsPage() {
     : undefined;
 
   const { data, isLoading } = useQuery({
-    queryKey: ['appointments', dateFilter, status, page, activePatientId],
+    queryKey: ['appointments', search, dateFilter, status, page, activePatientId],
     queryFn: () =>
       api
         .get('/appointments/', {
           params: {
+            q: search || undefined,
             date_from: dateFilter || undefined,
             date_to: dateFilter || undefined,
             status: status || undefined,
@@ -219,6 +222,19 @@ export default function AppointmentsPage() {
 
       {/* Filters */}
       <div className="card p-4 mb-6 flex flex-wrap gap-3 items-end">
+        <div className="flex-1 min-w-[220px]">
+          <label className="label">Search</label>
+          <div className="relative">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400 pointer-events-none" />
+            <input
+              type="text"
+              className="input pl-9"
+              placeholder={isPatient ? 'Search by doctor or type…' : 'Search by patient, doctor or type…'}
+              value={search}
+              onChange={(e) => { setSearch(e.target.value); setPage(0); }}
+            />
+          </div>
+        </div>
         <div>
           <label className="label">Date</label>
           <input
@@ -380,7 +396,7 @@ export default function AppointmentsPage() {
       {/* Cancel / Check-In confirmation dialog */}
       {confirm && (
         <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-xl shadow-xl w-full max-w-sm">
+          <div className="bg-white rounded-xl shadow-xl w-full max-w-md">
             <div className="p-5">
               <h2 className="text-lg font-semibold text-gray-900 mb-1">
                 {confirm.type === 'cancel' ? 'Cancel Appointment' : 'Check In Patient'}
@@ -431,7 +447,7 @@ export default function AppointmentsPage() {
       {/* Payment dialog */}
       {payAppt && (
         <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-xl shadow-xl w-full max-w-sm">
+          <div className="bg-white rounded-xl shadow-xl w-full max-w-md">
             <div className="p-5">
               <h2 className="text-lg font-semibold text-gray-900 mb-1">Pay for Appointment</h2>
               <p className="text-sm text-gray-500 mb-1">Dr. {payAppt.doctor_name}</p>
@@ -469,7 +485,7 @@ export default function AppointmentsPage() {
       {/* Reschedule dialog */}
       {rescheduleAppt && (
         <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-xl shadow-xl w-full max-w-sm">
+          <div className="bg-white rounded-xl shadow-xl w-full max-w-md">
             <div className="p-5">
               <h2 className="text-lg font-semibold text-gray-900 mb-1">Reschedule Appointment</h2>
               <p className="text-sm text-gray-500 mb-4">

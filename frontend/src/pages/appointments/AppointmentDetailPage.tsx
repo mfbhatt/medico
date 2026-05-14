@@ -302,7 +302,7 @@ export default function AppointmentDetailPage() {
       </div>
       {showPayModal && (
         <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-xl shadow-xl w-full max-w-sm p-5">
+          <div className="bg-white rounded-xl shadow-xl w-full max-w-md p-5">
             <h2 className="text-lg font-semibold text-slate-900 mb-1">Choose Payment Method</h2>
             {appt.consultation_fee != null && (
               <p className="text-2xl font-bold text-slate-900 mb-5">₹{appt.consultation_fee.toLocaleString()}</p>
