@@ -1,4 +1,4 @@
-import { useState, useCallback, useRef, useEffect } from 'react';
+import { useState, useCallback, useRef, useEffect, useMemo } from 'react';
 import { useQuery, useMutation, useQueryClient, keepPreviousData } from '@tanstack/react-query';
 import { useAppSelector } from '@/store/hooks';
 import {
@@ -10,7 +10,7 @@ import { Bar, Doughnut } from 'react-chartjs-2';
 import {
   ShoppingCart, Package, ClipboardList, BarChart2, AlertTriangle,
   Plus, X, Printer, Search, ChevronLeft, ChevronRight, CheckCircle,
-  Minus, Trash2, AlertCircle, RefreshCw,
+  Minus, Trash2, AlertCircle, RefreshCw, FileText, ShieldAlert,
 } from 'lucide-react';
 import api from '@/services/api';
 import { useDebounce } from '@/hooks/useDebounce';
@@ -53,6 +53,13 @@ interface CartItem {
   discount_percent: number;
   line_total: number;
   available_stock: number;
+  sig: string;
+  batch_id?: string;
+  batch_number?: string;
+  batch_expiry?: string;
+  requires_prescription: boolean;
+  is_controlled: boolean;
+  generic_name?: string;
 }
 
 interface SaleRecord {
@@ -83,9 +90,9 @@ interface PurchaseOrder {
 const PAYMENT_METHODS = [
   { value: 'cash', label: 'Cash' },
   { value: 'card', label: 'Card' },
-  { value: 'insurance', label: 'Insurance' },
+  // { value: 'insurance', label: 'Insurance' },
   { value: 'bank_transfer', label: 'Bank Transfer' },
-  { value: 'wallet', label: 'Wallet' },
+  // { value: 'wallet', label: 'Wallet' },
 ];
 
 const DRUG_FORMS = [
@@ -96,16 +103,21 @@ const DRUG_FORMS = [
 // ─── Print Receipt ────────────────────────────────────────────────────────────
 
 function printReceipt(sale: any, clinicName: string) {
-  const w = window.open('', '_blank', 'width=420,height=700');
+  const w = window.open('', '_blank', 'width=420,height=800');
   if (!w) return;
+
   const itemRows = sale.items
     .map(
-      (i: any) =>
-        `<tr>
-          <td style="padding:2px 0">${i.drug_name}</td>
-          <td style="text-align:right;padding:2px 4px">${i.quantity}</td>
-          <td style="text-align:right;padding:2px 4px">${i.unit_price.toFixed(2)}</td>
-          <td style="text-align:right;padding:2px 0">${i.line_total.toFixed(2)}</td>
+      (i: any) => `
+        <tr>
+          <td style="padding:3px 0 0">
+            <b>${i.drug_name}</b>
+            ${i.sig_instructions ? `<div style="font-size:10px;color:#444;margin-top:1px">Directions: ${i.sig_instructions}</div>` : ''}
+            ${i.batch_number ? `<div style="font-size:10px;color:#777">Batch: ${i.batch_number}${i.expiry_date ? ` · Exp: ${i.expiry_date}` : ''}</div>` : ''}
+          </td>
+          <td style="text-align:right;padding:3px 4px 0;vertical-align:top">${i.quantity}</td>
+          <td style="text-align:right;padding:3px 4px 0;vertical-align:top">${i.unit_price.toFixed(2)}</td>
+          <td style="text-align:right;padding:3px 0 0;vertical-align:top">${i.line_total.toFixed(2)}</td>
         </tr>`,
     )
     .join('');
@@ -114,46 +126,185 @@ function printReceipt(sale: any, clinicName: string) {
 <html><head><title>Receipt ${sale.sale_number}</title>
 <style>
   body{font-family:monospace;font-size:12px;margin:0;padding:16px;max-width:380px}
-  h2{text-align:center;margin:0 0 4px;font-size:14px}
-  .sub{text-align:center;font-size:11px;color:#555;margin-bottom:8px}
+  h2{text-align:center;margin:0 0 2px;font-size:15px}
+  .clinic-sub{text-align:center;font-size:11px;color:#555;margin-bottom:2px}
+  .doc-title{text-align:center;font-size:11px;font-weight:bold;letter-spacing:1px;margin-bottom:8px}
   hr{border:none;border-top:1px dashed #999;margin:6px 0}
   table{width:100%;border-collapse:collapse}
   th{font-size:10px;text-align:left;border-bottom:1px solid #ccc;padding-bottom:3px}
   th:not(:first-child){text-align:right}
   .totals td{padding:1px 0}
-  .total-row{font-weight:bold;font-size:13px}
+  .total-row td{font-weight:bold;font-size:13px;padding-top:4px}
   .footer{text-align:center;margin-top:12px;font-size:11px;color:#666}
+  .partial-note{text-align:center;font-size:11px;color:#b45309;font-weight:bold;margin:4px 0}
 </style></head><body>
 <h2>${clinicName}</h2>
-<div class="sub">Pharmacy Receipt</div>
+<div class="clinic-sub">Pharmacy Department</div>
+<div class="doc-title">DISPENSING RECEIPT</div>
 <hr/>
-<table><tr>
-  <td>Receipt #:</td><td style="text-align:right"><b>${sale.sale_number}</b></td>
-</tr><tr>
-  <td>Date:</td><td style="text-align:right">${new Date(sale.created_at).toLocaleString()}</td>
-</tr>${sale.patient_name ? `<tr><td>Patient:</td><td style="text-align:right">${sale.patient_name}</td></tr>` : ''}${sale.patient_id && !sale.patient_name ? `<tr><td>Patient ID:</td><td style="text-align:right">${sale.patient_id}</td></tr>` : ''}
+<table>
+  <tr><td>Receipt #:</td><td style="text-align:right"><b>${sale.sale_number}</b></td></tr>
+  <tr><td>Date:</td><td style="text-align:right">${new Date(sale.created_at).toLocaleString()}</td></tr>
+  ${sale.patient_name ? `<tr><td>Patient:</td><td style="text-align:right"><b>${sale.patient_name}</b></td></tr>` : ''}
+  ${sale.patient_id ? `<tr><td>Patient ID:</td><td style="text-align:right">${sale.patient_id}</td></tr>` : ''}
+  ${sale.prescription_number ? `<tr><td>Prescription #:</td><td style="text-align:right">${sale.prescription_number}</td></tr>` : ''}
+  <tr><td>Payment:</td><td style="text-align:right;text-transform:capitalize">${sale.payment_method}</td></tr>
 </table>
 <hr/>
 <table>
   <thead><tr>
-    <th>Item</th><th>Qty</th><th>Price</th><th>Total</th>
+    <th>Drug / Directions</th><th>Qty</th><th>Price</th><th>Total</th>
   </tr></thead>
   <tbody>${itemRows}</tbody>
 </table>
 <hr/>
+${sale.is_partial ? '<div class="partial-note">⚠ PARTIAL DISPENSE — patient to return for balance</div><hr/>' : ''}
 <table class="totals">
   <tr><td>Subtotal</td><td style="text-align:right">${sale.subtotal.toFixed(2)}</td></tr>
-  ${sale.discount_amount > 0 ? `<tr><td>Discount</td><td style="text-align:right">-${sale.discount_amount.toFixed(2)}</td></tr>` : ''}
+  ${sale.discount_amount > 0 ? `<tr><td>Discount${sale.discount_percent ? ` (${sale.discount_percent}%)` : ''}</td><td style="text-align:right">-${sale.discount_amount.toFixed(2)}</td></tr>` : ''}
   ${sale.tax_amount > 0 ? `<tr><td>Tax</td><td style="text-align:right">${sale.tax_amount.toFixed(2)}</td></tr>` : ''}
   <tr class="total-row"><td>TOTAL</td><td style="text-align:right">${sale.total_amount.toFixed(2)}</td></tr>
-  <tr><td>Payment (${sale.payment_method})</td><td style="text-align:right">${sale.paid_amount.toFixed(2)}</td></tr>
+  <tr><td>Paid</td><td style="text-align:right">${sale.paid_amount.toFixed(2)}</td></tr>
   ${sale.change_amount > 0 ? `<tr><td>Change</td><td style="text-align:right">${sale.change_amount.toFixed(2)}</td></tr>` : ''}
 </table>
 <hr/>
-<div class="footer">Thank you for your visit!<br/>Please keep this receipt for your records.</div>
+<div class="footer">Thank you for your visit!<br/>Keep this receipt for your records.</div>
 <script>window.onload=()=>{window.print();window.close();}</script>
 </body></html>`);
   w.document.close();
+}
+
+// ─── Sig Selector (structured dosage instructions) ────────────────────────────
+
+const DOSE_OPTIONS: Record<string, string[]> = {
+  tablet:      ['½ tablet', '1 tablet', '1½ tablets', '2 tablets', '3 tablets'],
+  capsule:     ['1 capsule', '2 capsules'],
+  syrup:       ['2.5 ml', '5 ml', '7.5 ml', '10 ml', '15 ml', '20 ml'],
+  injection:   ['1 ampule', '½ vial', '1 vial'],
+  cream:       ['thin layer', 'small amount'],
+  gel:         ['thin layer', 'small amount'],
+  drops:       ['1 drop', '2 drops', '3 drops', '4 drops', '5 drops'],
+  inhaler:     ['1 puff', '2 puffs'],
+  patch:       ['1 patch'],
+  suppository: ['1 suppository'],
+  powder:      ['1 sachet', '½ sachet'],
+};
+
+const FREQ_OPTIONS = [
+  'once daily', 'twice daily', 'three times daily', 'four times daily',
+  'every 4 hours', 'every 6 hours', 'every 8 hours', 'every 12 hours',
+  'at bedtime', 'once weekly', 'as needed',
+];
+
+const TIMING_OPTIONS = [
+  { value: '',                 label: '—' },
+  { value: 'before food',      label: 'before food' },
+  { value: 'after food',       label: 'after food' },
+  { value: 'with food',        label: 'with food' },
+  { value: 'on empty stomach', label: 'on empty stomach' },
+  { value: 'with water',       label: 'with water' },
+  { value: 'at bedtime',       label: 'at bedtime' },
+  { value: 'in the morning',   label: 'in the morning' },
+];
+
+function SigSelector({ form, value, onChange }: { form: string; value: string; onChange: (sig: string) => void }) {
+  const doses = DOSE_OPTIONS[form.toLowerCase()] ?? ['1 unit', '2 units'];
+  const [dose, setDose] = useState(doses[0]);
+  const [freq, setFreq] = useState('twice daily');
+  const [timing, setTiming] = useState('after food');
+
+  const onChangeRef = useRef(onChange);
+  onChangeRef.current = onChange;
+
+  useEffect(() => {
+    if (!value) {
+      onChangeRef.current(`Take ${doses[0]} twice daily after food`);
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const emit = (d: string, f: string, t: string) =>
+    onChange(`Take ${d} ${f}${t ? ' ' + t : ''}`);
+
+  return (
+    <div className="flex items-center gap-0.5 flex-1 min-w-0">
+      <select
+        value={dose}
+        onChange={(e) => { const v = e.target.value; setDose(v); emit(v, freq, timing); }}
+        className="input text-[10px] py-0 h-6 px-1 min-w-0 flex-1"
+        title="Dose"
+      >
+        {doses.map((d) => <option key={d} value={d}>{d}</option>)}
+      </select>
+      <select
+        value={freq}
+        onChange={(e) => { const v = e.target.value; setFreq(v); emit(dose, v, timing); }}
+        className="input text-[10px] py-0 h-6 px-1 min-w-0 flex-[1.4]"
+        title="Frequency"
+      >
+        {FREQ_OPTIONS.map((f) => <option key={f} value={f}>{f}</option>)}
+      </select>
+      <select
+        value={timing}
+        onChange={(e) => { const v = e.target.value; setTiming(v); emit(dose, freq, v); }}
+        className="input text-[10px] py-0 h-6 px-1 min-w-0 flex-[1.2]"
+        title="Timing"
+      >
+        {TIMING_OPTIONS.map((t) => <option key={t.value} value={t.value}>{t.label}</option>)}
+      </select>
+    </div>
+  );
+}
+
+// ─── Batch Selector (cart item) ───────────────────────────────────────────────
+
+function CartBatchRow({
+  item,
+  clinicId,
+  onBatchChange,
+}: {
+  item: CartItem;
+  clinicId: string;
+  onBatchChange: (drugId: string, batchId: string, batchNumber: string, batchExpiry: string) => void;
+}) {
+  const { data } = useQuery({
+    queryKey: ['drug-batches', item.drug_id, clinicId],
+    queryFn: () =>
+      api
+        .get('/inventory/batches', { params: { drug_id: item.drug_id, status: 'active', clinic_id: clinicId, page_size: 20 } })
+        .then((r) => r.data.data ?? []),
+    staleTime: 60_000,
+  });
+  const batches: any[] = data ?? [];
+
+  const onBatchChangeRef = useRef(onBatchChange);
+  onBatchChangeRef.current = onBatchChange;
+
+  useEffect(() => {
+    if (batches.length > 0 && !item.batch_id) {
+      const first = batches[0];
+      onBatchChangeRef.current(item.drug_id, first.id, first.batch_number ?? '—', first.expiry_date ?? '');
+    }
+  }, [batches, item.batch_id, item.drug_id]);
+
+  if (!batches.length) return <span className="text-[10px] text-gray-400 italic">No batch info</span>;
+
+  return (
+    <select
+      className="input text-[10px] py-0 px-1.5 h-6 flex-1"
+      value={item.batch_id ?? ''}
+      onChange={(e) => {
+        const b = batches.find((b: any) => b.id === e.target.value);
+        if (b) onBatchChange(item.drug_id, b.id, b.batch_number ?? '—', b.expiry_date ?? '');
+      }}
+    >
+      {batches.map((b: any) => (
+        <option key={b.id} value={b.id}>
+          {b.batch_number ?? '—'} · exp {b.expiry_date} · {b.quantity_remaining} left
+        </option>
+      ))}
+    </select>
+  );
 }
 
 // ─── Add Drug Modal ────────────────────────────────────────────────────────────
@@ -504,47 +655,151 @@ function AdjustmentModal({ drug, onClose }: { drug: Drug; onClose: () => void })
 
 // ─── Purchase Order Modal ──────────────────────────────────────────────────────
 
+// Fallback suppliers — replace with API data once /inventory/suppliers endpoint exists
+const FALLBACK_SUPPLIERS: { name: string; contact: string }[] = [
+  { name: 'MedLine Pharmaceuticals',   contact: '+92-21-3456-7890' },
+  { name: 'PharmaCare Distributors',   contact: '+92-42-3512-6600' },
+  { name: 'NovaMed Supplies',          contact: '+92-51-2871-4400' },
+  { name: 'HealthBridge Logistics',    contact: '+92-21-3890-1122' },
+  { name: 'CureMed Wholesale',         contact: '+92-41-8723-5500' },
+];
+
 interface POItem { drug_id: string; drug_name: string; quantity: number; unit_cost: number }
 
 function PurchaseOrderModal({ onClose, clinics, drugs, defaultClinicId }: { onClose: () => void; clinics: { id: string; name: string }[]; drugs: Drug[]; defaultClinicId?: string }) {
   const qc = useQueryClient();
+  const { success: notify } = useNotification();
   const [form, setForm] = useState({
     clinic_id: defaultClinicId || (clinics[0]?.id ?? ''),
     supplier_name: '', supplier_contact: '', expected_delivery_date: '', notes: '',
   });
   const [items, setItems] = useState<POItem[]>([]);
   const [error, setError] = useState('');
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
+  const [touched, setTouched] = useState<Record<string, boolean>>({});
+
+  const validate = (f = form, its = items) => {
+    const errs: Record<string, string> = {};
+    if (!f.supplier_name.trim())        errs.supplier_name        = 'Supplier name is required';
+    if (!f.supplier_contact.trim())     errs.supplier_contact     = 'Supplier contact is required';
+    if (!f.expected_delivery_date)      errs.expected_delivery_date = 'Expected delivery date is required';
+    else if (f.expected_delivery_date < new Date().toISOString().slice(0, 10))
+                                        errs.expected_delivery_date = 'Date must be today or in the future';
+    if (its.length === 0)               errs.items                = 'Add at least one order item';
+    else {
+      its.forEach((item, idx) => {
+        if (item.quantity < 1)   errs[`item_qty_${idx}`]  = 'Qty must be ≥ 1';
+        if (item.unit_cost <= 0) errs[`item_cost_${idx}`] = 'Unit cost must be > 0';
+      });
+    }
+    return errs;
+  };
+
+  const touch = (field: string) =>
+    setTouched((t) => ({ ...t, [field]: true }));
+
+  const err = (field: string) =>
+    touched[field] ? fieldErrors[field] : undefined;
+
+  // ── Supplier combobox state ──────────────────────────────────────────────────
+  const [supplierQuery, setSupplierQuery] = useState('');
+  const [showSuggestions, setShowSuggestions] = useState(false);
+  const [supplierLocked, setSupplierLocked] = useState(false); // contact auto-filled from known supplier
+  const supplierRef = useRef<HTMLDivElement>(null);
+
+  const { data: posData } = useQuery({
+    queryKey: ['pharmacy-pos-all'],
+    queryFn: () => api.get('/inventory/purchase-orders', { params: { page: 1, page_size: 200 } }).then((r) => r.data),
+  });
+
+  // Build unique supplier map: name → contact (fallbacks first, real PO data overrides)
+  const supplierMap = useMemo(() => {
+    const map = new Map<string, string>();
+    FALLBACK_SUPPLIERS.forEach((s) => map.set(s.name, s.contact));
+    (posData?.data ?? []).forEach((po: any) => {
+      if (po.supplier_name) map.set(po.supplier_name, po.supplier_contact ?? '');
+    });
+    return map;
+  }, [posData]);
+
+  const suggestions = useMemo(() => {
+    if (!supplierQuery.trim()) return [];
+    const q = supplierQuery.toLowerCase();
+    return Array.from(supplierMap.keys()).filter((name) => name.toLowerCase().includes(q)).slice(0, 8);
+  }, [supplierQuery, supplierMap]);
+
+  const selectSupplier = (name: string) => {
+    setSupplierQuery(name);
+    const updated = { ...form, supplier_name: name, supplier_contact: supplierMap.get(name) ?? '' };
+    setForm(updated);
+    setFieldErrors(validate(updated, items));
+    setSupplierLocked(true);
+    setShowSuggestions(false);
+  };
+
+  const clearSupplier = () => {
+    setSupplierQuery('');
+    const updated = { ...form, supplier_name: '', supplier_contact: '' };
+    setForm(updated);
+    setFieldErrors(validate(updated, items));
+    setSupplierLocked(false);
+  };
+
+  // Close dropdown on outside click
+  useEffect(() => {
+    const handler = (e: MouseEvent) => {
+      if (supplierRef.current && !supplierRef.current.contains(e.target as Node))
+        setShowSuggestions(false);
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, []);
 
   const addItem = () => {
     const drug = drugs[0];
     if (!drug) return;
-    setItems((p) => [...p, { drug_id: drug.id, drug_name: drug.name, quantity: 1, unit_cost: drug.unit_cost }]);
+    const next = [...items, { drug_id: drug.id, drug_name: drug.name, quantity: 1, unit_cost: drug.unit_cost }];
+    setItems(next);
+    setFieldErrors(validate(form, next));
   };
 
-  const removeItem = (idx: number) => setItems((p) => p.filter((_, i) => i !== idx));
+  const removeItem = (idx: number) => {
+    const next = items.filter((_, i) => i !== idx);
+    setItems(next);
+    setFieldErrors(validate(form, next));
+  };
 
-  const updateItem = (idx: number, field: keyof POItem, value: string | number) =>
-    setItems((p) =>
-      p.map((item, i) => {
-        if (i !== idx) return item;
-        if (field === 'drug_id') {
-          const d = drugs.find((dr) => dr.id === value);
-          return { ...item, drug_id: String(value), drug_name: d?.name ?? '', unit_cost: d?.unit_cost ?? 0 };
-        }
-        return { ...item, [field]: Number(value) };
-      }),
-    );
+  const updateItem = (idx: number, field: keyof POItem, value: string | number) => {
+    const next = items.map((item, i) => {
+      if (i !== idx) return item;
+      if (field === 'drug_id') {
+        const d = drugs.find((dr) => dr.id === value);
+        return { ...item, drug_id: String(value), drug_name: d?.name ?? '', unit_cost: d?.unit_cost ?? 0 };
+      }
+      return { ...item, [field]: Number(value) };
+    });
+    setItems(next);
+    setFieldErrors(validate(form, next));
+  };
 
   const total = items.reduce((s, i) => s + i.quantity * i.unit_cost, 0);
 
   const mutation = useMutation({
     mutationFn: (data: any) => api.post('/inventory/purchase-orders', data),
-    onSuccess: () => { qc.invalidateQueries({ queryKey: ['pharmacy-pos'] }); onClose(); },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['pharmacy-pos'] });
+      qc.invalidateQueries({ queryKey: ['pharmacy-pos-all'] });
+      notify(`Purchase order for ${form.supplier_name} submitted successfully`);
+      onClose();
+    },
     onError: (err: any) => setError(err.response?.data?.detail ?? 'Failed to create PO'),
   });
 
-  const set = (f: string) => (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) =>
-    setForm((p) => ({ ...p, [f]: e.target.value }));
+  const set = (f: string) => (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
+    const updated = { ...form, [f]: e.target.value };
+    setForm(updated);
+    setFieldErrors(validate(updated, items));
+  };
 
   return (
     <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
@@ -556,7 +811,11 @@ function PurchaseOrderModal({ onClose, clinics, drugs, defaultClinicId }: { onCl
         <form
           onSubmit={(e) => {
             e.preventDefault();
-            if (!items.length) { setError('Add at least one item'); return; }
+            const errs = validate();
+            setFieldErrors(errs);
+            setTouched({ supplier_name: true, supplier_contact: true, expected_delivery_date: true, items: true,
+              ...Object.fromEntries(items.flatMap((_, i) => [`item_qty_${i}`, `item_cost_${i}`].map((k) => [k, true]))) });
+            if (Object.keys(errs).length) return;
             setError('');
             mutation.mutate({
               ...form,
@@ -577,17 +836,75 @@ function PurchaseOrderModal({ onClose, clinics, drugs, defaultClinicId }: { onCl
                 {clinics.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
               </select>
             </div>
-            <div>
+            <div ref={supplierRef} className="relative">
               <label className="label">Supplier *</label>
-              <input className="input" value={form.supplier_name} onChange={set('supplier_name')} required />
+              <div className="relative">
+                <input
+                  className={`input pr-7 ${err('supplier_name') ? 'border-red-400 focus:ring-red-400' : ''}`}
+                  value={supplierQuery}
+                  onChange={(e) => {
+                    const val = e.target.value;
+                    setSupplierQuery(val);
+                    const updated = { ...form, supplier_name: val };
+                    setForm(updated);
+                    setSupplierLocked(false);
+                    setShowSuggestions(true);
+                    setFieldErrors(validate(updated, items));
+                  }}
+                  onFocus={() => { if (supplierQuery) setShowSuggestions(true); }}
+                  onBlur={() => touch('supplier_name')}
+                  placeholder="Search or enter supplier name"
+                  autoComplete="off"
+                />
+                {supplierQuery && (
+                  <button type="button" onClick={clearSupplier}
+                    className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600">
+                    <X className="w-3.5 h-3.5" />
+                  </button>
+                )}
+              </div>
+              {showSuggestions && suggestions.length > 0 && (
+                <ul className="absolute z-50 w-full mt-1 bg-white border border-gray-200 rounded-lg shadow-lg max-h-48 overflow-y-auto">
+                  {suggestions.map((name) => (
+                    <li key={name}
+                      onMouseDown={() => selectSupplier(name)}
+                      className="px-3 py-2 text-sm cursor-pointer hover:bg-primary-50 hover:text-primary-700 flex items-center justify-between gap-2">
+                      <span>{name}</span>
+                      {supplierMap.get(name) && (
+                        <span className="text-xs text-gray-400">{supplierMap.get(name)}</span>
+                      )}
+                    </li>
+                  ))}
+                </ul>
+              )}
+              {err('supplier_name') && <p className="mt-1 text-xs text-red-500">{err('supplier_name')}</p>}
             </div>
             <div>
-              <label className="label">Supplier Contact</label>
-              <input className="input" value={form.supplier_contact} onChange={set('supplier_contact')} />
+              <label className="label">
+                Supplier Contact *
+                {supplierLocked && <span className="ml-1 text-xs text-primary-600">(auto-filled)</span>}
+              </label>
+              <input
+                className={`input ${supplierLocked ? 'bg-gray-50 text-gray-500' : ''} ${err('supplier_contact') ? 'border-red-400 focus:ring-red-400' : ''}`}
+                value={form.supplier_contact}
+                onChange={set('supplier_contact')}
+                onBlur={() => touch('supplier_contact')}
+                placeholder="Phone or email"
+                readOnly={supplierLocked}
+              />
+              {err('supplier_contact') && <p className="mt-1 text-xs text-red-500">{err('supplier_contact')}</p>}
             </div>
             <div>
-              <label className="label">Expected Delivery</label>
-              <input className="input" type="date" value={form.expected_delivery_date} onChange={set('expected_delivery_date')} />
+              <label className="label">Expected Delivery *</label>
+              <input
+                className={`input ${err('expected_delivery_date') ? 'border-red-400 focus:ring-red-400' : ''}`}
+                type="date"
+                value={form.expected_delivery_date}
+                onChange={set('expected_delivery_date')}
+                onBlur={() => touch('expected_delivery_date')}
+                min={new Date().toISOString().slice(0, 10)}
+              />
+              {err('expected_delivery_date') && <p className="mt-1 text-xs text-red-500">{err('expected_delivery_date')}</p>}
             </div>
           </div>
 
@@ -599,32 +916,60 @@ function PurchaseOrderModal({ onClose, clinics, drugs, defaultClinicId }: { onCl
               </button>
             </div>
             {items.length === 0 ? (
-              <p className="text-sm text-gray-400 text-center py-4 border border-dashed border-gray-200 rounded-lg">Click "Add Item" to add drugs to this order</p>
+              <div>
+                <p className={`text-sm text-center py-4 border border-dashed rounded-lg ${err('items') ? 'border-red-300 text-red-400 bg-red-50' : 'border-gray-200 text-gray-400'}`}>
+                  Click "Add Item" to add drugs to this order
+                </p>
+                {err('items') && <p className="mt-1 text-xs text-red-500">{err('items')}</p>}
+              </div>
             ) : (
               <div className="space-y-2">
                 {items.map((item, idx) => (
-                  <div key={idx} className="grid grid-cols-12 gap-2 items-center">
-                    <div className="col-span-5">
-                      <select className="input text-xs" value={item.drug_id} onChange={(e) => updateItem(idx, 'drug_id', e.target.value)}>
-                        {drugs.map((d) => <option key={d.id} value={d.id}>{d.name} {d.strength}</option>)}
-                      </select>
+                  <div key={idx} className="space-y-1">
+                    <div className="grid grid-cols-12 gap-2 items-center">
+                      <div className="col-span-5">
+                        <select className="input text-xs" value={item.drug_id} onChange={(e) => updateItem(idx, 'drug_id', e.target.value)}>
+                          {drugs.map((d) => <option key={d.id} value={d.id}>{d.name} {d.strength}</option>)}
+                        </select>
+                      </div>
+                      <div className="col-span-2">
+                        <input
+                          className={`input text-xs ${err(`item_qty_${idx}`) ? 'border-red-400' : ''}`}
+                          type="number" min={1} placeholder="Qty"
+                          value={item.quantity}
+                          onChange={(e) => updateItem(idx, 'quantity', e.target.value)}
+                          onBlur={() => touch(`item_qty_${idx}`)}
+                        />
+                      </div>
+                      <div className="col-span-2">
+                        <input
+                          className={`input text-xs ${err(`item_cost_${idx}`) ? 'border-red-400' : ''}`}
+                          type="number" min={0} step="0.01" placeholder="Unit cost"
+                          value={item.unit_cost}
+                          onChange={(e) => updateItem(idx, 'unit_cost', e.target.value)}
+                          onBlur={() => touch(`item_cost_${idx}`)}
+                        />
+                      </div>
+                      <div className="col-span-2 text-right text-sm font-medium text-gray-700">
+                        {(item.quantity * item.unit_cost).toFixed(2)}
+                      </div>
+                      <div className="col-span-1 text-right">
+                        <button type="button" onClick={() => removeItem(idx)} className="text-red-400 hover:text-red-600">
+                          <X className="w-4 h-4" />
+                        </button>
+                      </div>
                     </div>
-                    <div className="col-span-2">
-                      <input className="input text-xs" type="number" min={1} placeholder="Qty"
-                        value={item.quantity} onChange={(e) => updateItem(idx, 'quantity', e.target.value)} />
-                    </div>
-                    <div className="col-span-2">
-                      <input className="input text-xs" type="number" min={0} step="0.01" placeholder="Unit cost"
-                        value={item.unit_cost} onChange={(e) => updateItem(idx, 'unit_cost', e.target.value)} />
-                    </div>
-                    <div className="col-span-2 text-right text-sm font-medium text-gray-700">
-                      {(item.quantity * item.unit_cost).toFixed(2)}
-                    </div>
-                    <div className="col-span-1 text-right">
-                      <button type="button" onClick={() => removeItem(idx)} className="text-red-400 hover:text-red-600">
-                        <X className="w-4 h-4" />
-                      </button>
-                    </div>
+                    {(err(`item_qty_${idx}`) || err(`item_cost_${idx}`)) && (
+                      <div className="grid grid-cols-12 gap-2">
+                        <div className="col-span-5" />
+                        <div className="col-span-2">
+                          {err(`item_qty_${idx}`) && <p className="text-xs text-red-500">{err(`item_qty_${idx}`)}</p>}
+                        </div>
+                        <div className="col-span-2">
+                          {err(`item_cost_${idx}`) && <p className="text-xs text-red-500">{err(`item_cost_${idx}`)}</p>}
+                        </div>
+                      </div>
+                    )}
                   </div>
                 ))}
                 <div className="flex justify-end pt-2 border-t border-gray-100">
@@ -751,7 +1096,7 @@ function ReceivePOModal({ po, onClose }: { po: any; onClose: () => void }) {
 
 // ─── Receipt View Modal ────────────────────────────────────────────────────────
 
-function SaleDetailModal({ saleId, onClose }: { saleId: string; onClose: () => void }) {
+function SaleDetailModal({ saleId, onClose, clinicName }: { saleId: string; onClose: () => void; clinicName: string }) {
   const fmt = useCurrency();
   const { data } = useQuery({
     queryKey: ['pharmacy-sale', saleId],
@@ -775,7 +1120,7 @@ function SaleDetailModal({ saleId, onClose }: { saleId: string; onClose: () => v
             <p className="text-sm text-gray-500">{data.sale_number}</p>
           </div>
           <div className="flex gap-2">
-            <button onClick={() => printReceipt(data, 'Pharmacy')} className="btn-secondary flex items-center gap-1.5 text-sm py-1.5">
+            <button onClick={() => printReceipt(data, clinicName)} className="btn-secondary flex items-center gap-1.5 text-sm py-1.5">
               <Printer className="w-4 h-4" /> Print
             </button>
             <button onClick={onClose}><X className="w-5 h-5 text-gray-400" /></button>
@@ -844,11 +1189,11 @@ function SaleDetailModal({ saleId, onClose }: { saleId: string; onClose: () => v
 
 // ─── POS Panel ────────────────────────────────────────────────────────────────
 
-function POSPanel({ clinicId }: { clinicId: string }) {
+function POSPanel({ clinicId, clinicName }: { clinicId: string; clinicName: string }) {
   const fmt = useCurrency();
   const qc = useQueryClient();
   const [search, setSearch] = useState('');
-  const debouncedSearch = useDebounce(search, 300);
+  const debouncedSearch = useDebounce(search, 400);
   const [cart, setCart] = useState<CartItem[]>([]);
   const [patientSearch, setPatientSearch] = useState('');
   const debouncedPatientSearch = useDebounce(patientSearch, 350);
@@ -862,15 +1207,17 @@ function POSPanel({ clinicId }: { clinicId: string }) {
   const [notes, setNotes] = useState('');
   const [completedSale, setCompletedSale] = useState<any>(null);
   const [error, setError] = useState('');
+  const [selectedPrescription, setSelectedPrescription] = useState<{ id: string; rx_number: string; doctor_name?: string } | null>(null);
+  const [isPartialDispense, setIsPartialDispense] = useState(false);
 
   const { data: drugsData, isLoading, isFetching, isError: drugsError, error: drugsErrorObj } = useQuery({
     queryKey: ['pharmacy-pos-drugs', debouncedSearch, clinicId],
     queryFn: () =>
-      api.get('/inventory/drugs', { params: { q: debouncedSearch || undefined, page_size: 30, ...(clinicId ? { clinic_id: clinicId } : {}) } })
+      api.get('/inventory/drugs', { params: { q: debouncedSearch || undefined, page_size: 50, ...(clinicId ? { clinic_id: clinicId } : {}) } })
         .then((r) => r.data.data ?? []),
     enabled: !!clinicId,
     placeholderData: keepPreviousData,
-    staleTime: 30_000,
+    staleTime: 60_000,
   });
   const drugs: Drug[] = drugsData ?? [];
   const posErrorMsg = drugsError ? ((drugsErrorObj as any)?.response?.data?.detail ?? (drugsErrorObj as any)?.message ?? 'Failed to load drugs') : null;
@@ -887,6 +1234,28 @@ function POSPanel({ clinicId }: { clinicId: string }) {
     staleTime: 30_000,
   });
   const patientList: any[] = patientSearchData ?? [];
+
+  const { data: patientDetail } = useQuery({
+    queryKey: ['patient-detail-pharmacy', selectedPatient?.id],
+    queryFn: () => api.get(`/patients/${selectedPatient!.id}`).then((r) => r.data.data),
+    enabled: !!selectedPatient?.id,
+    staleTime: 300_000,
+  });
+  const patientAllergies = useMemo<string[]>(() => {
+    if (!patientDetail) return [];
+    const raw = patientDetail.allergies ?? patientDetail.medical_history?.allergies ?? [];
+    return raw.map((a: any) => (typeof a === 'string' ? a : (a.allergen ?? a.name ?? '')).toLowerCase()).filter(Boolean);
+  }, [patientDetail]);
+
+  const { data: prescriptionsData } = useQuery({
+    queryKey: ['patient-prescriptions', selectedPatient?.id],
+    queryFn: () =>
+      api.get('/prescriptions/', { params: { patient_id: selectedPatient!.id, status: 'active', page_size: 20 } })
+        .then((r) => r.data.data ?? []),
+    enabled: !!selectedPatient?.id,
+    staleTime: 60_000,
+  });
+  const prescriptions: any[] = prescriptionsData ?? [];
 
   useEffect(() => {
     function handleClick(e: MouseEvent) {
@@ -922,6 +1291,10 @@ function POSPanel({ clinicId }: { clinicId: string }) {
           discount_percent: 0,
           line_total: drug.selling_price,
           available_stock: drug.total_stock,
+          sig: '',
+          requires_prescription: drug.requires_prescription,
+          is_controlled: drug.is_controlled,
+          generic_name: drug.generic_name,
         },
       ];
     });
@@ -950,8 +1323,27 @@ function POSPanel({ clinicId }: { clinicId: string }) {
 
   const removeFromCart = (drug_id: string) => setCart((prev) => prev.filter((i) => i.drug_id !== drug_id));
 
+  const updateCartSig = useCallback((drug_id: string, sig: string) => {
+    setCart((prev) => prev.map((i) => (i.drug_id !== drug_id ? i : { ...i, sig })));
+  }, []);
+
+  const updateCartBatch = useCallback((drug_id: string, batch_id: string, batch_number: string, batch_expiry: string) => {
+    setCart((prev) => prev.map((i) => (i.drug_id !== drug_id ? i : { ...i, batch_id, batch_number, batch_expiry })));
+  }, []);
+
+  const allergyWarnings = useMemo(
+    () =>
+      cart.filter((item) => {
+        if (!patientAllergies.length) return false;
+        const drugText = `${item.drug_name} ${item.generic_name ?? ''}`.toLowerCase();
+        return patientAllergies.some((a) => a.length > 2 && drugText.includes(a));
+      }),
+    [cart, patientAllergies],
+  );
+
   const subtotal = cart.reduce((s, i) => s + i.line_total, 0);
-  const disc = parseFloat(discountAmount) || 0;
+  const discPct = Math.min(100, Math.max(0, parseFloat(discountAmount) || 0));
+  const disc = subtotal * discPct / 100;
   const tax = parseFloat(taxAmount) || 0;
   const total = Math.max(0, subtotal - disc + tax);
   const paid = parseFloat(paidAmount) || total;
@@ -965,6 +1357,8 @@ function POSPanel({ clinicId }: { clinicId: string }) {
       setSelectedPatient(null);
       setPatientSearch('');
       setShowPatientDropdown(false);
+      setSelectedPrescription(null);
+      setIsPartialDispense(false);
       setDiscountAmount('');
       setTaxAmount('');
       setPaidAmount('');
@@ -986,6 +1380,11 @@ function POSPanel({ clinicId }: { clinicId: string }) {
       setError('Cash paid is less than total amount');
       return;
     }
+    const rxUnlinked = cart.filter((i) => i.requires_prescription && !selectedPrescription);
+    if (rxUnlinked.length) {
+      const names = rxUnlinked.map((i) => i.drug_name).join(', ');
+      if (!window.confirm(`${names} require(s) a prescription. Proceed without linking one?`)) return;
+    }
     setError('');
     saleMutation.mutate({
       clinic_id: clinicId,
@@ -994,34 +1393,43 @@ function POSPanel({ clinicId }: { clinicId: string }) {
         quantity: i.quantity,
         unit_price: i.unit_price,
         discount_percent: i.discount_percent,
+        sig_instructions: i.sig || undefined,
+        batch_id: i.batch_id || undefined,
       })),
       patient_id: selectedPatient?.id || (patientSearch.trim() ? patientSearch.trim() : undefined),
       patient_name: selectedPatient?.name || undefined,
+      prescription_id: selectedPrescription?.id || undefined,
+      prescription_number: selectedPrescription?.rx_number || undefined,
       payment_method: paymentMethod,
       paid_amount: paymentMethod === 'cash' ? paid : total,
+      discount_percent: discPct || undefined,
       discount_amount: disc,
       tax_amount: tax,
       notes: notes || undefined,
+      is_partial: isPartialDispense || undefined,
     });
   };
 
   return (
     <div className="flex gap-6 h-[calc(100vh-195px)] min-h-[560px]">
       {/* Drug search – left panel */}
-      <div className="flex-1 flex flex-col min-w-0">
+      <div className="w-1/2 flex flex-col min-w-0">
         <div className="relative mb-4">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
           <input
             type="text"
-            className="input pl-9"
+            className="input pl-9 pr-9"
             placeholder="Search drugs by name or generic…"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             autoFocus
           />
+          {isFetching && !isLoading && (
+            <RefreshCw className="absolute right-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-400 animate-spin" />
+          )}
         </div>
 
-        <div className={`flex-1 overflow-y-auto border border-gray-200 rounded-xl transition-opacity ${isFetching ? 'opacity-60' : 'opacity-100'}`}>
+        <div className="flex-1 overflow-y-auto border border-gray-200 rounded-xl">
           {isLoading ? (
             <div className="text-center py-12 text-gray-400">Loading drugs…</div>
           ) : posErrorMsg ? (
@@ -1049,7 +1457,19 @@ function POSPanel({ clinicId }: { clinicId: string }) {
                   >
                     <div className="flex items-start justify-between gap-2">
                       <div className="min-w-0">
-                        <p className={`font-semibold text-sm truncate ${inCart ? 'text-primary-900' : 'text-gray-900 group-hover:text-primary-900'}`}>{drug.name}</p>
+                        <div className="flex items-center gap-1 flex-wrap">
+                          <p className={`font-semibold text-sm truncate ${inCart ? 'text-primary-900' : 'text-gray-900 group-hover:text-primary-900'}`}>{drug.name}</p>
+                          {drug.requires_prescription && (
+                            <span className="inline-flex items-center gap-0.5 text-[9px] font-bold bg-blue-100 text-blue-700 px-1 py-0 rounded shrink-0">
+                              <FileText className="w-2.5 h-2.5" /> Rx
+                            </span>
+                          )}
+                          {drug.is_controlled && (
+                            <span className="inline-flex items-center gap-0.5 text-[9px] font-bold bg-purple-100 text-purple-700 px-1 py-0 rounded shrink-0">
+                              <ShieldAlert className="w-2.5 h-2.5" /> CD
+                            </span>
+                          )}
+                        </div>
                         <p className={`text-xs ${inCart ? 'text-primary-700' : 'text-gray-500 group-hover:text-primary-700'}`}>{drug.form} · {drug.strength} {drug.unit}</p>
                         {drug.generic_name && <p className={`text-xs ${inCart ? 'text-primary-600' : 'text-gray-400 group-hover:text-primary-600'}`}>{drug.generic_name}</p>}
                       </div>
@@ -1074,12 +1494,24 @@ function POSPanel({ clinicId }: { clinicId: string }) {
       </div>
 
       {/* Cart – right panel */}
-      <div className="w-[460px] shrink-0 flex flex-col border border-gray-200 rounded-xl bg-white overflow-hidden">
+      <div className="w-1/2 flex flex-col border border-gray-200 rounded-xl bg-white overflow-hidden">
         <div className="p-4 border-b border-gray-200 bg-gray-50">
           <h3 className="font-semibold text-gray-900 flex items-center gap-2">
             <ShoppingCart className="w-4 h-4" /> Cart
             {cart.length > 0 && <span className="ml-auto text-xs font-normal text-gray-500">{cart.length} item{cart.length !== 1 ? 's' : ''}</span>}
           </h3>
+          {allergyWarnings.length > 0 && (
+            <div className="mt-2 flex items-start gap-1.5 bg-red-50 border border-red-300 text-red-800 rounded px-2.5 py-1.5 text-xs">
+              <ShieldAlert className="w-3.5 h-3.5 mt-0.5 shrink-0" />
+              <span><strong>Allergy alert:</strong> {allergyWarnings.map((i) => i.drug_name).join(', ')} may conflict with patient allergies. Verify before dispensing.</span>
+            </div>
+          )}
+          {cart.length >= 2 && (
+            <div className="mt-2 flex items-center gap-1.5 bg-amber-50 border border-amber-200 text-amber-800 rounded px-2.5 py-1.5 text-xs">
+              <AlertTriangle className="w-3.5 h-3.5 shrink-0" />
+              <span>Multiple drugs — verify drug interactions before dispensing.</span>
+            </div>
+          )}
         </div>
 
         <div className="flex-1 overflow-y-auto px-3 pt-1 pb-3">
@@ -1094,51 +1526,102 @@ function POSPanel({ clinicId }: { clinicId: string }) {
               <span className="w-16 text-right">Total</span>
               <span className="w-4" />
             </div>
-            {cart.map((item) => (
-              <div key={item.drug_id} className="flex items-center gap-2 py-2.5 border-b border-gray-100 last:border-0">
-                {/* Name + price breakdown */}
-                <div className="flex-1 min-w-0">
-                  <p className="font-medium text-sm text-gray-900 truncate leading-tight">{item.drug_name}</p>
-                  <p className="text-xs text-gray-400">{fmt(item.unit_price)} × {item.quantity}</p>
+            {cart.map((item) => {
+              const hasAllergyWarn = allergyWarnings.some((w) => w.drug_id === item.drug_id);
+              return (
+              <div key={item.drug_id} className="py-2.5 border-b border-gray-100 last:border-0">
+                {/* Row 1: Name + controls */}
+                <div className="flex items-center gap-2">
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-1 flex-wrap">
+                      <p className={`font-medium text-sm truncate leading-tight ${hasAllergyWarn ? 'text-red-700' : 'text-gray-900'}`}>{item.drug_name}</p>
+                      {item.requires_prescription && (
+                        <span className="text-[9px] font-bold bg-blue-100 text-blue-700 px-1 rounded shrink-0">Rx</span>
+                      )}
+                      {item.is_controlled && (
+                        <span className="text-[9px] font-bold bg-purple-100 text-purple-700 px-1 rounded shrink-0">CD</span>
+                      )}
+                      {hasAllergyWarn && (
+                        <ShieldAlert className="w-3 h-3 text-red-500 shrink-0" aria-label="Possible allergy conflict" />
+                      )}
+                    </div>
+                    <p className="text-xs text-gray-400">{fmt(item.unit_price)} × {item.quantity}</p>
+                  </div>
+                  <div className="flex items-center border border-gray-200 rounded-lg bg-white shrink-0">
+                    <button onClick={() => updateCartQty(item.drug_id, -1)} className="w-6 h-6 flex items-center justify-center text-gray-500 hover:text-gray-800">
+                      <Minus className="w-2.5 h-2.5" />
+                    </button>
+                    <span className="w-7 text-center text-xs font-semibold">{item.quantity}</span>
+                    <button onClick={() => updateCartQty(item.drug_id, 1)} disabled={item.quantity >= item.available_stock}
+                      className="w-6 h-6 flex items-center justify-center text-gray-500 hover:text-gray-800 disabled:opacity-30">
+                      <Plus className="w-2.5 h-2.5" />
+                    </button>
+                  </div>
+                  <input
+                    type="number" min={0} max={100} step={0.5}
+                    value={item.discount_percent}
+                    onChange={(e) => updateCartDiscount(item.drug_id, parseFloat(e.target.value) || 0)}
+                    className="w-12 input text-xs py-0.5 px-1.5 shrink-0"
+                    title="Discount %"
+                    placeholder="0%"
+                  />
+                  <span className="text-sm font-semibold text-gray-900 w-16 text-right shrink-0">{fmt(item.line_total)}</span>
+                  <button onClick={() => removeFromCart(item.drug_id)} className="text-gray-300 hover:text-red-500 shrink-0 ml-0.5">
+                    <Trash2 className="w-3.5 h-3.5" />
+                  </button>
                 </div>
 
-                {/* Qty stepper */}
-                <div className="flex items-center border border-gray-200 rounded-lg bg-white shrink-0">
-                  <button onClick={() => updateCartQty(item.drug_id, -1)} className="w-6 h-6 flex items-center justify-center text-gray-500 hover:text-gray-800">
-                    <Minus className="w-2.5 h-2.5" />
-                  </button>
-                  <span className="w-7 text-center text-xs font-semibold">{item.quantity}</span>
-                  <button onClick={() => updateCartQty(item.drug_id, 1)} disabled={item.quantity >= item.available_stock}
-                    className="w-6 h-6 flex items-center justify-center text-gray-500 hover:text-gray-800 disabled:opacity-30">
-                    <Plus className="w-2.5 h-2.5" />
-                  </button>
+                {/* Row 2: Sig (structured) + Batch */}
+                <div className="mt-1.5 flex items-center gap-1.5">
+                  <SigSelector
+                    form={item.form}
+                    value={item.sig}
+                    onChange={(sig) => updateCartSig(item.drug_id, sig)}
+                  />
+                  <div className="flex items-center gap-1 shrink-0 min-w-0 max-w-[150px]">
+                    <span className="text-[10px] text-gray-400 shrink-0">Batch:</span>
+                    <CartBatchRow item={item} clinicId={clinicId} onBatchChange={updateCartBatch} />
+                  </div>
                 </div>
-
-                {/* Discount % */}
-                <input
-                  type="number" min={0} max={100} step={0.5}
-                  value={item.discount_percent}
-                  onChange={(e) => updateCartDiscount(item.drug_id, parseFloat(e.target.value) || 0)}
-                  className="w-12 input text-xs py-0.5 px-1.5 shrink-0"
-                  title="Discount %"
-                  placeholder="0%"
-                />
-
-                {/* Line total */}
-                <span className="text-sm font-semibold text-gray-900 w-16 text-right shrink-0">{fmt(item.line_total)}</span>
-
-                {/* Remove */}
-                <button onClick={() => removeFromCart(item.drug_id)} className="text-gray-300 hover:text-red-500 shrink-0 ml-0.5">
-                  <Trash2 className="w-3.5 h-3.5" />
-                </button>
               </div>
-            ))}
+              );
+            })}
             </>
           )}
         </div>
 
         {/* Cart footer */}
         <div className="p-3 border-t border-gray-200 bg-gray-50 space-y-2">
+          {/* Prescription selector — shown only when patient is selected and has active Rx */}
+          {selectedPatient && (
+            <div>
+              {prescriptions.length > 0 ? (
+                <div className="flex items-center gap-1.5">
+                  <FileText className="w-3.5 h-3.5 text-blue-500 shrink-0" />
+                  <select
+                    className="input text-xs py-1 flex-1"
+                    value={selectedPrescription?.id ?? ''}
+                    onChange={(e) => {
+                      const rx = prescriptions.find((p: any) => p.id === e.target.value);
+                      setSelectedPrescription(rx ? { id: rx.id, rx_number: rx.prescription_number ?? rx.id.slice(0, 8), doctor_name: rx.doctor_name } : null);
+                    }}
+                  >
+                    <option value="">— No linked prescription —</option>
+                    {prescriptions.map((rx: any) => (
+                      <option key={rx.id} value={rx.id}>
+                        Rx #{rx.prescription_number ?? rx.id.slice(0, 8)}{rx.doctor_name ? ` · Dr. ${rx.doctor_name}` : ''} · {new Date(rx.created_at).toLocaleDateString()}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              ) : (
+                <p className="text-[10px] text-gray-400 flex items-center gap-1">
+                  <FileText className="w-3 h-3" /> No active prescriptions on file for this patient
+                </p>
+              )}
+            </div>
+          )}
+
           {/* Patient search + Discount + Tax on one row */}
           <div className="grid grid-cols-[1fr_80px_80px] gap-2">
             <div className="relative" ref={patientRef}>
@@ -1204,8 +1687,8 @@ function POSPanel({ clinicId }: { clinicId: string }) {
               )}
             </div>
             <div>
-              <label className="label text-xs mb-0.5">Discount</label>
-              <input className="input text-xs py-1" type="number" min={0} step={0.01} placeholder="0.00"
+              <label className="label text-xs mb-0.5">Disc %</label>
+              <input className="input text-xs py-1" type="number" min={0} max={100} step={0.5} placeholder="0"
                 value={discountAmount} onChange={(e) => setDiscountAmount(e.target.value)} />
             </div>
             <div>
@@ -1218,7 +1701,7 @@ function POSPanel({ clinicId }: { clinicId: string }) {
           {/* Totals */}
           <div className="space-y-0.5 text-xs">
             <div className="flex justify-between text-gray-500"><span>Subtotal</span><span>{fmt(subtotal)}</span></div>
-            {disc > 0 && <div className="flex justify-between text-red-500"><span>Discount</span><span>−{fmt(disc)}</span></div>}
+            {discPct > 0 && <div className="flex justify-between text-red-500"><span>Discount ({discPct}%)</span><span>−{fmt(disc)}</span></div>}
             {tax > 0 && <div className="flex justify-between text-gray-500"><span>Tax</span><span>{fmt(tax)}</span></div>}
             <div className="flex justify-between font-bold text-sm border-t border-gray-200 pt-1">
               <span>Total</span><span>{fmt(total)}</span>
@@ -1259,6 +1742,19 @@ function POSPanel({ clinicId }: { clinicId: string }) {
 
           {error && <div className="text-xs text-red-600 bg-red-50 border border-red-200 px-2 py-1 rounded">{error}</div>}
 
+          <div className="flex items-center gap-2">
+            <input
+              id="partial-dispense"
+              type="checkbox"
+              checked={isPartialDispense}
+              onChange={(e) => setIsPartialDispense(e.target.checked)}
+              className="w-3.5 h-3.5 rounded border-gray-300 text-primary-600"
+            />
+            <label htmlFor="partial-dispense" className="text-xs text-gray-600 cursor-pointer select-none">
+              Partial dispense — patient to return for balance
+            </label>
+          </div>
+
           <button
             onClick={processSale}
             disabled={cart.length === 0 || saleMutation.isPending}
@@ -1266,6 +1762,8 @@ function POSPanel({ clinicId }: { clinicId: string }) {
           >
             {saleMutation.isPending ? (
               <><RefreshCw className="w-4 h-4 animate-spin" /> Processing…</>
+            ) : isPartialDispense ? (
+              <><CheckCircle className="w-4 h-4" /> Partial Dispense · {fmt(total)}</>
             ) : (
               <><CheckCircle className="w-4 h-4" /> Process Sale · {fmt(total)}</>
             )}
@@ -1298,8 +1796,10 @@ function POSPanel({ clinicId }: { clinicId: string }) {
               <div className="flex justify-between"><span className="text-gray-500">Method</span><span className="capitalize">{completedSale.payment_method}</span></div>
             </div>
             <div className="flex gap-3">
-              <button onClick={() => printReceipt(completedSale, 'Pharmacy')}
-                className="flex-1 btn-secondary flex items-center justify-center gap-2">
+              <button
+                onClick={() => printReceipt(completedSale, clinicName)}
+                className="flex-1 btn-secondary flex items-center justify-center gap-2"
+              >
                 <Printer className="w-4 h-4" /> Print Receipt
               </button>
               <button onClick={() => setCompletedSale(null)} className="flex-1 btn-primary">
@@ -1555,7 +2055,7 @@ function PurchaseOrdersTab({ clinics, clinicId, drugs }: { clinics: { id: string
 
 // ─── Sales History Tab ────────────────────────────────────────────────────────
 
-function SalesTab({ clinicId }: { clinicId: string }) {
+function SalesTab({ clinicId, clinicName }: { clinicId: string; clinicName: string }) {
   const fmt = useCurrency();
   const [page, setPage] = useState(0);
   const [dateFrom, setDateFrom] = useState('');
@@ -1661,7 +2161,7 @@ function SalesTab({ clinicId }: { clinicId: string }) {
         )}
       </div>
 
-      {selectedSale && <SaleDetailModal saleId={selectedSale} onClose={() => setSelectedSale(null)} />}
+      {selectedSale && <SaleDetailModal saleId={selectedSale} onClose={() => setSelectedSale(null)} clinicName={clinicName} />}
     </>
   );
 }
@@ -2156,6 +2656,7 @@ export default function PharmacyPage() {
   const effectiveClinicId = isAdminRole
     ? (selectedClinicId || clinics[0]?.id || '')
     : (userClinicId || clinics[0]?.id || '');
+  const effectiveClinicName = clinics.find((c) => c.id === effectiveClinicId)?.name ?? 'Pharmacy';
 
   const { data: drugsData } = useQuery({
     queryKey: ['pharmacy-drugs-all', effectiveClinicId],
@@ -2230,10 +2731,10 @@ export default function PharmacyPage() {
         </nav>
       </div>
 
-      {tab === 'pos' && <POSPanel clinicId={effectiveClinicId} />}
+      {tab === 'pos' && <POSPanel clinicId={effectiveClinicId} clinicName={effectiveClinicName} />}
       {tab === 'inventory' && <InventoryTab clinics={clinics} clinicId={effectiveClinicId} alertsMap={alertsMap} />}
       {tab === 'orders' && <PurchaseOrdersTab clinics={clinics} clinicId={effectiveClinicId} drugs={allDrugs} />}
-      {tab === 'sales' && <SalesTab clinicId={effectiveClinicId} />}
+      {tab === 'sales' && <SalesTab clinicId={effectiveClinicId} clinicName={effectiveClinicName} />}
       {tab === 'reports' && <ReportsTab clinicId={effectiveClinicId} />}
       {tab === 'expiry' && <ExpiryTab clinicId={effectiveClinicId} />}
       {tab === 'alerts' && <AlertsTab clinicId={effectiveClinicId} />}
