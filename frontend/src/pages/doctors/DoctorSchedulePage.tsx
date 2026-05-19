@@ -36,11 +36,14 @@ export default function DoctorSchedulePage() {
   const navigate = useNavigate();
   const qc = useQueryClient();
 
-  const { data: clinicsData } = useQuery({
-    queryKey: ["clinics-list"],
-    queryFn: () => api.get("/clinics/", { params: { limit: 50 } }).then((r) => r.data.data),
+  const { data: doctorClinicsData } = useQuery({
+    queryKey: ["doctor-clinics", id],
+    queryFn: () => api.get(`/doctors/${id}/clinics`).then((r) => r.data.data),
+    enabled: !!id,
   });
-  const clinics: any[] = clinicsData?.clinics ?? clinicsData ?? [];
+  const clinics: any[] = Array.isArray(doctorClinicsData)
+    ? doctorClinicsData.map((c: any) => ({ id: c.clinic_id, name: c.clinic_name }))
+    : [];
 
   const { data: doctor } = useQuery({
     queryKey: ["doctor", id],
@@ -115,6 +118,7 @@ export default function DoctorSchedulePage() {
 
   const addEntry = () => {
     setAddError("");
+    if (clinics.length === 0) { setAddError("No clinics are assigned to this doctor. Assign clinics first from the Doctors page."); return; }
     if (!newEntry.clinic_id) { setAddError("Please select a clinic."); return; }
     if (newEntry.selected_days.length === 0) { setAddError("Select at least one day."); return; }
     if (!newEntry.start_time || !newEntry.end_time) { setAddError("Start and end time are required."); return; }
@@ -237,7 +241,9 @@ export default function DoctorSchedulePage() {
             onChange={(e) => setNewEntry((p) => ({ ...p, clinic_id: e.target.value }))}
             className={cls}
           >
-            <option value="">Select Clinic</option>
+            <option value="">
+              {clinics.length === 0 ? "No clinics assigned" : "Select Clinic"}
+            </option>
             {clinics.map((c: any) => <option key={c.id} value={c.id}>{c.name}</option>)}
           </select>
 

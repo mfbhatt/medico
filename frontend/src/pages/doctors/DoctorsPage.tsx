@@ -1,7 +1,7 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { X, Search, Pencil, Trash2, Building2 } from 'lucide-react';
+import { X, Search, Pencil, Building2 } from 'lucide-react';
 import api from '@/services/api';
 import Pagination from '@/components/ui/Pagination';
 import { useDebounce } from '@/hooks/useDebounce';
@@ -29,14 +29,12 @@ const INITIAL_FORM: AddDoctorForm = {
 };
 
 interface EditDoctorForm {
-  // User fields
   first_name: string;
   middle_name: string;
   last_name: string;
   email: string;
   phone: string;
   new_password: string;
-  // Doctor profile fields
   registration_number: string;
   specialization: string;
   experience_years: string;
@@ -73,33 +71,51 @@ export default function DoctorsPage() {
   const debouncedSearch = useDebounce(search, 300);
   const [specializationFilter, setSpecializationFilter] = useState('');
   const [page, setPage] = useState(1);
+
   const [addOpen, setAddOpen] = useState(false);
   const [addForm, setAddForm] = useState<AddDoctorForm>(INITIAL_FORM);
   const [addError, setAddError] = useState('');
+  const [addSelectedClinics, setAddSelectedClinics] = useState<Set<string>>(new Set());
+  const [addPrimaryClinic, setAddPrimaryClinic] = useState('');
+
   const [editOpen, setEditOpen] = useState(false);
   const [editDoctorId, setEditDoctorId] = useState<string | null>(null);
+  const [editUserId, setEditUserId] = useState<string | null>(null);
   const [editForm, setEditForm] = useState<EditDoctorForm>(INITIAL_EDIT_FORM);
   const [editError, setEditError] = useState('');
+  const [editSelectedClinics, setEditSelectedClinics] = useState<Set<string>>(new Set());
+  const [editPrimaryClinic, setEditPrimaryClinic] = useState('');
+
   const qc = useQueryClient();
 
-  const { data: editDoctorClinics = [] } = useQuery({
+  const { data: editDoctorClinics = [], isLoading: isLoadingClinics } = useQuery({
     queryKey: ['doctor-clinics', editDoctorId],
     queryFn: () => api.get(`/doctors/${editDoctorId}/clinics`).then((r) => r.data.data),
     enabled: !!editDoctorId,
   });
 
-  const removeClinicMutation = useMutation({
-    mutationFn: ({ doctorId, clinicId }: { doctorId: string; clinicId: string }) =>
-      api.delete(`/doctors/${doctorId}/clinics/${clinicId}`),
-    onSuccess: (_data, vars) => qc.invalidateQueries({ queryKey: ['doctor-clinics', vars.doctorId] }),
-  });
+  // Sync edit clinic selections once the doctor's current assignments load
+  useEffect(() => {
+    if (!editOpen) return;
+    const clinics = editDoctorClinics as any[];
+    if (clinics.length === 0) return;
+    setEditSelectedClinics(new Set(clinics.map((c) => c.clinic_id)));
+    const primary = clinics.find((c) => c.is_primary_location);
+    setEditPrimaryClinic(primary?.clinic_id ?? '');
+  }, [editDoctorClinics, editOpen]);
 
-  // Fetch specialization catalog for dropdowns
+  const { data: allClinicsRaw } = useQuery({
+    queryKey: ['clinics'],
+    queryFn: () => api.get('/clinics/').then((r) => r.data.data),
+    staleTime: 5 * 60 * 1000,
+  });
+  const allClinics: any[] = Array.isArray(allClinicsRaw) ? allClinicsRaw : [];
+
   const { data: specsData } = useQuery({
     queryKey: ['specializations'],
     queryFn: () =>
       api.get('/specializations/', { params: { is_active: true } }).then((r) => r.data.data as { id: string; name: string; category: string | null }[]),
-    staleTime: 5 * 60 * 1000, // cache 5 min
+    staleTime: 5 * 60 * 1000,
   });
   const specializations = specsData ?? [];
 
@@ -123,8 +139,9 @@ export default function DoctorsPage() {
   const total: number = (doctorsRaw as any)?.meta?.total ?? 0;
 
   const createMutation = useMutation({
-    mutationFn: (form: AddDoctorForm) =>
-      api.post('/users/', {
+    mutationFn: async (payload: { form: AddDoctorForm; selectedClinics: Set<string>; primaryClinic: string }) => {
+      const { form, selectedClinics, primaryClinic } = payload;
+      const res = await api.post('/users/', {
         first_name: form.first_name,
         middle_name: form.middle_name || undefined,
         last_name: form.last_name,
@@ -136,11 +153,25 @@ export default function DoctorsPage() {
         consultation_fee: form.consultation_fee ? Number(form.consultation_fee) : undefined,
         experience_years: form.experience_years ? Number(form.experience_years) : 0,
         role: 'doctor',
-      }),
+      });
+      const doctorId = res.data?.data?.id ?? res.data?.data?.doctor_id;
+      if (doctorId && selectedClinics.size > 0) {
+        await Promise.all(
+          [...selectedClinics].map((clinicId) =>
+            api.post(`/doctors/${doctorId}/clinics`, {
+              clinic_id: clinicId,
+              is_primary_location: clinicId === primaryClinic,
+            })
+          )
+        );
+      }
+    },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['doctors'] });
       setAddOpen(false);
       setAddForm(INITIAL_FORM);
+      setAddSelectedClinics(new Set());
+      setAddPrimaryClinic('');
       setAddError('');
     },
     onError: (err: any) => {
@@ -148,10 +179,26 @@ export default function DoctorsPage() {
     },
   });
 
-  const [editUserId, setEditUserId] = useState<string | null>(null);
-
   const updateMutation = useMutation({
-    mutationFn: async ({ doctorId, userId, form }: { doctorId: string; userId: string; form: EditDoctorForm }) => {
+    mutationFn: async ({
+      doctorId,
+      userId,
+      form,
+      selectedClinics,
+      primaryClinic,
+      currentClinics,
+    }: {
+      doctorId: string;
+      userId: string;
+      form: EditDoctorForm;
+      selectedClinics: Set<string>;
+      primaryClinic: string;
+      currentClinics: any[];
+    }) => {
+      const currentClinicIds = new Set(currentClinics.map((c: any) => c.clinic_id));
+      const toAdd = [...selectedClinics].filter((id) => !currentClinicIds.has(id));
+      const toRemove = [...currentClinicIds].filter((id) => !selectedClinics.has(id));
+
       await Promise.all([
         api.patch(`/doctors/${doctorId}`, {
           primary_specialization: form.specialization || undefined,
@@ -172,7 +219,29 @@ export default function DoctorsPage() {
           phone: form.phone || undefined,
           new_password: form.new_password || undefined,
         }),
+        ...toAdd.map((clinicId) =>
+          api.post(`/doctors/${doctorId}/clinics`, {
+            clinic_id: clinicId,
+            is_primary_location: clinicId === primaryClinic,
+          })
+        ),
+        ...toRemove.map((clinicId) => api.delete(`/doctors/${doctorId}/clinics/${clinicId}`)),
       ]);
+
+      // Update primary flag for clinics that stayed but whose primary status changed
+      const staying = [...selectedClinics].filter((id) => currentClinicIds.has(id));
+      await Promise.all(
+        staying.map((clinicId) => {
+          const current = currentClinics.find((c: any) => c.clinic_id === clinicId);
+          const shouldBePrimary = clinicId === primaryClinic;
+          if (current && current.is_primary_location !== shouldBePrimary) {
+            return api.patch(`/doctors/${doctorId}/clinics/${clinicId}`, {
+              is_primary_location: shouldBePrimary,
+            });
+          }
+          return Promise.resolve();
+        })
+      );
     },
     onSuccess: (_data, variables) => {
       const { doctorId, form } = variables;
@@ -205,10 +274,13 @@ export default function DoctorsPage() {
           }),
         };
       });
+      qc.invalidateQueries({ queryKey: ['doctor-clinics', variables.doctorId] });
       setEditOpen(false);
       setEditDoctorId(null);
       setEditUserId(null);
       setEditForm(INITIAL_EDIT_FORM);
+      setEditSelectedClinics(new Set());
+      setEditPrimaryClinic('');
       setEditError('');
     },
     onError: (err: any) => {
@@ -236,15 +308,48 @@ export default function DoctorsPage() {
       is_accepting_new_patients: doctor.is_accepting_new_patients ?? true,
       telemedicine_enabled: doctor.telemedicine_enabled ?? false,
     });
+    setEditSelectedClinics(new Set());
+    setEditPrimaryClinic('');
     setEditError('');
     setEditOpen(true);
+  };
+
+  const closeEdit = () => {
+    setEditOpen(false);
+    setEditError('');
+    setEditForm(INITIAL_EDIT_FORM);
+    setEditSelectedClinics(new Set());
+    setEditPrimaryClinic('');
+    setEditDoctorId(null);
+    setEditUserId(null);
+  };
+
+  const closeAdd = () => {
+    setAddOpen(false);
+    setAddError('');
+    setAddForm(INITIAL_FORM);
+    setAddSelectedClinics(new Set());
+    setAddPrimaryClinic('');
   };
 
   const handleEditSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!editDoctorId || !editUserId) return;
     setEditError('');
-    updateMutation.mutate({ doctorId: editDoctorId, userId: editUserId, form: editForm });
+    updateMutation.mutate({
+      doctorId: editDoctorId,
+      userId: editUserId,
+      form: editForm,
+      selectedClinics: editSelectedClinics,
+      primaryClinic: editPrimaryClinic,
+      currentClinics: editDoctorClinics as any[],
+    });
+  };
+
+  const handleAddSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    setAddError('');
+    createMutation.mutate({ form: addForm, selectedClinics: addSelectedClinics, primaryClinic: addPrimaryClinic });
   };
 
   const setEditField = (field: keyof Omit<EditDoctorForm, 'is_accepting_new_patients' | 'telemedicine_enabled'>) =>
@@ -255,13 +360,6 @@ export default function DoctorsPage() {
     (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) =>
       setAddForm((f) => ({ ...f, [field]: e.target.value }));
 
-  const handleAddSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    setAddError('');
-    createMutation.mutate(addForm);
-  };
-
-  // Group specializations by category for <optgroup> display
   const specsByCategory = specializations.reduce<Record<string, typeof specializations>>(
     (acc, s) => {
       const key = s.category ?? 'Other';
@@ -270,6 +368,71 @@ export default function DoctorsPage() {
     },
     {}
   );
+
+  const renderClinicSelector = (
+    selectedClinics: Set<string>,
+    primaryClinic: string,
+    onToggle: (id: string, checked: boolean) => void,
+    onSetPrimary: (id: string) => void,
+    currentAssignments: any[] = []
+  ) => {
+    if (allClinics.length === 0) {
+      return (
+        <div className="bg-amber-50 border border-amber-200 text-amber-800 px-4 py-3 rounded-lg text-sm">
+          No clinics available. Create clinics in the system first.
+        </div>
+      );
+    }
+    const currentIds = new Set(currentAssignments.map((c: any) => c.clinic_id));
+    return (
+      <div className="border border-slate-200 rounded-lg divide-y divide-slate-100 max-h-56 overflow-y-auto">
+        {allClinics.map((clinic: any) => {
+          const isSelected = selectedClinics.has(clinic.id);
+          const isPrimary = clinic.id === primaryClinic;
+          const isAdding = isSelected && !currentIds.has(clinic.id) && currentIds.size > 0;
+          const isRemoving = !isSelected && currentIds.has(clinic.id);
+          return (
+            <div
+              key={clinic.id}
+              className={`flex items-center gap-3 px-3 py-2.5 transition-colors ${isSelected ? 'bg-blue-50' : 'hover:bg-slate-50'}`}
+            >
+              <input
+                id={`clinic-${clinic.id}`}
+                type="checkbox"
+                checked={isSelected}
+                onChange={(e) => onToggle(clinic.id, e.target.checked)}
+                className="w-4 h-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500 cursor-pointer flex-shrink-0"
+              />
+              <Building2 className="w-4 h-4 text-slate-400 flex-shrink-0" />
+              <label htmlFor={`clinic-${clinic.id}`} className="text-sm font-medium text-slate-800 flex-1 cursor-pointer truncate">
+                {clinic.name}
+              </label>
+              {isAdding && (
+                <span className="text-xs bg-green-100 text-green-700 px-1.5 py-0.5 rounded font-semibold flex-shrink-0">+Add</span>
+              )}
+              {isRemoving && (
+                <span className="text-xs bg-red-100 text-red-700 px-1.5 py-0.5 rounded font-semibold flex-shrink-0">−Remove</span>
+              )}
+              {isSelected && (
+                <button
+                  type="button"
+                  onClick={() => onSetPrimary(isPrimary ? '' : clinic.id)}
+                  title={isPrimary ? 'Primary clinic (click to unset)' : 'Set as primary clinic'}
+                  className={`flex-shrink-0 text-xs px-2 py-0.5 rounded font-semibold transition-colors ${
+                    isPrimary
+                      ? 'bg-indigo-600 text-white'
+                      : 'bg-slate-100 text-slate-500 hover:bg-indigo-100 hover:text-indigo-700'
+                  }`}
+                >
+                  {isPrimary ? '★ Primary' : 'Set Primary'}
+                </button>
+              )}
+            </div>
+          );
+        })}
+      </div>
+    );
+  };
 
   return (
     <div>
@@ -413,12 +576,9 @@ export default function DoctorsPage() {
       {editOpen && (
         <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
           <div className="bg-white rounded-xl shadow-xl w-full max-w-xl max-h-[90vh] overflow-y-auto">
-            <div className="flex items-center justify-between p-5 border-b border-gray-200 sticky top-0 bg-white">
+            <div className="flex items-center justify-between p-5 border-b border-gray-200 sticky top-0 bg-white z-10">
               <h2 className="text-lg font-semibold text-gray-900">Edit Doctor</h2>
-              <button
-                onClick={() => { setEditOpen(false); setEditError(''); setEditForm(INITIAL_EDIT_FORM); }}
-                className="text-gray-400 hover:text-gray-600"
-              >
+              <button onClick={closeEdit} className="text-gray-400 hover:text-gray-600">
                 <X className="w-5 h-5" />
               </button>
             </div>
@@ -557,37 +717,35 @@ export default function DoctorsPage() {
               </div>
 
               {/* Clinic Assignments */}
-              {editDoctorClinics.length > 0 && (
-                <div>
-                  <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-3">Clinic Assignments</p>
-                  <div className="space-y-2">
-                    {editDoctorClinics.map((a: any) => (
-                      <div key={a.id} className="flex items-center justify-between px-3 py-2 bg-slate-50 rounded-lg border border-slate-200">
-                        <div className="flex items-center gap-2 min-w-0">
-                          <Building2 className="w-4 h-4 text-slate-400 flex-shrink-0" />
-                          <span className="text-sm text-slate-700 truncate">{a.clinic_name}</span>
-                          {a.is_primary_clinic && (
-                            <span className="badge badge-blue text-xs flex-shrink-0">Primary</span>
-                          )}
-                        </div>
-                        <button
-                          type="button"
-                          title="Remove clinic"
-                          disabled={removeClinicMutation.isPending}
-                          onClick={() => {
-                            if (confirm(`Remove Dr. from ${a.clinic_name}?`)) {
-                              removeClinicMutation.mutate({ doctorId: editDoctorId!, clinicId: a.clinic_id });
-                            }
-                          }}
-                          className="p-1 ml-2 text-slate-400 hover:text-red-600 rounded flex-shrink-0"
-                        >
-                          <Trash2 className="w-4 h-4" />
-                        </button>
-                      </div>
-                    ))}
-                  </div>
+              <div>
+                <div className="flex items-center justify-between mb-2">
+                  <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Clinic Assignments</p>
+                  {editSelectedClinics.size > 0 && (
+                    <span className="text-xs bg-indigo-100 text-indigo-700 px-2 py-0.5 rounded-full font-semibold">
+                      {editSelectedClinics.size} selected
+                    </span>
+                  )}
                 </div>
-              )}
+                <p className="text-xs text-slate-500 mb-3">
+                  Check clinics to assign. Click <strong>Set Primary</strong> on the doctor's main clinic.
+                </p>
+                {isLoadingClinics ? (
+                  <div className="text-sm text-slate-500 animate-pulse py-3 text-center">Loading current assignments…</div>
+                ) : (
+                  renderClinicSelector(
+                    editSelectedClinics,
+                    editPrimaryClinic,
+                    (id, checked) => {
+                      const next = new Set(editSelectedClinics);
+                      if (checked) next.add(id); else next.delete(id);
+                      setEditSelectedClinics(next);
+                      if (!checked && editPrimaryClinic === id) setEditPrimaryClinic('');
+                    },
+                    setEditPrimaryClinic,
+                    editDoctorClinics as any[]
+                  )
+                )}
+              </div>
 
               {editError && (
                 <div className="bg-red-50 border border-red-200 text-red-700 px-3 py-2 rounded text-sm">
@@ -599,11 +757,7 @@ export default function DoctorsPage() {
                 <button type="submit" disabled={updateMutation.isPending} className="btn-primary flex-1">
                   {updateMutation.isPending ? 'Saving…' : 'Save Changes'}
                 </button>
-                <button
-                  type="button"
-                  onClick={() => { setEditOpen(false); setEditError(''); setEditForm(INITIAL_EDIT_FORM); }}
-                  className="btn-secondary flex-1"
-                >
+                <button type="button" onClick={closeEdit} className="btn-secondary flex-1">
                   Cancel
                 </button>
               </div>
@@ -616,18 +770,15 @@ export default function DoctorsPage() {
       {addOpen && (
         <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
           <div className="bg-white rounded-xl shadow-xl w-full max-w-xl max-h-[90vh] overflow-y-auto">
-            <div className="flex items-center justify-between p-5 border-b border-gray-200 sticky top-0 bg-white">
+            <div className="flex items-center justify-between p-5 border-b border-gray-200 sticky top-0 bg-white z-10">
               <h2 className="text-lg font-semibold text-gray-900">Add Doctor</h2>
-              <button
-                onClick={() => { setAddOpen(false); setAddError(''); setAddForm(INITIAL_FORM); }}
-                className="text-gray-400 hover:text-gray-600"
-              >
+              <button onClick={closeAdd} className="text-gray-400 hover:text-gray-600">
                 <X className="w-5 h-5" />
               </button>
             </div>
 
             <form onSubmit={handleAddSubmit} className="p-6 space-y-5">
-              {/* Name */}
+              {/* Personal Info */}
               <div>
                 <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-3">Personal Info</p>
                 <div className="grid grid-cols-3 gap-4">
@@ -709,6 +860,32 @@ export default function DoctorsPage() {
                 </div>
               </div>
 
+              {/* Clinic Assignments */}
+              <div>
+                <div className="flex items-center justify-between mb-2">
+                  <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Clinic Assignments</p>
+                  {addSelectedClinics.size > 0 && (
+                    <span className="text-xs bg-indigo-100 text-indigo-700 px-2 py-0.5 rounded-full font-semibold">
+                      {addSelectedClinics.size} selected
+                    </span>
+                  )}
+                </div>
+                <p className="text-xs text-slate-500 mb-3">
+                  Optionally assign this doctor to clinics now. Click <strong>Set Primary</strong> for the main clinic.
+                </p>
+                {renderClinicSelector(
+                  addSelectedClinics,
+                  addPrimaryClinic,
+                  (id, checked) => {
+                    const next = new Set(addSelectedClinics);
+                    if (checked) next.add(id); else next.delete(id);
+                    setAddSelectedClinics(next);
+                    if (!checked && addPrimaryClinic === id) setAddPrimaryClinic('');
+                  },
+                  setAddPrimaryClinic
+                )}
+              </div>
+
               {addError && (
                 <div className="bg-red-50 border border-red-200 text-red-700 px-3 py-2 rounded text-sm">
                   {addError}
@@ -719,11 +896,7 @@ export default function DoctorsPage() {
                 <button type="submit" disabled={createMutation.isPending} className="btn-primary flex-1">
                   {createMutation.isPending ? 'Creating…' : 'Create Doctor'}
                 </button>
-                <button
-                  type="button"
-                  onClick={() => { setAddOpen(false); setAddError(''); setAddForm(INITIAL_FORM); }}
-                  className="btn-secondary flex-1"
-                >
+                <button type="button" onClick={closeAdd} className="btn-secondary flex-1">
                   Cancel
                 </button>
               </div>
