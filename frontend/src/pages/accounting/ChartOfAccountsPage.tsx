@@ -104,10 +104,63 @@ export default function ChartOfAccountsPage() {
   const [editAccount, setEditAccount] = useState<any>(null);
   const [editGroup, setEditGroup] = useState<any>(null);
   const [form, setForm] = useState<any>({});
+  const [formErrors, setFormErrors] = useState<Record<string, string>>({});
 
   const toast = {
     success: (m: string) => dispatch(addToast({ id: Date.now().toString(), type: 'success', message: m, duration: 3000 })),
     error: (m: string) => dispatch(addToast({ id: Date.now().toString(), type: 'error', message: m, duration: 5000 })),
+  };
+
+  const validateAccountForm = (f: any, isEdit: boolean): Record<string, string> => {
+    const errors: Record<string, string> = {};
+
+    if (!f.name?.trim()) {
+      errors.name = 'Account name is required';
+    } else if (f.name.trim().length < 2) {
+      errors.name = 'Account name must be at least 2 characters';
+    } else if (f.name.trim().length > 100) {
+      errors.name = 'Account name must not exceed 100 characters';
+    }
+
+    if (f.code) {
+      const trimmedCode = f.code.trim();
+      if (trimmedCode.length < 4) {
+        errors.code = 'IFSC Code must be at least 4 characters';
+      } else if (trimmedCode.length > 20) {
+        errors.code = 'IFSC Code must not exceed 20 characters';
+      } else if (/[^A-Za-z0-9 ]/.test(trimmedCode)) {
+        errors.code = 'IFSC Code must not contain special characters';
+      }
+    }
+
+    if (!f.account_group_id) {
+      errors.account_group_id = 'Please select a group';
+    }
+
+    if (f.opening_balance !== undefined && f.opening_balance !== '' && isNaN(Number(f.opening_balance))) {
+      errors.opening_balance = 'Opening balance must be a valid number';
+    }
+
+    if (f.description && f.description.length > 255) {
+      errors.description = 'Description must not exceed 255 characters';
+    }
+
+    if (f.bank_name && f.bank_name.length > 100) {
+      errors.bank_name = 'Bank name must not exceed 100 characters';
+    }
+
+    if (f.bank_account_number) {
+      const trimmedBan = f.bank_account_number.trim();
+      if (!/^[A-Za-z0-9\-_ ]+$/.test(trimmedBan)) {
+        errors.bank_account_number = 'Bank account number may only contain letters, numbers, hyphens, underscores, or spaces';
+      } else if (trimmedBan.length < 5) {
+        errors.bank_account_number = 'Bank account number must be at least 5 characters';
+      } else if (trimmedBan.length > 34) {
+        errors.bank_account_number = 'Bank account number must not exceed 34 characters';
+      }
+    }
+
+    return errors;
   };
 
   const { data: groupsData } = useQuery({
@@ -179,12 +232,14 @@ export default function ChartOfAccountsPage() {
   const openAddAccount = (group: any) => {
     setEditAccount(null);
     setForm({ account_group_id: group.id, account_type: 'asset' });
+    setFormErrors({});
     setShowAccountModal(true);
   };
 
   const openEditAccount = (a: any) => {
     setEditAccount(a);
     setForm({ ...a });
+    setFormErrors({});
     setShowAccountModal(true);
   };
 
@@ -196,7 +251,7 @@ export default function ChartOfAccountsPage() {
           <button className="btn-secondary" onClick={() => { setEditGroup(null); setForm({ nature: 'dr' }); setShowGroupModal(true); }}>
             + Add Group
           </button>
-          <button className="btn-primary" onClick={() => { setEditAccount(null); setForm({}); setShowAccountModal(true); }}>
+          <button className="btn-primary" onClick={() => { setEditAccount(null); setForm({ account_type: 'asset', account_group_id: flatGroups[0]?.id || '' }); setFormErrors({}); setShowAccountModal(true); }}>
             + Add Account
           </button>
         </div>
@@ -229,33 +284,58 @@ export default function ChartOfAccountsPage() {
             <div className="space-y-3">
               <div>
                 <label className="label">Account Name *</label>
-                <input className="input" value={form.name || ''} onChange={e => setForm({ ...form, name: e.target.value })} />
+                <input
+                  className={`input ${formErrors.name ? 'border-red-500 focus:ring-red-300' : ''}`}
+                  value={form.name || ''}
+                  onChange={e => { setForm({ ...form, name: e.target.value }); if (formErrors.name) setFormErrors(f => ({ ...f, name: '' })); }}
+                  placeholder="e.g. Cash in Hand"
+                />
+                {formErrors.name && <p className="text-xs text-red-500 mt-1">{formErrors.name}</p>}
               </div>
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="label">Code</label>
-                  <input className="input" value={form.code || ''} onChange={e => setForm({ ...form, code: e.target.value })} placeholder="e.g. 1001" />
+                  <label className="label">IFSC Code</label>
+                  <input
+                    className={`input ${formErrors.code ? 'border-red-500 focus:ring-red-300' : ''}`}
+                    value={form.code || ''}
+                    onChange={e => {
+                      const normalized = e.target.value.replace(/^ /, '').replace(/ {2,}/g, ' ');
+                      setForm({ ...form, code: normalized });
+                      if (formErrors.code) setFormErrors(f => ({ ...f, code: '' }));
+                    }}
+                    placeholder="e.g. SBIN0001234"
+                  />
+                  {formErrors.code && <p className="text-xs text-red-500 mt-1">{formErrors.code}</p>}
                 </div>
                 <div>
                   <label className="label">Type *</label>
                   <select className="input" value={form.account_type || 'asset'} onChange={e => setForm({ ...form, account_type: e.target.value })}>
-                    {TYPES.map(t => <option key={t} value={t}>{t}</option>)}
+                    {TYPES.map(t => <option key={t} value={t}>{t.charAt(0).toUpperCase() + t.slice(1)}</option>)}
                   </select>
                 </div>
               </div>
-              {!editAccount && (
-                <div>
-                  <label className="label">Group *</label>
-                  <select className="input" value={form.account_group_id || ''} onChange={e => setForm({ ...form, account_group_id: e.target.value })}>
-                    <option value="">Select group</option>
-                    {flatGroups.map(g => <option key={g.id} value={g.id}>{g.name}</option>)}
-                  </select>
-                </div>
-              )}
+              <div>
+                <label className="label">Group *</label>
+                <select
+                  className={`input ${formErrors.account_group_id ? 'border-red-500 focus:ring-red-300' : ''}`}
+                  value={form.account_group_id || ''}
+                  onChange={e => { setForm({ ...form, account_group_id: e.target.value }); if (formErrors.account_group_id) setFormErrors(f => ({ ...f, account_group_id: '' })); }}
+                >
+                  {flatGroups.map(g => <option key={g.id} value={g.id}>{g.name}</option>)}
+                </select>
+                {formErrors.account_group_id && <p className="text-xs text-red-500 mt-1">{formErrors.account_group_id}</p>}
+              </div>
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="label">Opening Balance</label>
-                  <input type="number" className="input" value={form.opening_balance || 0} onChange={e => setForm({ ...form, opening_balance: parseFloat(e.target.value) })} />
+                  <input
+                    type="number"
+                    className={`input ${formErrors.opening_balance ? 'border-red-500 focus:ring-red-300' : ''}`}
+                    value={form.opening_balance ?? ''}
+                    placeholder="0"
+                    onChange={e => { setForm({ ...form, opening_balance: e.target.value === '' ? undefined : parseFloat(e.target.value) }); if (formErrors.opening_balance) setFormErrors(f => ({ ...f, opening_balance: '' })); }}
+                  />
+                  {formErrors.opening_balance && <p className="text-xs text-red-500 mt-1">{formErrors.opening_balance}</p>}
                 </div>
                 <div>
                   <label className="label">Balance Type</label>
@@ -267,26 +347,57 @@ export default function ChartOfAccountsPage() {
               </div>
               <div>
                 <label className="label">Description</label>
-                <input className="input" value={form.description || ''} onChange={e => setForm({ ...form, description: e.target.value })} />
+                <input
+                  className={`input ${formErrors.description ? 'border-red-500 focus:ring-red-300' : ''}`}
+                  value={form.description || ''}
+                  onChange={e => { setForm({ ...form, description: e.target.value }); if (formErrors.description) setFormErrors(f => ({ ...f, description: '' })); }}
+                  placeholder="Optional notes about this account"
+                />
+                {formErrors.description && <p className="text-xs text-red-500 mt-1">{formErrors.description}</p>}
               </div>
               <div>
-                <label className="label">Bank Name (for bank accounts)</label>
-                <input className="input" value={form.bank_name || ''} onChange={e => setForm({ ...form, bank_name: e.target.value })} />
+                <label className="label">Bank Name <span className="text-gray-400 font-normal">(for bank accounts)</span></label>
+                <input
+                  className={`input ${formErrors.bank_name ? 'border-red-500 focus:ring-red-300' : ''}`}
+                  value={form.bank_name || ''}
+                  onChange={e => { setForm({ ...form, bank_name: e.target.value }); if (formErrors.bank_name) setFormErrors(f => ({ ...f, bank_name: '' })); }}
+                />
+                {formErrors.bank_name && <p className="text-xs text-red-500 mt-1">{formErrors.bank_name}</p>}
               </div>
               <div>
                 <label className="label">Bank Account Number</label>
-                <input className="input" value={form.bank_account_number || ''} onChange={e => setForm({ ...form, bank_account_number: e.target.value })} />
+                <input
+                  className={`input ${formErrors.bank_account_number ? 'border-red-500 focus:ring-red-300' : ''}`}
+                  value={form.bank_account_number || ''}
+                  onChange={e => {
+                    const normalized = e.target.value.replace(/^ /, '').replace(/ {2,}/g, ' ');
+                    setForm({ ...form, bank_account_number: normalized });
+                    if (formErrors.bank_account_number) setFormErrors(f => ({ ...f, bank_account_number: '' }));
+                  }}
+                />
+                {formErrors.bank_account_number && <p className="text-xs text-red-500 mt-1">{formErrors.bank_account_number}</p>}
               </div>
             </div>
             <div className="flex gap-3 mt-5">
               <button
                 className="btn-primary flex-1"
-                disabled={saveMutation.isPending || !form.name}
-                onClick={() => saveMutation.mutate(form)}
+                disabled={saveMutation.isPending}
+                onClick={() => {
+                  const errors = validateAccountForm(form, !!editAccount);
+                  if (Object.keys(errors).length > 0) {
+                    setFormErrors(errors);
+                    return;
+                  }
+                  saveMutation.mutate({
+                    ...form,
+                    code: form.code?.trim() ?? form.code,
+                    bank_account_number: form.bank_account_number?.trim() ?? form.bank_account_number,
+                  });
+                }}
               >
                 {saveMutation.isPending ? 'Saving…' : 'Save'}
               </button>
-              <button className="btn-secondary flex-1" onClick={() => { setShowAccountModal(false); setEditAccount(null); }}>Cancel</button>
+              <button className="btn-secondary flex-1" onClick={() => { setShowAccountModal(false); setEditAccount(null); setFormErrors({}); }}>Cancel</button>
             </div>
           </div>
         </div>
