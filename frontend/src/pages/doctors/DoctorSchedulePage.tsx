@@ -36,11 +36,14 @@ export default function DoctorSchedulePage() {
   const navigate = useNavigate();
   const qc = useQueryClient();
 
-  const { data: clinicsData } = useQuery({
-    queryKey: ["clinics-list"],
-    queryFn: () => api.get("/clinics/", { params: { limit: 50 } }).then((r) => r.data.data),
+  const { data: doctorClinicsData } = useQuery({
+    queryKey: ["doctor-clinics", id],
+    queryFn: () => api.get(`/doctors/${id}/clinics`).then((r) => r.data.data),
+    enabled: !!id,
   });
-  const clinics: any[] = clinicsData?.clinics ?? clinicsData ?? [];
+  const clinics: any[] = Array.isArray(doctorClinicsData)
+    ? doctorClinicsData.map((c: any) => ({ id: c.clinic_id, name: c.clinic_name, is_primary: c.is_primary_location }))
+    : [];
 
   const { data: doctor } = useQuery({
     queryKey: ["doctor", id],
@@ -48,6 +51,7 @@ export default function DoctorSchedulePage() {
     enabled: !!id,
   });
 
+  const [selectedClinicId, setSelectedClinicId] = useState<string>("");
   const [schedules, setSchedules] = useState<ScheduleEntry[]>([]);
   const [schedulesInitialized, setSchedulesInitialized] = useState(false);
 
@@ -66,6 +70,15 @@ export default function DoctorSchedulePage() {
       setSchedulesInitialized(true);
     }
   }, [doctor, schedulesInitialized]);
+
+  // Auto-select primary (or first) clinic when clinic list loads
+  useEffect(() => {
+    if (clinics.length > 0 && !selectedClinicId) {
+      const primary = clinics.find((c) => c.is_primary);
+      setSelectedClinicId(primary?.id ?? clinics[0].id);
+    }
+  }, [clinics, selectedClinicId]);
+
   const [saveSuccess, setSaveSuccess] = useState(false);
   const [addError, setAddError] = useState("");
   const [newEntry, setNewEntry] = useState<NewEntryForm>({
@@ -77,12 +90,12 @@ export default function DoctorSchedulePage() {
     max_patients: 20,
   });
 
-  // Auto-select clinic when there is exactly one
+  // Keep add form's clinic_id in sync with selected clinic tab
   useEffect(() => {
-    if (clinics.length === 1 && !newEntry.clinic_id) {
-      setNewEntry((p) => ({ ...p, clinic_id: clinics[0].id }));
+    if (selectedClinicId) {
+      setNewEntry((p) => ({ ...p, clinic_id: selectedClinicId }));
     }
-  }, [clinics]);
+  }, [selectedClinicId]);
 
   const saveMutation = useMutation({
     mutationFn: () =>
@@ -115,7 +128,8 @@ export default function DoctorSchedulePage() {
 
   const addEntry = () => {
     setAddError("");
-    if (!newEntry.clinic_id) { setAddError("Please select a clinic."); return; }
+    if (clinics.length === 0) { setAddError("No clinics are assigned to this doctor. Assign clinics first from the Doctors page."); return; }
+    if (!selectedClinicId) { setAddError("Select a clinic tab first."); return; }
     if (newEntry.selected_days.length === 0) { setAddError("Select at least one day."); return; }
     if (!newEntry.start_time || !newEntry.end_time) { setAddError("Start and end time are required."); return; }
     if (newEntry.start_time >= newEntry.end_time) { setAddError("End time must be after start time."); return; }
@@ -165,6 +179,38 @@ export default function DoctorSchedulePage() {
       {saveMutation.isError && (
         <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg mb-4 text-sm">
           {(saveMutation.error as any)?.response?.data?.message ?? "Failed to save schedule"}
+        </div>
+      )}
+
+      {/* Clinic tabs */}
+      {clinics.length > 0 && (
+        <div className="flex gap-1 mb-4 border-b border-slate-200">
+          {clinics.map((c) => {
+            const count = schedules.filter((s) => s.clinic_id === c.id).length;
+            const active = c.id === selectedClinicId;
+            return (
+              <button
+                key={c.id}
+                type="button"
+                onClick={() => setSelectedClinicId(c.id)}
+                className={`px-4 py-2.5 text-sm font-medium border-b-2 transition-colors whitespace-nowrap flex items-center gap-1.5 ${
+                  active
+                    ? "border-blue-600 text-blue-600"
+                    : "border-transparent text-slate-500 hover:text-slate-700 hover:border-slate-300"
+                }`}
+              >
+                {c.name}
+                {c.is_primary && (
+                  <span className="text-[10px] bg-blue-100 text-blue-700 px-1.5 py-0.5 rounded font-medium">Primary</span>
+                )}
+                {count > 0 && (
+                  <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-medium ${active ? "bg-blue-100 text-blue-700" : "bg-slate-100 text-slate-500"}`}>
+                    {count}
+                  </span>
+                )}
+              </button>
+            );
+          })}
         </div>
       )}
 
@@ -232,15 +278,6 @@ export default function DoctorSchedulePage() {
 
         {/* Rest of form */}
         <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-          <select
-            value={newEntry.clinic_id}
-            onChange={(e) => setNewEntry((p) => ({ ...p, clinic_id: e.target.value }))}
-            className={cls}
-          >
-            <option value="">Select Clinic</option>
-            {clinics.map((c: any) => <option key={c.id} value={c.id}>{c.name}</option>)}
-          </select>
-
           <div className="flex items-center gap-1">
             <Clock className="h-4 w-4 text-slate-400 flex-shrink-0" />
             <input type="time" value={newEntry.start_time} onChange={(e) => setNewEntry((p) => ({ ...p, start_time: e.target.value }))} className={`${cls} flex-1`} />
@@ -278,33 +315,41 @@ export default function DoctorSchedulePage() {
         </button>
       </div>
 
-      {/* Current schedule */}
+      {/* Current schedule — filtered to selected clinic */}
       <div className="bg-white rounded-xl border border-slate-200">
-        <div className="px-5 py-4 border-b border-slate-100">
-          <h2 className="text-sm font-semibold text-slate-700">Current Schedule ({schedules.length} entries)</h2>
+        <div className="px-5 py-4 border-b border-slate-100 flex items-center justify-between">
+          <h2 className="text-sm font-semibold text-slate-700">
+            {selectedClinicId
+              ? `${clinics.find((c) => c.id === selectedClinicId)?.name ?? ""} Schedule`
+              : "Current Schedule"}
+          </h2>
+          {clinics.length > 1 && (
+            <span className="text-xs text-slate-400">
+              {schedules.filter((s) => s.clinic_id === selectedClinicId).length} of {schedules.length} total entries shown
+            </span>
+          )}
         </div>
 
-        {schedules.length === 0 ? (
-          <div className="text-center py-12 text-slate-400 text-sm">No schedule entries yet. Add slots above.</div>
+        {schedules.filter((s) => s.clinic_id === selectedClinicId).length === 0 ? (
+          <div className="text-center py-12 text-slate-400 text-sm">No schedule entries for this clinic yet. Add slots above.</div>
         ) : (
           <div className="divide-y divide-slate-50">
-            {schedules.map((s, i) => {
-              const clinic = clinics.find((c: any) => c.id === s.clinic_id);
-              return (
+            {schedules
+              .map((s, i) => ({ s, i }))
+              .filter(({ s }) => s.clinic_id === selectedClinicId)
+              .map(({ s, i }) => (
                 <div key={i} className="flex items-center justify-between px-5 py-3.5 hover:bg-slate-50">
                   <div>
                     <p className="text-sm font-medium text-slate-900">{DAY_LABELS[s.day_of_week]}</p>
                     <p className="text-xs text-slate-500 mt-0.5">
                       {s.start_time} – {s.end_time} · {s.slot_duration_minutes}min slots · Max {s.max_patients} patients
-                      {clinic && ` · ${clinic.name}`}
                     </p>
                   </div>
                   <button onClick={() => removeEntry(i)} className="text-red-500 hover:text-red-700 p-1.5 rounded-lg hover:bg-red-50">
                     <Trash2 className="h-4 w-4" />
                   </button>
                 </div>
-              );
-            })}
+              ))}
           </div>
         )}
       </div>
@@ -327,7 +372,7 @@ export default function DoctorSchedulePage() {
           className="btn-primary px-5"
         >
           <Save className="h-4 w-4" />
-          {saveMutation.isPending ? "Saving…" : "Save Schedule"}
+          {saveMutation.isPending ? "Saving…" : `Save All Schedules (${schedules.length})`}
         </button>
         <button onClick={() => navigate(`/doctors/${id}`)} className="bg-white hover:bg-slate-50 text-slate-700 border border-slate-200 font-medium px-5 py-2.5 rounded-lg text-sm">
           Cancel

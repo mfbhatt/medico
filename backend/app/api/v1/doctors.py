@@ -460,6 +460,19 @@ async def remove_doctor_from_clinic(
 
     assignment.is_deleted = True
     assignment.is_active = False
+
+    # Deactivate all schedules for this doctor at the removed clinic
+    schedules = await db.execute(
+        select(DoctorSchedule).where(
+            DoctorSchedule.doctor_id == doctor_id,
+            DoctorSchedule.clinic_id == clinic_id,
+            DoctorSchedule.is_deleted == False,
+            DoctorSchedule.is_active == True,
+        )
+    )
+    for schedule in schedules.scalars():
+        schedule.is_active = False
+
     await db.commit()
     return _success(None, message="Doctor removed from clinic")
 
