@@ -318,13 +318,26 @@ function AddDrugModal({ onClose, clinics, defaultClinicId }: { onClose: () => vo
     clinic_id: defaultClinicId || (clinics[0]?.id ?? ''), selling_price: '',
     unit_cost: '', reorder_level: '10', reorder_quantity: '100',
     requires_prescription: true, is_controlled: false,
-    storage_conditions: '',
+    storage_conditions: '', initial_quantity: '', initial_expiry_date: '',
   });
   const [error, setError] = useState('');
 
+  const stockMutation = useMutation({
+    mutationFn: ({ drugId, qty, expiry }: { drugId: string; qty: number; expiry: string }) =>
+      api.post(`/inventory/drugs/${drugId}/stock`, { quantity: qty, expiry_date: expiry }),
+  });
+
   const mutation = useMutation({
     mutationFn: (data: any) => api.post('/inventory/drugs', data),
-    onSuccess: (_: any, variables: any) => {
+    onSuccess: async (res: any, variables: any) => {
+      const drugId = res.data?.data?.id;
+      if (drugId && variables.initial_quantity > 0) {
+        try {
+          await stockMutation.mutateAsync({ drugId, qty: variables.initial_quantity, expiry: variables.initial_expiry_date });
+        } catch {
+          // stock add failed — drug still created
+        }
+      }
       qc.invalidateQueries({ queryKey: ['pharmacy-drugs'] });
       notify(`${variables.name} added to catalog successfully`);
       onClose();
@@ -346,12 +359,18 @@ function AddDrugModal({ onClose, clinics, defaultClinicId }: { onClose: () => vo
           onSubmit={(e) => {
             e.preventDefault();
             setError('');
+            const iqty = Number(form.initial_quantity) || 0;
+            if (iqty > 0 && !form.initial_expiry_date) {
+              setError('Expiry date is required when adding initial stock');
+              return;
+            }
             mutation.mutate({
               ...form,
               selling_price: Number(form.selling_price) || 0,
               unit_cost: Number(form.unit_cost) || 0,
               reorder_level: Number(form.reorder_level),
               reorder_quantity: Number(form.reorder_quantity),
+              initial_quantity: iqty,
             });
           }}
           className="p-5 space-y-4"
@@ -408,6 +427,22 @@ function AddDrugModal({ onClose, clinics, defaultClinicId }: { onClose: () => vo
             <div>
               <label className="label">Selling Price</label>
               <input className="input" type="number" min={0} step="0.01" value={form.selling_price} onChange={set('selling_price')} />
+            </div>
+            <div>
+              <label className="label">Opening Quantity</label>
+              <input className="input" type="number" min={0} placeholder="0" value={form.initial_quantity} onChange={set('initial_quantity')} />
+            </div>
+            <div>
+              <label className="label">
+                Expiry Date{Number(form.initial_quantity) > 0 && <span className="text-red-500 ml-0.5">*</span>}
+              </label>
+              <input
+                className="input"
+                type="date"
+                value={form.initial_expiry_date}
+                onChange={set('initial_expiry_date')}
+                required={Number(form.initial_quantity) > 0}
+              />
             </div>
             <div className="col-span-2">
               <label className="label">Storage Conditions</label>
