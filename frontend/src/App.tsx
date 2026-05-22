@@ -1,6 +1,5 @@
+import { lazy } from "react";
 import { Navigate, Routes, Route } from "react-router-dom";
-import { useSelector } from "react-redux";
-import { RootState } from "./store";
 import { useTokenRefresh } from "./hooks/useTokenRefresh";
 
 import ProtectedRoute from "./components/auth/ProtectedRoute";
@@ -8,115 +7,96 @@ import AuthLayout from "./components/layouts/AuthLayout";
 import DashboardLayout from "./components/layouts/DashboardLayout";
 import PublicLayout from "./components/layouts/PublicLayout";
 
-// ─── Auth pages ──────────────────────────────────────────────────────────────
+// ─── Static imports (always needed — small, no benefit from lazy-loading) ────
 import LoginPage from "./pages/LoginPage";
 import ForgotPasswordPage from "./pages/ForgotPasswordPage";
 import ResetPasswordPage from "./pages/auth/ResetPasswordPage";
 import PatientProfileCompletionPage from "./pages/auth/PatientProfileCompletionPage";
 import PatientRegisterPage from "./pages/public/PatientRegisterPage";
-
-// ─── Public pages ────────────────────────────────────────────────────────────
 import LandingPage from "./pages/public/LandingPage";
 import PublicClinicsPage from "./pages/public/PublicClinicsPage";
 import PublicClinicDetailPage from "./pages/public/PublicClinicDetailPage";
 import PrivacyPolicyPage from "./pages/public/PrivacyPolicyPage";
 import DataDeletionPage from "./pages/public/DataDeletionPage";
 
-// ─── Dashboard pages ─────────────────────────────────────────────────────────
-import DashboardPage from "./pages/dashboard/DashboardPage";
+// ─── Lazy-loaded module pages (code-split per module) ────────────────────────
 
-// ─── Appointment pages ───────────────────────────────────────────────────────
-import AppointmentsPage from "./pages/appointments/AppointmentsPage";
-import NewAppointmentPage from "./pages/appointments/NewAppointmentPage";
-import AppointmentDetailPage from "./pages/appointments/AppointmentDetailPage";
-import CalendarPage from "./pages/appointments/CalendarPage";
+// Home
+const HomePage = lazy(() => import("./pages/home/HomePage"));
 
-// ─── Patient pages ───────────────────────────────────────────────────────────
-import PatientsPage from "./pages/patients/PatientsPage";
-import PatientDetailPage from "./pages/patients/PatientDetailPage";
-import NewPatientPage from "./pages/patients/NewPatientPage";
+// Dashboard (detailed analytics view — accessible from Analytics tile)
+const DashboardPage = lazy(() => import("./pages/dashboard/DashboardPage"));
 
-// ─── Doctor pages ────────────────────────────────────────────────────────────
-import DoctorsPage from "./pages/doctors/DoctorsPage";
-import DoctorDetailPage from "./pages/doctors/DoctorDetailPage";
-import DoctorSchedulePage from "./pages/doctors/DoctorSchedulePage";
-import DoctorClinicsPage from "./pages/doctors/DoctorClinicsPage";
-import DoctorStatsPage from "./pages/doctors/DoctorStatsPage";
+// Appointments
+const AppointmentsPage    = lazy(() => import("./pages/appointments/AppointmentsPage"));
+const NewAppointmentPage  = lazy(() => import("./pages/appointments/NewAppointmentPage"));
+const AppointmentDetailPage = lazy(() => import("./pages/appointments/AppointmentDetailPage"));
+const CalendarPage        = lazy(() => import("./pages/appointments/CalendarPage"));
 
-// ─── Medical Records ─────────────────────────────────────────────────────────
-import MedicalRecordPage from "./pages/medical-records/MedicalRecordPage";
+// Patients
+const PatientsPage        = lazy(() => import("./pages/patients/PatientsPage"));
+const PatientDetailPage   = lazy(() => import("./pages/patients/PatientDetailPage"));
+const NewPatientPage      = lazy(() => import("./pages/patients/NewPatientPage"));
 
-// ─── Prescriptions ───────────────────────────────────────────────────────────
-import PrescriptionsPage from "./pages/prescriptions/PrescriptionsPage";
+// Doctors
+const DoctorsPage         = lazy(() => import("./pages/doctors/DoctorsPage"));
+const DoctorDetailPage    = lazy(() => import("./pages/doctors/DoctorDetailPage"));
+const DoctorSchedulePage  = lazy(() => import("./pages/doctors/DoctorSchedulePage"));
+const DoctorClinicsPage   = lazy(() => import("./pages/doctors/DoctorClinicsPage"));
+const DoctorStatsPage     = lazy(() => import("./pages/doctors/DoctorStatsPage"));
 
-// ─── Lab ─────────────────────────────────────────────────────────────────────
-import LabOrdersPage from "./pages/lab/LabOrdersPage";
-import LabReportPage from "./pages/lab/LabReportPage";
+// Clinical modules
+const MedicalRecordPage   = lazy(() => import("./pages/medical-records/MedicalRecordPage"));
+const PrescriptionsPage   = lazy(() => import("./pages/prescriptions/PrescriptionsPage"));
+const LabOrdersPage       = lazy(() => import("./pages/lab/LabOrdersPage"));
+const LabReportPage       = lazy(() => import("./pages/lab/LabReportPage"));
+const BillingPage         = lazy(() => import("./pages/billing/BillingPage"));
+const InvoiceDetailPage   = lazy(() => import("./pages/billing/InvoiceDetailPage"));
+const PharmacyPage        = lazy(() => import("./pages/pharmacy/PharmacyPage"));
 
-// ─── Billing ─────────────────────────────────────────────────────────────────
-import BillingPage from "./pages/billing/BillingPage";
-import InvoiceDetailPage from "./pages/billing/InvoiceDetailPage";
+// Analytics & Telemedicine
+const AnalyticsPage       = lazy(() => import("./pages/analytics/AnalyticsPage"));
+const TelemedicinePage    = lazy(() => import("./pages/telemedicine/TelemedicinePage"));
+const NotificationsPage   = lazy(() => import("./pages/notifications/NotificationsPage"));
 
-// ─── Pharmacy ────────────────────────────────────────────────────────────────
-import PharmacyPage from "./pages/pharmacy/PharmacyPage";
+// Admin
+const SuperAdminDashboard = lazy(() => import("./pages/admin/SuperAdminDashboard"));
+const TenantsPage         = lazy(() => import("./pages/admin/TenantsPage"));
+const ClinicsPage         = lazy(() => import("./pages/admin/ClinicsPage"));
+const UsersPage           = lazy(() => import("./pages/admin/UsersPage"));
+const SettingsPage        = lazy(() => import("./pages/admin/SettingsPage"));
+const SpecializationsPage = lazy(() => import("./pages/admin/SpecializationsPage"));
 
-// ─── Analytics ───────────────────────────────────────────────────────────────
-import AnalyticsPage from "./pages/analytics/AnalyticsPage";
+// Accounting (18 pages — single chunk thanks to lazy import)
+const AccountingDashboard   = lazy(() => import("./pages/accounting/AccountingDashboard"));
+const ChartOfAccountsPage   = lazy(() => import("./pages/accounting/ChartOfAccountsPage"));
+const VoucherEntryPage      = lazy(() => import("./pages/accounting/VoucherEntryPage"));
+const VoucherListPage       = lazy(() => import("./pages/accounting/VoucherListPage"));
+const VoucherDetailPage     = lazy(() => import("./pages/accounting/VoucherDetailPage"));
+const DayBookPage           = lazy(() => import("./pages/accounting/DayBookPage"));
+const LedgerPage            = lazy(() => import("./pages/accounting/LedgerPage"));
+const TrialBalancePage      = lazy(() => import("./pages/accounting/TrialBalancePage"));
+const ProfitLossPage        = lazy(() => import("./pages/accounting/ProfitLossPage"));
+const BalanceSheetPage      = lazy(() => import("./pages/accounting/BalanceSheetPage"));
+const CashBankBookPage      = lazy(() => import("./pages/accounting/CashBankBookPage"));
+const ARAgingPage           = lazy(() => import("./pages/accounting/ARAgingPage"));
+const FiscalYearPage        = lazy(() => import("./pages/accounting/FiscalYearPage"));
+const GSTReportsPage        = lazy(() => import("./pages/accounting/GSTReportsPage"));
+const BankReconciliationPage = lazy(() => import("./pages/accounting/BankReconciliationPage"));
+const BudgetPage            = lazy(() => import("./pages/accounting/BudgetPage"));
+const APAgingPage           = lazy(() => import("./pages/accounting/APAgingPage"));
+const CashFlowPage          = lazy(() => import("./pages/accounting/CashFlowPage"));
+const OutstandingPage       = lazy(() => import("./pages/accounting/OutstandingPage"));
+const ClosingEntryPage      = lazy(() => import("./pages/accounting/ClosingEntryPage"));
 
-// ─── Admin pages ─────────────────────────────────────────────────────────────
-import SuperAdminDashboard from "./pages/admin/SuperAdminDashboard";
-import TenantsPage from "./pages/admin/TenantsPage";
-import ClinicsPage from "./pages/admin/ClinicsPage";
-import UsersPage from "./pages/admin/UsersPage";
-import SettingsPage from "./pages/admin/SettingsPage";
-import SpecializationsPage from "./pages/admin/SpecializationsPage";
-
-// ─── Telemedicine ────────────────────────────────────────────────────────────
-import TelemedicinePage from "./pages/telemedicine/TelemedicinePage";
-
-// ─── Notifications ───────────────────────────────────────────────────────────
-import NotificationsPage from "./pages/notifications/NotificationsPage";
-
-// ─── Accounting ──────────────────────────────────────────────────────────────
-import AccountingDashboard from "./pages/accounting/AccountingDashboard";
-import ChartOfAccountsPage from "./pages/accounting/ChartOfAccountsPage";
-import VoucherEntryPage from "./pages/accounting/VoucherEntryPage";
-import VoucherListPage from "./pages/accounting/VoucherListPage";
-import VoucherDetailPage from "./pages/accounting/VoucherDetailPage";
-import DayBookPage from "./pages/accounting/DayBookPage";
-import LedgerPage from "./pages/accounting/LedgerPage";
-import TrialBalancePage from "./pages/accounting/TrialBalancePage";
-import ProfitLossPage from "./pages/accounting/ProfitLossPage";
-import BalanceSheetPage from "./pages/accounting/BalanceSheetPage";
-import CashBankBookPage from "./pages/accounting/CashBankBookPage";
-import ARAgingPage from "./pages/accounting/ARAgingPage";
-import FiscalYearPage from "./pages/accounting/FiscalYearPage";
-import GSTReportsPage from "./pages/accounting/GSTReportsPage";
-import BankReconciliationPage from "./pages/accounting/BankReconciliationPage";
-import BudgetPage from "./pages/accounting/BudgetPage";
-import APAgingPage from "./pages/accounting/APAgingPage";
-import CashFlowPage from "./pages/accounting/CashFlowPage";
-import OutstandingPage from "./pages/accounting/OutstandingPage";
-import ClosingEntryPage from "./pages/accounting/ClosingEntryPage";
-
-/**
- * After login, redirect to role-appropriate home.
- * super_admin → /admin/dashboard..
- * everyone else → /dashboard
- */
-function RoleBasedHome() {
-  const { user } = useSelector((s: RootState) => s.auth);
-  const to = user?.role === "super_admin" ? "/admin/dashboard" : user?.role === "patient" ? "/appointments" : "/dashboard";
-  return <Navigate to={to} replace />;
-}
+// ─── App ──────────────────────────────────────────────────────────────────────
 
 export default function App() {
-  // Silently refresh the access token before it expires and on tab focus.
   useTokenRefresh();
 
   return (
     <Routes>
-      {/* ── Public routes (no auth required) ────────────────────────────── */}
+      {/* ── Public routes ────────────────────────────────────────────────── */}
       <Route element={<PublicLayout />}>
         <Route path="/" element={<LandingPage />} />
         <Route path="/clinics" element={<PublicClinicsPage />} />
@@ -133,66 +113,78 @@ export default function App() {
         <Route path="/reset-password" element={<ResetPasswordPage />} />
       </Route>
 
-      {/* ── Profile completion (post OTP/social login, standalone layout) ── */}
+      {/* ── Profile completion ───────────────────────────────────────────── */}
       <Route path="/complete-profile" element={<PatientProfileCompletionPage />} />
 
-      {/* ── Protected routes (any authenticated user) ────────────────────── */}
+      {/* ── Protected routes ─────────────────────────────────────────────── */}
       <Route element={<ProtectedRoute />}>
         <Route element={<DashboardLayout />}>
-          {/* Role-aware default redirect */}
-          <Route path="/home" element={<RoleBasedHome />} />
-
-          {/* Dashboard — staff only; patients redirected to their appointments */}
-          <Route element={<ProtectedRoute allowedRoles={["super_admin", "tenant_admin", "clinic_admin", "doctor", "nurse", "receptionist", "pharmacist", "lab_technician"]} redirectTo="/appointments" />}>
-            <Route path="/dashboard" element={<DashboardPage />} />
+          {/* ── Module-launcher home (all staff except patients) ──────────── */}
+          <Route
+            element={
+              <ProtectedRoute
+                allowedRoles={[
+                  "super_admin", "tenant_admin", "clinic_admin",
+                  "doctor", "nurse", "receptionist", "pharmacist", "lab_technician",
+                ]}
+                redirectTo="/appointments"
+              />
+            }
+          >
+            <Route path="/home" element={<HomePage />} />
+            {/* /dashboard kept for backward-compat — redirects to /home */}
+            <Route path="/dashboard" element={<Navigate to="/home" replace />} />
           </Route>
 
-          {/* Appointments */}
+          {/* ── Appointments ─────────────────────────────────────────────── */}
           <Route path="/appointments" element={<AppointmentsPage />} />
           <Route path="/appointments/new" element={<NewAppointmentPage />} />
           <Route path="/appointments/calendar" element={<CalendarPage />} />
           <Route path="/appointments/:id" element={<AppointmentDetailPage />} />
 
-          {/* Patients */}
+          {/* ── Patients ─────────────────────────────────────────────────── */}
           <Route path="/patients" element={<PatientsPage />} />
           <Route path="/patients/new" element={<NewPatientPage />} />
           <Route path="/patients/:id" element={<PatientDetailPage />} />
 
-          {/* Doctors */}
+          {/* ── Doctors ──────────────────────────────────────────────────── */}
           <Route path="/doctors" element={<DoctorsPage />} />
           <Route path="/doctors/:id" element={<DoctorDetailPage />} />
           <Route path="/doctors/:id/schedule" element={<DoctorSchedulePage />} />
           <Route path="/doctors/:id/clinics" element={<DoctorClinicsPage />} />
           <Route path="/doctors/:id/stats" element={<DoctorStatsPage />} />
 
-          {/* Medical Records */}
+          {/* ── Clinical modules ─────────────────────────────────────────── */}
           <Route path="/medical-records/:id" element={<MedicalRecordPage />} />
-
-          {/* Prescriptions */}
           <Route path="/prescriptions" element={<PrescriptionsPage />} />
-
-          {/* Lab */}
           <Route path="/lab" element={<LabOrdersPage />} />
           <Route path="/lab/reports/:id" element={<LabReportPage />} />
-
-          {/* Billing */}
           <Route path="/billing" element={<BillingPage />} />
           <Route path="/billing/invoices/:id" element={<InvoiceDetailPage />} />
-
-          {/* Pharmacy */}
           <Route path="/pharmacy" element={<PharmacyPage />} />
           <Route path="/notifications" element={<NotificationsPage />} />
-
-          {/* Telemedicine */}
           <Route path="/telemedicine/:appointmentId" element={<TelemedicinePage />} />
 
-          {/* Analytics (tenant_admin, clinic_admin, super_admin) */}
-          <Route element={<ProtectedRoute allowedRoles={["super_admin", "tenant_admin", "clinic_admin"]} />}>
+          {/* ── Analytics ────────────────────────────────────────────────── */}
+          <Route
+            element={
+              <ProtectedRoute
+                allowedRoles={["super_admin", "tenant_admin", "clinic_admin"]}
+              />
+            }
+          >
             <Route path="/analytics" element={<AnalyticsPage />} />
+            <Route path="/dashboard/stats" element={<DashboardPage />} />
           </Route>
 
-          {/* Accounting (tenant_admin, clinic_admin, super_admin) */}
-          <Route element={<ProtectedRoute allowedRoles={["super_admin", "tenant_admin", "clinic_admin"]} />}>
+          {/* ── Accounting ───────────────────────────────────────────────── */}
+          <Route
+            element={
+              <ProtectedRoute
+                allowedRoles={["super_admin", "tenant_admin", "clinic_admin"]}
+              />
+            }
+          >
             <Route path="/accounting" element={<AccountingDashboard />} />
             <Route path="/accounting/chart-of-accounts" element={<ChartOfAccountsPage />} />
             <Route path="/accounting/vouchers" element={<VoucherListPage />} />
@@ -217,14 +209,22 @@ export default function App() {
           </Route>
 
           {/* ── Super-admin only ─────────────────────────────────────────── */}
-          <Route element={<ProtectedRoute allowedRoles={["super_admin"]} />}>
+          <Route
+            element={<ProtectedRoute allowedRoles={["super_admin"]} />}
+          >
             <Route path="/admin/dashboard" element={<SuperAdminDashboard />} />
             <Route path="/admin/tenants" element={<TenantsPage />} />
             <Route path="/admin/specializations" element={<SpecializationsPage />} />
           </Route>
 
-          {/* ── Admin shared (super_admin + tenant_admin + clinic_admin) ─── */}
-          <Route element={<ProtectedRoute allowedRoles={["super_admin", "tenant_admin", "clinic_admin"]} />}>
+          {/* ── Shared admin (super_admin + tenant_admin + clinic_admin) ──── */}
+          <Route
+            element={
+              <ProtectedRoute
+                allowedRoles={["super_admin", "tenant_admin", "clinic_admin"]}
+              />
+            }
+          >
             <Route path="/admin/clinics" element={<ClinicsPage />} />
             <Route path="/admin/users" element={<UsersPage />} />
             <Route path="/settings" element={<SettingsPage />} />

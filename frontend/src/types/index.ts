@@ -15,7 +15,7 @@ export interface User {
   tenant_id?: string;
   clinic_id?: string;
   patient_id?: string;
-  role: "super_admin" | "tenant_admin" | "clinic_admin" | "doctor" | "nurse" | "receptionist" | "patient";
+  role: "super_admin" | "tenant_admin" | "clinic_admin" | "doctor" | "nurse" | "receptionist" | "pharmacist" | "lab_technician" | "patient";
   avatar?: string;
   lastLogin?: string;
   is_active?: boolean;

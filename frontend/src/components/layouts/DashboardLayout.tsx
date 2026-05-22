@@ -1,5 +1,5 @@
-import { useState, useEffect } from "react";
-import { Outlet, NavLink, Link, useNavigate } from "react-router-dom";
+import { useState, useEffect, Suspense } from "react";
+import { Outlet, NavLink, Link, useNavigate, useLocation } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { STORAGE_KEYS, API_BASE_URL } from "../../utils/constants";
 import api from "../../services/api";
@@ -9,19 +9,13 @@ import { useDispatch, useSelector } from "react-redux";
 import { switchTenantThunk, setActivePatient, ActivePatient } from "../../store/slices/authSlice";
 import {
   Calendar,
-  Users,
-  UserCog,
-  FileText,
   Pill,
   FlaskConical,
-  CreditCard,
-  Package,
   BarChart3,
   Settings,
   LogOut,
   Menu,
   X,
-  Building2,
   Bell,
   ChevronDown,
   ChevronRight,
@@ -30,7 +24,6 @@ import {
   LayoutDashboard,
   Globe,
   Layers,
-  UserCheck,
   Stethoscope,
   ArrowLeftRight,
   Check,
@@ -42,6 +35,7 @@ import {
 import { RootState, AppDispatch } from "../../store";
 import { logout } from "../../store/slices/authSlice";
 import { setCurrency, setFeatureFlags, setUserFeatureFlags } from "../../store/slices/tenantSlice";
+import { getModuleForPath, type UserRole } from "../../modules/registry";
 
 // ─── Navigation configs per role ────────────────────────────────────────────
 
@@ -56,45 +50,12 @@ const SUPER_ADMIN_NAV = [
   { name: "Settings", href: "/settings", icon: Settings },
 ];
 
-const TENANT_ADMIN_NAV = [
-  { name: "Dashboard", href: "/dashboard", icon: Home },
-  { name: "My Clinics", href: "/admin/clinics", icon: Building2 },
-  { name: "Doctors", href: "/doctors", icon: UserCog, module: "doctors" },
-  { name: "Patients", href: "/patients", icon: Users, module: "patients" },
-  { name: "Appointments", href: "/appointments", icon: Calendar, module: "appointments" },
-  { name: "Staff & Users", href: "/admin/users", icon: UserCheck },
-  { name: "Billing", href: "/billing", icon: CreditCard, module: "billing" },
-  { name: "Pharmacy", href: "/pharmacy", icon: Package, module: "pharmacy" },
-  // { name: "Accounting", href: "/accounting", icon: BookOpen, module: "accounting" },
-  { name: "Analytics", href: "/analytics", icon: BarChart3, module: "analytics" },
-  { name: "Settings", href: "/settings", icon: Settings },
-];
-
-const OPERATIONAL_NAV = [
-  { name: "Dashboard", href: "/dashboard", icon: Home, roles: ["*"] },
-  { name: "Appointments", href: "/appointments", icon: Calendar, roles: ["*"], module: "appointments" },
-  { name: "Patients", href: "/patients", icon: Users, roles: ["clinic_admin", "doctor", "nurse", "receptionist"], module: "patients" },
-  { name: "Doctors", href: "/doctors", icon: UserCog, roles: ["clinic_admin", "receptionist"], module: "doctors" },
-  { name: "Medical Records", href: "/medical-records", icon: FileText, roles: ["doctor", "nurse", "clinic_admin"], module: "medical_records" },
-  { name: "Prescriptions", href: "/prescriptions", icon: Pill, roles: ["doctor", "pharmacist", "nurse"], module: "prescriptions" },
-  { name: "Lab Reports", href: "/lab", icon: FlaskConical, roles: ["doctor", "lab_technician", "nurse"], module: "lab" },
-  { name: "Billing", href: "/billing", icon: CreditCard, roles: ["receptionist", "clinic_admin"], module: "billing" },
-  { name: "Pharmacy", href: "/pharmacy", icon: Package, roles: ["pharmacist", "clinic_admin"], module: "pharmacy" },
-  // { name: "Accounting", href: "/accounting", icon: BookOpen, roles: ["clinic_admin"], module: "accounting" },
-  { name: "Analytics", href: "/analytics", icon: BarChart3, roles: ["clinic_admin"], module: "analytics" },
-];
-
 const PATIENT_NAV = [
   { name: "My Appointments", href: "/appointments", icon: Calendar },
   { name: "My Prescriptions", href: "/prescriptions", icon: Pill },
   { name: "My Reports", href: "/lab", icon: FlaskConical },
 ];
 
-const CLINIC_ADMIN_EXTRA = [
-  { name: "Clinics", href: "/admin/clinics", icon: Building2 },
-  { name: "Staff", href: "/admin/users", icon: Shield },
-  { name: "Settings", href: "/settings", icon: Settings },
-];
 
 // ─── Role metadata ───────────────────────────────────────────────────────────
 
@@ -287,8 +248,6 @@ export default function DashboardLayout() {
   const [switchingTenant, setSwitchingTenant] = useState<string | null>(null);
 
   const { user, activePatient } = useSelector((state: RootState) => state.auth);
-  const tenantFeatures = useSelector((state: RootState) => state.tenant?.features ?? {});
-  const userFeatures = useSelector((state: RootState) => state.tenant?.userFeatures ?? {});
   const dispatch = useDispatch<AppDispatch>();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
@@ -393,24 +352,10 @@ export default function DashboardLayout() {
     return () => es.close();
   }, [user?.id]);
 
-  // Returns true when a module is accessible.
-  // Default ON: only explicit `false` disables a module.
-  // Both tenant-level AND user-level must allow the module.
-  const isModuleEnabled = (module?: string) =>
-    !module || (tenantFeatures[module] !== false && userFeatures[module] !== false);
-
-  // Build navigation list for the current role, filtered by enabled modules
-  const navItems = (() => {
-    if (role === "super_admin") return SUPER_ADMIN_NAV;
-    if (role === "tenant_admin") return TENANT_ADMIN_NAV.filter((i) => isModuleEnabled((i as any).module));
-    if (role === "patient") return PATIENT_NAV;
-    // For other roles, filter operational nav by role + module access
-    const hasRole = (roles: string[]) => roles.includes("*") || roles.includes(role);
-    return OPERATIONAL_NAV.filter((item) => hasRole(item.roles) && isModuleEnabled((item as any).module));
-  })();
-
-  // Extra admin section for clinic_admin
-  const showClinicAdminExtra = role === "clinic_admin";
+  // Determine which module owns the current URL (drives the module-scoped sidebar).
+  // Super-admin and patient bypass this — they use their own static nav.
+  const { pathname } = useLocation();
+  const currentModule = getModuleForPath(pathname, role);
 
   return (
     <div className="flex h-screen bg-slate-100 dark:bg-slate-900 overflow-hidden">
@@ -468,28 +413,52 @@ export default function DashboardLayout() {
 
         {/* Nav */}
         <nav className="flex-1 overflow-y-auto p-3 space-y-1">
-          {navItems.map((item) => (
+          {/* ── Super-admin: full static nav (they manage the whole platform) ── */}
+          {role === "super_admin" && SUPER_ADMIN_NAV.map((item) => (
             <NavItem key={item.href} item={item} collapsed={sidebarCollapsed} accentClass={meta.sidebarAccent} />
           ))}
 
-          {/* Accounting sub-nav for admin roles (only when accounting module is enabled) */}
-          {(role === "tenant_admin" || role === "clinic_admin" || role === "super_admin") && isModuleEnabled("accounting") && (
-            <div className="pt-2">
-              <AccountingSubNav collapsed={sidebarCollapsed} />
-            </div>
-          )}
+          {/* ── Patient: unchanged patient nav ──────────────────────────────── */}
+          {role === "patient" && PATIENT_NAV.map((item) => (
+            <NavItem key={item.href} item={item} collapsed={sidebarCollapsed} accentClass={meta.sidebarAccent} />
+          ))}
 
-          {/* Extra admin items for clinic_admin */}
-          {showClinicAdminExtra && (
+          {/* ── All other staff: Home + module-scoped nav ────────────────────── */}
+          {role !== "super_admin" && role !== "patient" && (
             <>
-              {!sidebarCollapsed && (
-                <p className="px-3 pt-4 pb-1 text-[10px] font-semibold text-slate-500 uppercase tracking-wider">
-                  Administration
-                </p>
+              {/* Always-visible Home link */}
+              <NavItem
+                item={{ name: "Home", href: "/home", icon: Home }}
+                collapsed={sidebarCollapsed}
+                accentClass={meta.sidebarAccent}
+              />
+
+              {/* Module-specific nav when inside a module */}
+              {currentModule && (
+                <>
+                  {!sidebarCollapsed && (
+                    <p className="px-3 pt-4 pb-1 text-[10px] font-semibold text-white/40 uppercase tracking-wider">
+                      {currentModule.name}
+                    </p>
+                  )}
+
+                  {/* Accounting uses its own grouped sub-nav component */}
+                  {currentModule.id === "accounting" ? (
+                    <AccountingSubNav collapsed={sidebarCollapsed} />
+                  ) : (
+                    currentModule.navItems
+                      .filter((item) => !item.roles || item.roles.includes(role as UserRole))
+                      .map((item) => (
+                        <NavItem
+                          key={item.href}
+                          item={item}
+                          collapsed={sidebarCollapsed}
+                          accentClass={meta.sidebarAccent}
+                        />
+                      ))
+                  )}
+                </>
               )}
-              {CLINIC_ADMIN_EXTRA.map((item) => (
-                <NavItem key={item.href} item={item} collapsed={sidebarCollapsed} accentClass={meta.sidebarAccent} />
-              ))}
             </>
           )}
         </nav>
@@ -704,9 +673,17 @@ export default function DashboardLayout() {
           </div>
         </header>
 
-        {/* Content */}
+        {/* Content — Suspense catches lazy-loaded module pages */}
         <main className="flex-1 overflow-y-auto p-6">
-          <Outlet />
+          <Suspense
+            fallback={
+              <div className="flex items-center justify-center h-48">
+                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary-600" />
+              </div>
+            }
+          >
+            <Outlet />
+          </Suspense>
         </main>
       </div>
     </div>
