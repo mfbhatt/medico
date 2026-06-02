@@ -1,6 +1,7 @@
 import { useState, useCallback, useRef, useEffect, useMemo } from 'react';
 import { useQuery, useMutation, useQueryClient, keepPreviousData } from '@tanstack/react-query';
 import { useAppSelector } from '@/store/hooks';
+import { useLocation, useNavigate } from 'react-router-dom';
 import {
   Chart as ChartJS,
   CategoryScale, LinearScale, BarElement, ArcElement,
@@ -8,9 +9,10 @@ import {
 } from 'chart.js';
 import { Bar, Doughnut } from 'react-chartjs-2';
 import {
-  ShoppingCart, Package, ClipboardList, BarChart2, AlertTriangle,
+  ShoppingCart, Package, BarChart2, AlertTriangle,
   Plus, X, Printer, Search, ChevronLeft, ChevronRight, CheckCircle,
   Minus, Trash2, AlertCircle, RefreshCw, FileText, ShieldAlert,
+  TrendingUp, DollarSign, Boxes,
 } from 'lucide-react';
 import api from '@/services/api';
 import { useDebounce } from '@/hooks/useDebounce';
@@ -21,7 +23,7 @@ ChartJS.register(CategoryScale, LinearScale, BarElement, ArcElement, Title, Tool
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
-type Tab = 'pos' | 'inventory' | 'orders' | 'sales' | 'reports' | 'expiry' | 'alerts';
+type Tab = 'overview' | 'pos' | 'inventory' | 'orders' | 'sales' | 'reports' | 'expiry' | 'alerts';
 
 interface Drug {
   id: string;
@@ -1222,6 +1224,22 @@ function SaleDetailModal({ saleId, onClose, clinicName }: { saleId: string; onCl
   );
 }
 
+// ─── POS helpers ─────────────────────────────────────────────────────────────
+
+const FORM_COLOR: Record<string, string> = {
+  tablet:      'bg-blue-100 text-blue-700',
+  capsule:     'bg-violet-100 text-violet-700',
+  syrup:       'bg-emerald-100 text-emerald-700',
+  injection:   'bg-red-100 text-red-700',
+  cream:       'bg-pink-100 text-pink-700',
+  gel:         'bg-fuchsia-100 text-fuchsia-700',
+  drops:       'bg-cyan-100 text-cyan-700',
+  inhaler:     'bg-sky-100 text-sky-700',
+  patch:       'bg-orange-100 text-orange-700',
+  suppository: 'bg-amber-100 text-amber-700',
+  powder:      'bg-lime-100 text-lime-700',
+};
+
 // ─── POS Panel ────────────────────────────────────────────────────────────────
 
 function POSPanel({ clinicId, clinicName }: { clinicId: string; clinicName: string }) {
@@ -1446,398 +1464,430 @@ function POSPanel({ clinicId, clinicName }: { clinicId: string; clinicName: stri
   };
 
   return (
-    <div className="flex gap-6 h-[calc(100vh-195px)] min-h-[560px]">
-      {/* Drug search – left panel */}
-      <div className="w-1/2 flex flex-col min-w-0">
-        <div className="relative mb-4">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
-          <input
-            type="text"
-            className="input pl-9 pr-9"
-            placeholder="Search drugs by name or generic…"
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            autoFocus
-          />
-          {isFetching && !isLoading && (
-            <RefreshCw className="absolute right-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-400 animate-spin" />
-          )}
+    <div className="flex h-[calc(100vh-170px)] min-h-[580px] rounded-2xl overflow-hidden border border-gray-200 shadow-sm bg-white">
+
+      {/* ── LEFT: Drug catalog ─────────────────────────────────────────── */}
+      <div className="flex flex-col w-[55%] border-r border-gray-100">
+
+        {/* Search bar */}
+        <div className="px-4 py-3 border-b border-gray-100 bg-gray-50/60">
+          <div className="relative">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none" />
+            <input
+              type="text"
+              className="input pl-9 pr-9 bg-white"
+              placeholder="Search drugs by name, generic or category…"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              autoFocus
+            />
+            {isFetching && !isLoading && (
+              <RefreshCw className="absolute right-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-400 animate-spin" />
+            )}
+          </div>
+          <p className="text-[11px] text-gray-400 mt-1.5 px-0.5">
+            {drugs.length > 0 ? `${drugs.length} drug${drugs.length !== 1 ? 's' : ''} available` : ''}
+          </p>
         </div>
 
-        <div className="flex-1 overflow-y-auto border border-gray-200 rounded-xl">
+        {/* Drug list */}
+        <div className="flex-1 overflow-y-auto p-2 space-y-1">
           {isLoading ? (
-            <div className="text-center py-12 text-gray-400">Loading drugs…</div>
+            <div className="flex flex-col items-center justify-center h-full gap-3 py-16">
+              <RefreshCw className="w-6 h-6 text-gray-300 animate-spin" />
+              <p className="text-sm text-gray-400">Loading drugs…</p>
+            </div>
           ) : posErrorMsg ? (
-            <div className="flex flex-col items-center gap-2 py-12 text-red-600">
-              <AlertCircle className="w-6 h-6" />
+            <div className="flex flex-col items-center gap-2 py-16 text-red-500">
+              <AlertCircle className="w-8 h-8 opacity-60" />
               <span className="text-sm font-medium px-4 text-center">{posErrorMsg}</span>
             </div>
           ) : drugs.length === 0 ? (
-            <div className="text-center py-12 text-gray-400 text-sm px-4">
-              No drugs found. Add drugs in the Inventory tab first.
+            <div className="flex flex-col items-center justify-center h-full gap-2 px-4 py-16">
+              <div className="w-14 h-14 rounded-2xl bg-gray-100 flex items-center justify-center">
+                <Package className="w-7 h-7 text-gray-300" />
+              </div>
+              <p className="text-sm font-medium text-gray-400">No drugs found</p>
+              <p className="text-xs text-gray-300 text-center">Add drugs in the Inventory tab first</p>
             </div>
           ) : (
-            <div className="divide-y divide-gray-100">
-              {drugs.map((drug) => {
-                const inCart = cart.find((c) => c.drug_id === drug.id);
-                const isOut = drug.total_stock === 0;
-                return (
-                  <button
-                    key={drug.id}
-                    onClick={() => addToCart(drug)}
-                    disabled={isOut}
-                    className={`group w-full text-left px-4 py-3 transition-colors border-l-2
-                      ${isOut ? 'opacity-40 cursor-not-allowed bg-gray-50 border-transparent' : 'cursor-pointer'}
-                      ${inCart ? 'bg-primary-100 border-primary-500 hover:bg-primary-100' : 'border-transparent hover:bg-primary-100'}`}
-                  >
-                    <div className="flex items-start justify-between gap-2">
-                      <div className="min-w-0">
-                        <div className="flex items-center gap-1 flex-wrap">
-                          <p className={`font-semibold text-sm truncate ${inCart ? 'text-primary-900' : 'text-gray-900 group-hover:text-primary-900'}`}>{drug.name}</p>
-                          {drug.requires_prescription && (
-                            <span className="inline-flex items-center gap-0.5 text-[9px] font-bold bg-blue-100 text-blue-700 px-1 py-0 rounded shrink-0">
-                              <FileText className="w-2.5 h-2.5" /> Rx
-                            </span>
-                          )}
-                          {drug.is_controlled && (
-                            <span className="inline-flex items-center gap-0.5 text-[9px] font-bold bg-purple-100 text-purple-700 px-1 py-0 rounded shrink-0">
-                              <ShieldAlert className="w-2.5 h-2.5" /> CD
-                            </span>
-                          )}
-                        </div>
-                        <p className={`text-xs ${inCart ? 'text-primary-700' : 'text-gray-500 group-hover:text-primary-700'}`}>{drug.form} · {drug.strength} {drug.unit}</p>
-                        {drug.generic_name && <p className={`text-xs ${inCart ? 'text-primary-600' : 'text-gray-400 group-hover:text-primary-600'}`}>{drug.generic_name}</p>}
-                      </div>
-                      <div className="text-right shrink-0">
-                        <p className={`font-semibold text-sm ${inCart ? 'text-primary-900' : 'text-gray-900 group-hover:text-primary-900'}`}>{fmt(drug.selling_price)}</p>
-                        <p className={`text-xs ${isOut ? 'text-red-500' : drug.is_low_stock ? 'text-amber-600' : inCart ? 'text-primary-600' : 'text-gray-400 group-hover:text-primary-600'}`}>
-                          Stock: {drug.total_stock}
-                        </p>
-                        {inCart && (
-                          <span className="inline-flex items-center gap-1 mt-0.5 text-xs font-semibold bg-primary-600 text-white px-2 py-0.5 rounded-full">
-                            In cart · {inCart.quantity}
+            drugs.map((drug) => {
+              const inCart = cart.find((c) => c.drug_id === drug.id);
+              const isOut = drug.total_stock === 0;
+              const formColor = FORM_COLOR[drug.form?.toLowerCase()] ?? 'bg-gray-100 text-gray-600';
+              return (
+                <button
+                  key={drug.id}
+                  onClick={() => addToCart(drug)}
+                  disabled={isOut}
+                  className={`group w-full text-left px-4 py-3 rounded-xl border transition-all ${
+                    isOut
+                      ? 'opacity-40 cursor-not-allowed bg-gray-50 border-gray-100'
+                      : inCart
+                      ? 'bg-primary-50 border-primary-200 shadow-sm'
+                      : 'bg-white border-gray-100 hover:border-primary-200 hover:bg-primary-50/40 hover:shadow-sm'
+                  }`}
+                >
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-center gap-1.5 flex-wrap mb-1">
+                        <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded-md capitalize ${formColor}`}>
+                          {drug.form}
+                        </span>
+                        {drug.requires_prescription && (
+                          <span className="inline-flex items-center gap-0.5 text-[9px] font-bold bg-blue-100 text-blue-700 px-1.5 py-0.5 rounded-md">
+                            <FileText className="w-2.5 h-2.5" /> Rx
+                          </span>
+                        )}
+                        {drug.is_controlled && (
+                          <span className="inline-flex items-center gap-0.5 text-[9px] font-bold bg-purple-100 text-purple-700 px-1.5 py-0.5 rounded-md">
+                            <ShieldAlert className="w-2.5 h-2.5" /> CD
                           </span>
                         )}
                       </div>
+                      <p className={`font-semibold text-sm leading-snug ${inCart ? 'text-primary-900' : 'text-gray-900'}`}>
+                        {drug.name}{' '}
+                        <span className="font-normal text-gray-400 text-xs">{drug.strength}{drug.unit}</span>
+                      </p>
+                      {drug.generic_name && (
+                        <p className="text-xs text-gray-400 truncate mt-0.5">{drug.generic_name}</p>
+                      )}
                     </div>
-                  </button>
-                );
-              })}
-            </div>
+                    <div className="text-right shrink-0 flex flex-col items-end gap-1">
+                      <p className={`font-bold text-sm ${inCart ? 'text-primary-700' : 'text-gray-900'}`}>
+                        {fmt(drug.selling_price)}
+                      </p>
+                      <div className="flex items-center gap-1">
+                        <span className={`w-1.5 h-1.5 rounded-full ${isOut ? 'bg-red-400' : drug.is_low_stock ? 'bg-amber-400' : 'bg-emerald-400'}`} />
+                        <p className={`text-[11px] ${isOut ? 'text-red-500' : drug.is_low_stock ? 'text-amber-600' : 'text-gray-400'}`}>
+                          {drug.total_stock} left
+                        </p>
+                      </div>
+                      {inCart && (
+                        <span className="text-[11px] font-bold bg-primary-600 text-white px-2 py-0.5 rounded-full">
+                          ✓ {inCart.quantity} in cart
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                </button>
+              );
+            })
           )}
         </div>
       </div>
 
-      {/* Cart – right panel */}
-      <div className="w-1/2 flex flex-col border border-gray-200 rounded-xl bg-white overflow-hidden">
-        <div className="p-4 border-b border-gray-200 bg-gray-50">
-          <h3 className="font-semibold text-gray-900 flex items-center gap-2">
-            <ShoppingCart className="w-4 h-4" /> Cart
-            {cart.length > 0 && <span className="ml-auto text-xs font-normal text-gray-500">{cart.length} item{cart.length !== 1 ? 's' : ''}</span>}
-          </h3>
-          {allergyWarnings.length > 0 && (
-            <div className="mt-2 flex items-start gap-1.5 bg-red-50 border border-red-300 text-red-800 rounded px-2.5 py-1.5 text-xs">
-              <ShieldAlert className="w-3.5 h-3.5 mt-0.5 shrink-0" />
-              <span><strong>Allergy alert:</strong> {allergyWarnings.map((i) => i.drug_name).join(', ')} may conflict with patient allergies. Verify before dispensing.</span>
+      {/* ── RIGHT: Cart ────────────────────────────────────────────────── */}
+      <div className="w-[45%] flex flex-col bg-white">
+
+        {/* Cart header */}
+        <div className="px-5 py-3.5 border-b border-gray-100 flex items-center justify-between">
+          <div className="flex items-center gap-2.5">
+            <div className="w-8 h-8 bg-primary-600 rounded-xl flex items-center justify-center shadow-sm">
+              <ShoppingCart className="w-4 h-4 text-white" />
             </div>
-          )}
-          {cart.length >= 2 && (
-            <div className="mt-2 flex items-center gap-1.5 bg-amber-50 border border-amber-200 text-amber-800 rounded px-2.5 py-1.5 text-xs">
-              <AlertTriangle className="w-3.5 h-3.5 shrink-0" />
-              <span>Multiple drugs — verify drug interactions before dispensing.</span>
+            <div>
+              <h3 className="font-semibold text-gray-800 leading-tight">Cart</h3>
+              <p className="text-[11px] text-gray-400">{cart.length === 0 ? 'Empty' : `${cart.length} item${cart.length !== 1 ? 's' : ''}`}</p>
             </div>
+          </div>
+          {cart.length > 0 && (
+            <button onClick={() => setCart([])} className="text-xs text-gray-400 hover:text-red-500 transition-colors font-medium">
+              Clear
+            </button>
           )}
         </div>
 
-        <div className="flex-1 overflow-y-auto px-3 pt-1 pb-3">
+        {/* Alerts */}
+        {(allergyWarnings.length > 0 || cart.length >= 2) && (
+          <div className="px-4 pt-3 space-y-1.5">
+            {allergyWarnings.length > 0 && (
+              <div className="flex items-start gap-2 bg-red-50 border border-red-200 rounded-xl px-3 py-2 text-xs text-red-800">
+                <ShieldAlert className="w-3.5 h-3.5 mt-0.5 shrink-0 text-red-500" />
+                <span><strong>Allergy alert:</strong> {allergyWarnings.map((i) => i.drug_name).join(', ')} may conflict.</span>
+              </div>
+            )}
+            {cart.length >= 2 && (
+              <div className="flex items-start gap-2 bg-amber-50 border border-amber-200 rounded-xl px-3 py-2 text-xs text-amber-800">
+                <AlertTriangle className="w-3.5 h-3.5 shrink-0 text-amber-500" />
+                <span>Multiple drugs — verify interactions before dispensing.</span>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Cart items */}
+        <div className="flex-1 overflow-y-auto px-4 py-3 space-y-2">
           {cart.length === 0 ? (
-            <p className="text-center text-gray-400 text-sm py-8">Add drugs from the list</p>
-          ) : (
-            <>
-            <div className="flex items-center gap-2 px-0 py-1 text-xs text-gray-400 border-b border-gray-100 mb-1">
-              <span className="flex-1">Drug</span>
-              <span className="w-[76px] text-center">Qty</span>
-              <span className="w-12 text-center">Disc%</span>
-              <span className="w-16 text-right">Total</span>
-              <span className="w-4" />
+            <div className="flex flex-col items-center justify-center h-full gap-3 py-12">
+              <div className="w-16 h-16 rounded-2xl bg-gray-50 flex items-center justify-center">
+                <ShoppingCart className="w-7 h-7 text-gray-200" />
+              </div>
+              <p className="text-sm font-medium text-gray-400">Cart is empty</p>
+              <p className="text-xs text-gray-300">Click a drug on the left to add it</p>
             </div>
-            {cart.map((item) => {
+          ) : (
+            cart.map((item) => {
               const hasAllergyWarn = allergyWarnings.some((w) => w.drug_id === item.drug_id);
               return (
-              <div key={item.drug_id} className="py-2.5 border-b border-gray-100 last:border-0">
-                {/* Row 1: Name + controls */}
-                <div className="flex items-center gap-2">
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-1 flex-wrap">
-                      <p className={`font-medium text-sm truncate leading-tight ${hasAllergyWarn ? 'text-red-700' : 'text-gray-900'}`}>{item.drug_name}</p>
-                      {item.requires_prescription && (
-                        <span className="text-[9px] font-bold bg-blue-100 text-blue-700 px-1 rounded shrink-0">Rx</span>
-                      )}
-                      {item.is_controlled && (
-                        <span className="text-[9px] font-bold bg-purple-100 text-purple-700 px-1 rounded shrink-0">CD</span>
-                      )}
-                      {hasAllergyWarn && (
-                        <ShieldAlert className="w-3 h-3 text-red-500 shrink-0" aria-label="Possible allergy conflict" />
-                      )}
+                <div
+                  key={item.drug_id}
+                  className={`rounded-xl border p-3 space-y-2 ${hasAllergyWarn ? 'bg-red-50 border-red-200' : 'bg-gray-50 border-gray-100'}`}
+                >
+                  {/* Name row */}
+                  <div className="flex items-start gap-2">
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-1 flex-wrap">
+                        <p className={`font-semibold text-sm truncate ${hasAllergyWarn ? 'text-red-700' : 'text-gray-900'}`}>{item.drug_name}</p>
+                        {item.requires_prescription && <span className="text-[9px] font-bold bg-blue-100 text-blue-700 px-1 py-0.5 rounded">Rx</span>}
+                        {item.is_controlled && <span className="text-[9px] font-bold bg-purple-100 text-purple-700 px-1 py-0.5 rounded">CD</span>}
+                        {hasAllergyWarn && <ShieldAlert className="w-3 h-3 text-red-500 shrink-0" />}
+                      </div>
+                      <p className="text-xs text-gray-400 mt-0.5">{fmt(item.unit_price)} × {item.quantity} = <span className="font-semibold text-gray-700">{fmt(item.line_total)}</span></p>
                     </div>
-                    <p className="text-xs text-gray-400">{fmt(item.unit_price)} × {item.quantity}</p>
-                  </div>
-                  <div className="flex items-center border border-gray-200 rounded-lg bg-white shrink-0">
-                    <button onClick={() => updateCartQty(item.drug_id, -1)} className="w-6 h-6 flex items-center justify-center text-gray-500 hover:text-gray-800">
-                      <Minus className="w-2.5 h-2.5" />
-                    </button>
-                    <span className="w-7 text-center text-xs font-semibold">{item.quantity}</span>
-                    <button onClick={() => updateCartQty(item.drug_id, 1)} disabled={item.quantity >= item.available_stock}
-                      className="w-6 h-6 flex items-center justify-center text-gray-500 hover:text-gray-800 disabled:opacity-30">
-                      <Plus className="w-2.5 h-2.5" />
+                    <button onClick={() => removeFromCart(item.drug_id)} className="text-gray-300 hover:text-red-500 transition-colors shrink-0 mt-0.5">
+                      <Trash2 className="w-3.5 h-3.5" />
                     </button>
                   </div>
-                  <input
-                    type="number" min={0} max={100} step={0.5}
-                    value={item.discount_percent}
-                    onChange={(e) => updateCartDiscount(item.drug_id, parseFloat(e.target.value) || 0)}
-                    className="w-12 input text-xs py-0.5 px-1.5 shrink-0"
-                    title="Discount %"
-                    placeholder="0%"
-                  />
-                  <span className="text-sm font-semibold text-gray-900 w-16 text-right shrink-0">{fmt(item.line_total)}</span>
-                  <button onClick={() => removeFromCart(item.drug_id)} className="text-gray-300 hover:text-red-500 shrink-0 ml-0.5">
-                    <Trash2 className="w-3.5 h-3.5" />
-                  </button>
-                </div>
-
-                {/* Row 2: Sig (structured) + Batch */}
-                <div className="mt-1.5 flex items-center gap-1.5">
-                  <SigSelector
-                    form={item.form}
-                    value={item.sig}
-                    onChange={(sig) => updateCartSig(item.drug_id, sig)}
-                  />
-                  <div className="flex items-center gap-1 shrink-0 min-w-0 max-w-[150px]">
-                    <span className="text-[10px] text-gray-400 shrink-0">Batch:</span>
-                    <CartBatchRow item={item} clinicId={clinicId} onBatchChange={updateCartBatch} />
+                  {/* Controls row */}
+                  <div className="flex items-center gap-2">
+                    {/* Qty stepper */}
+                    <div className="flex items-center bg-white border border-gray-200 rounded-lg overflow-hidden shrink-0">
+                      <button onClick={() => updateCartQty(item.drug_id, -1)}
+                        className="w-7 h-7 flex items-center justify-center text-gray-500 hover:text-primary-600 hover:bg-primary-50 transition-colors">
+                        <Minus className="w-3 h-3" />
+                      </button>
+                      <span className="w-8 text-center text-sm font-bold text-gray-800">{item.quantity}</span>
+                      <button onClick={() => updateCartQty(item.drug_id, 1)}
+                        disabled={item.quantity >= item.available_stock}
+                        className="w-7 h-7 flex items-center justify-center text-gray-500 hover:text-primary-600 hover:bg-primary-50 transition-colors disabled:opacity-30">
+                        <Plus className="w-3 h-3" />
+                      </button>
+                    </div>
+                    {/* Discount */}
+                    <div className="flex items-center gap-1 min-w-0 flex-1">
+                      <span className="text-[10px] text-gray-400 shrink-0">Disc%</span>
+                      <input
+                        type="number" min={0} max={100} step={0.5}
+                        value={item.discount_percent}
+                        onChange={(e) => updateCartDiscount(item.drug_id, parseFloat(e.target.value) || 0)}
+                        className="w-14 text-center text-xs border border-gray-200 rounded-lg py-1 bg-white focus:outline-none focus:border-primary-400"
+                        placeholder="0"
+                      />
+                    </div>
+                  </div>
+                  {/* Sig + Batch */}
+                  <div className="flex items-center gap-2 pt-1 border-t border-gray-100">
+                    <SigSelector form={item.form} value={item.sig} onChange={(sig) => updateCartSig(item.drug_id, sig)} />
+                    <div className="flex items-center gap-1 shrink-0 max-w-[140px]">
+                      <span className="text-[10px] text-gray-300 shrink-0">Batch</span>
+                      <CartBatchRow item={item} clinicId={clinicId} onBatchChange={updateCartBatch} />
+                    </div>
                   </div>
                 </div>
-              </div>
               );
-            })}
-            </>
+            })
           )}
         </div>
 
-        {/* Cart footer */}
-        <div className="p-3 border-t border-gray-200 bg-gray-50 space-y-2">
-          {/* Prescription selector — shown only when patient is selected and has active Rx */}
-          {selectedPatient && (
-            <div>
-              {prescriptions.length > 0 ? (
-                <div className="flex items-center gap-1.5">
-                  <FileText className="w-3.5 h-3.5 text-blue-500 shrink-0" />
-                  <select
-                    className="input text-xs py-1 flex-1"
-                    value={selectedPrescription?.id ?? ''}
-                    onChange={(e) => {
-                      const rx = prescriptions.find((p: any) => p.id === e.target.value);
-                      setSelectedPrescription(rx ? { id: rx.id, rx_number: rx.prescription_number ?? rx.id.slice(0, 8), doctor_name: rx.doctor_name } : null);
-                    }}
-                  >
-                    <option value="">— No linked prescription —</option>
-                    {prescriptions.map((rx: any) => (
-                      <option key={rx.id} value={rx.id}>
-                        Rx #{rx.prescription_number ?? rx.id.slice(0, 8)}{rx.doctor_name ? ` · Dr. ${rx.doctor_name}` : ''} · {new Date(rx.created_at).toLocaleDateString()}
-                      </option>
-                    ))}
-                  </select>
+        {/* ── Checkout footer ─────────────────────────────────────────── */}
+        <div className="border-t border-gray-100 px-4 py-2.5 space-y-2 bg-gray-50/40">
+
+          {/* Patient search */}
+          <div className="relative" ref={patientRef}>
+            {selectedPatient ? (
+              <div className="flex items-center gap-3 bg-primary-50 border border-primary-200 rounded-xl px-3 py-2">
+                <div className="w-8 h-8 rounded-full bg-primary-200 flex items-center justify-center shrink-0">
+                  <span className="text-xs font-bold text-primary-700">{selectedPatient.name[0]?.toUpperCase()}</span>
                 </div>
-              ) : (
-                <p className="text-[10px] text-gray-400 flex items-center gap-1">
-                  <FileText className="w-3 h-3" /> No active prescriptions on file for this patient
-                </p>
-              )}
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-semibold text-primary-900 truncate">{selectedPatient.name}</p>
+                  <p className="text-[10px] text-primary-500">Patient ID: {selectedPatient.id.slice(0, 8)}…</p>
+                </div>
+                <button onClick={() => { setSelectedPatient(null); setPatientSearch(''); }}
+                  className="text-primary-300 hover:text-red-500 transition-colors shrink-0">
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+            ) : (
+              <>
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-400 pointer-events-none" />
+                <input
+                  className="input pl-9 text-sm py-2"
+                  placeholder="Search patient (optional — walk-in if blank)"
+                  value={patientSearch}
+                  onChange={(e) => { setPatientSearch(e.target.value); setShowPatientDropdown(true); }}
+                  onFocus={() => { if (patientSearch.length >= 2) setShowPatientDropdown(true); }}
+                />
+                {searchingPatients && <RefreshCw className="absolute right-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-400 animate-spin" />}
+                {showPatientDropdown && patientSearch.trim().length >= 2 && (
+                  <div className="absolute left-0 right-0 bottom-full mb-1.5 bg-white border border-gray-200 rounded-xl shadow-xl z-50 max-h-44 overflow-y-auto">
+                    {searchingPatients ? (
+                      <div className="px-4 py-3 text-sm text-gray-400">Searching…</div>
+                    ) : patientList.length > 0 ? (
+                      patientList.map((p: any) => (
+                        <button key={p.id} type="button"
+                          onMouseDown={() => {
+                            setSelectedPatient({ id: p.id, name: `${p.first_name ?? ''} ${p.last_name ?? ''}`.trim() });
+                            setPatientSearch(''); setShowPatientDropdown(false);
+                          }}
+                          className="w-full text-left px-4 py-2.5 hover:bg-primary-50 border-b border-gray-50 last:border-0 transition-colors">
+                          <p className="text-sm font-medium text-gray-900">{p.first_name} {p.last_name}</p>
+                          <p className="text-xs text-gray-400">{p.patient_id || p.id?.slice(0, 8)}</p>
+                        </button>
+                      ))
+                    ) : (
+                      <div className="px-4 py-3 text-sm text-gray-400 italic">No patient found — will be saved as walk-in</div>
+                    )}
+                  </div>
+                )}
+              </>
+            )}
+          </div>
+
+          {/* Prescription */}
+          {selectedPatient && prescriptions.length > 0 && (
+            <div className="flex items-center gap-2 bg-blue-50 border border-blue-100 rounded-lg px-2.5 py-1.5">
+              <FileText className="w-3 h-3 text-blue-500 shrink-0" />
+              <select className="flex-1 text-xs bg-transparent border-0 text-blue-900 focus:outline-none"
+                value={selectedPrescription?.id ?? ''}
+                onChange={(e) => {
+                  const rx = prescriptions.find((p: any) => p.id === e.target.value);
+                  setSelectedPrescription(rx ? { id: rx.id, rx_number: rx.prescription_number ?? rx.id.slice(0, 8), doctor_name: rx.doctor_name } : null);
+                }}>
+                <option value="">— No linked prescription —</option>
+                {prescriptions.map((rx: any) => (
+                  <option key={rx.id} value={rx.id}>
+                    Rx #{rx.prescription_number ?? rx.id.slice(0, 8)}{rx.doctor_name ? ` · Dr. ${rx.doctor_name}` : ''} · {new Date(rx.created_at).toLocaleDateString()}
+                  </option>
+                ))}
+              </select>
             </div>
           )}
 
-          {/* Patient search + Discount + Tax on one row */}
-          <div className="grid grid-cols-[1fr_80px_80px] gap-2">
-            <div className="relative" ref={patientRef}>
-              {selectedPatient ? (
-                <div className="input text-xs py-1 flex items-center justify-between gap-1 bg-primary-50 border-primary-300 cursor-default">
-                  <div className="min-w-0">
-                    <p className="font-medium text-primary-900 text-xs truncate leading-tight">{selectedPatient.name}</p>
-                    <p className="text-[10px] text-primary-600 leading-tight truncate">ID: {selectedPatient.id.slice(0, 8)}…</p>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => { setSelectedPatient(null); setPatientSearch(''); }}
-                    className="shrink-0 text-primary-400 hover:text-red-500 ml-1"
-                  >
-                    <X className="w-3 h-3" />
-                  </button>
-                </div>
-              ) : (
-                <>
-                  <div className="relative">
-                    <input
-                      className="input text-xs py-1"
-                      placeholder="Patient name or ID (optional)"
-                      value={patientSearch}
-                      onChange={(e) => { setPatientSearch(e.target.value); setShowPatientDropdown(true); }}
-                      onFocus={() => { if (patientSearch.length >= 2) setShowPatientDropdown(true); }}
-                    />
-                    {searchingPatients && (
-                      <RefreshCw className="absolute right-2 top-1/2 -translate-y-1/2 w-3 h-3 text-gray-400 animate-spin" />
-                    )}
-                  </div>
-                  {showPatientDropdown && patientSearch.trim().length >= 2 && (
-                    <div className="absolute left-0 right-0 bottom-full mb-1 bg-white border border-gray-200 rounded-lg shadow-lg z-50 max-h-40 overflow-y-auto">
-                      {searchingPatients ? (
-                        <div className="px-3 py-2 text-xs text-gray-400">Searching…</div>
-                      ) : patientList.length > 0 ? (
-                        patientList.map((p: any) => (
-                          <button
-                            key={p.id}
-                            type="button"
-                            onMouseDown={() => {
-                              setSelectedPatient({
-                                id: p.id,
-                                name: `${p.first_name ?? ''} ${p.last_name ?? ''}`.trim(),
-                              });
-                              setPatientSearch('');
-                              setShowPatientDropdown(false);
-                            }}
-                            className="w-full text-left px-3 py-2 hover:bg-primary-50 transition-colors border-b border-gray-100 last:border-0"
-                          >
-                            <p className="text-xs font-medium text-gray-900">{p.first_name} {p.last_name}</p>
-                            <p className="text-[10px] text-gray-500">{p.patient_id || p.id?.slice(0, 8)}</p>
-                          </button>
-                        ))
-                      ) : (
-                        <div className="px-3 py-2 text-xs text-gray-500 italic">
-                          No patient found — ID will be saved as entered
-                        </div>
-                      )}
-                    </div>
-                  )}
-                </>
-              )}
+          {/* Totals — discount & tax inline with subtotal row */}
+          <div className="bg-white border border-gray-100 rounded-xl px-3 py-2.5 space-y-1">
+            <div className="flex items-center justify-between gap-2">
+              <span className="text-xs text-gray-400 shrink-0">Subtotal</span>
+              <div className="flex items-center gap-1.5 ml-auto">
+                <span className="text-[10px] text-gray-300">Disc%</span>
+                <input type="number" min={0} max={100} step={0.5} placeholder="0"
+                  value={discountAmount} onChange={(e) => setDiscountAmount(e.target.value)}
+                  className="w-10 text-[11px] text-center border border-gray-200 rounded-md py-0.5 focus:outline-none focus:border-primary-400 bg-white" />
+                <span className="text-[10px] text-gray-300">Tax</span>
+                <input type="number" min={0} step={0.01} placeholder="0"
+                  value={taxAmount} onChange={(e) => setTaxAmount(e.target.value)}
+                  className="w-12 text-[11px] text-center border border-gray-200 rounded-md py-0.5 focus:outline-none focus:border-primary-400 bg-white" />
+                <span className="text-xs text-gray-500 w-14 text-right">{fmt(subtotal)}</span>
+              </div>
             </div>
-            <div>
-              <label className="label text-xs mb-0.5">Disc %</label>
-              <input className="input text-xs py-1" type="number" min={0} max={100} step={0.5} placeholder="0"
-                value={discountAmount} onChange={(e) => setDiscountAmount(e.target.value)} />
-            </div>
-            <div>
-              <label className="label text-xs mb-0.5">Tax</label>
-              <input className="input text-xs py-1" type="number" min={0} step={0.01} placeholder="0.00"
-                value={taxAmount} onChange={(e) => setTaxAmount(e.target.value)} />
+            {discPct > 0 && <div className="flex justify-between text-xs text-emerald-600"><span>Discount ({discPct}%)</span><span>−{fmt(disc)}</span></div>}
+            {tax > 0 && <div className="flex justify-between text-xs text-gray-400"><span>Tax</span><span>{fmt(tax)}</span></div>}
+            <div className="flex justify-between items-baseline pt-1.5 border-t border-gray-100">
+              <span className="font-bold text-gray-800 text-sm">Total</span>
+              <span className="font-bold text-xl text-gray-900">{fmt(total)}</span>
             </div>
           </div>
 
-          {/* Totals */}
-          <div className="space-y-0.5 text-xs">
-            <div className="flex justify-between text-gray-500"><span>Subtotal</span><span>{fmt(subtotal)}</span></div>
-            {discPct > 0 && <div className="flex justify-between text-red-500"><span>Discount ({discPct}%)</span><span>−{fmt(disc)}</span></div>}
-            {tax > 0 && <div className="flex justify-between text-gray-500"><span>Tax</span><span>{fmt(tax)}</span></div>}
-            <div className="flex justify-between font-bold text-sm border-t border-gray-200 pt-1">
-              <span>Total</span><span>{fmt(total)}</span>
-            </div>
-          </div>
-
-          {/* Payment method */}
-          <div className="flex flex-wrap gap-1">
+          {/* Payment method + cash paid on same row */}
+          <div className="flex items-center gap-1.5">
             {PAYMENT_METHODS.map((m) => (
-              <button
-                key={m.value}
-                type="button"
-                onClick={() => setPaymentMethod(m.value)}
-                className={`flex-1 min-w-[60px] px-2  text-xs font-medium rounded-lg border transition-colors
-                  ${paymentMethod === m.value ? 'bg-primary-600 text-white border-primary-600' : 'border-gray-200 text-gray-600 hover:border-gray-300'}`}
-              >
+              <button key={m.value} type="button" onClick={() => setPaymentMethod(m.value)}
+                className={`flex-1 py-1.5 text-xs font-semibold rounded-lg border transition-all ${
+                  paymentMethod === m.value
+                    ? 'bg-primary-600 text-white border-primary-600'
+                    : 'border-gray-200 text-gray-500 bg-white hover:border-primary-300 hover:text-primary-600'
+                }`}>
                 {m.label}
               </button>
             ))}
           </div>
 
-          {/* Cash tendered */}
           {paymentMethod === 'cash' && (
             <div className="flex items-center gap-2">
-              <div className="flex-1">
-                <label className="label text-xs mb-0.5">Cash Paid</label>
-                <input className="input text-xs py-1" type="number" min={total} step={0.01} placeholder={total.toFixed(2)}
-                  value={paidAmount} onChange={(e) => setPaidAmount(e.target.value)} />
-              </div>
+              <input className="input text-sm py-1.5 flex-1" type="number" min={total} step={0.01}
+                placeholder={`Cash paid (${total.toFixed(2)})`}
+                value={paidAmount} onChange={(e) => setPaidAmount(e.target.value)} />
               {change > 0 && (
                 <div className="text-right shrink-0">
-                  <p className="text-xs text-gray-500">Change</p>
-                  <p className="text-base font-bold text-green-600">{fmt(change)}</p>
+                  <p className="text-[10px] text-gray-400">Change</p>
+                  <p className="text-base font-bold text-emerald-600">{fmt(change)}</p>
                 </div>
               )}
             </div>
           )}
 
-          {error && <div className="text-xs text-red-600 bg-red-50 border border-red-200 px-2 py-1 rounded">{error}</div>}
+          {error && (
+            <div className="flex items-center gap-1.5 text-xs text-red-600 bg-red-50 border border-red-200 px-2.5 py-1.5 rounded-lg">
+              <AlertCircle className="w-3 h-3 shrink-0" /> {error}
+            </div>
+          )}
 
-          <div className="flex items-center gap-2">
-            <input
-              id="partial-dispense"
-              type="checkbox"
-              checked={isPartialDispense}
-              onChange={(e) => setIsPartialDispense(e.target.checked)}
-              className="w-3.5 h-3.5 rounded border-gray-300 text-primary-600"
-            />
-            <label htmlFor="partial-dispense" className="text-xs text-gray-600 cursor-pointer select-none">
-              Partial dispense — patient to return for balance
+          <div className="flex items-center justify-between gap-2">
+            <label className="flex items-center gap-1.5 cursor-pointer select-none flex-1">
+              <input type="checkbox" checked={isPartialDispense} onChange={(e) => setIsPartialDispense(e.target.checked)}
+                className="w-3.5 h-3.5 rounded border-gray-300 text-primary-600 focus:ring-primary-500" />
+              <span className="text-xs text-gray-400">Partial dispense</span>
             </label>
           </div>
 
           <button
             onClick={processSale}
             disabled={cart.length === 0 || saleMutation.isPending}
-            className="w-full btn-primary py-2 font-semibold flex items-center justify-center gap-2 text-sm"
+            className="w-full py-2.5 rounded-xl font-bold text-sm flex items-center justify-center gap-2 transition-all
+              bg-primary-600 text-white hover:bg-primary-700 shadow-sm hover:shadow-md
+              disabled:opacity-40 disabled:cursor-not-allowed disabled:shadow-none"
           >
             {saleMutation.isPending ? (
               <><RefreshCw className="w-4 h-4 animate-spin" /> Processing…</>
-            ) : isPartialDispense ? (
-              <><CheckCircle className="w-4 h-4" /> Partial Dispense · {fmt(total)}</>
             ) : (
-              <><CheckCircle className="w-4 h-4" /> Process Sale · {fmt(total)}</>
+              <><CheckCircle className="w-5 h-5" />{isPartialDispense ? 'Partial Dispense' : 'Process Sale'} · {fmt(total)}</>
             )}
           </button>
         </div>
       </div>
 
-      {/* Sale success modal */}
+      {/* ── Sale success modal ────────────────────────────────────────── */}
       {completedSale && (
-        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-xl shadow-xl w-full max-w-lg p-6 text-center space-y-4 relative">
-            <button
-              onClick={() => setCompletedSale(null)}
-              className="absolute top-4 right-4 text-gray-400 hover:text-gray-600"
-              aria-label="Close"
-            >
-              <X className="w-5 h-5" />
-            </button>
-            <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto">
-              <CheckCircle className="w-9 h-9 text-green-600" />
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md overflow-hidden">
+            {/* Green header */}
+            <div className="bg-gradient-to-br from-emerald-500 to-green-600 px-6 pt-8 pb-6 text-center relative">
+              <button onClick={() => setCompletedSale(null)}
+                className="absolute top-4 right-4 text-white/60 hover:text-white transition-colors">
+                <X className="w-5 h-5" />
+              </button>
+              <div className="w-16 h-16 bg-white/20 rounded-full flex items-center justify-center mx-auto mb-3">
+                <CheckCircle className="w-9 h-9 text-white" />
+              </div>
+              <h2 className="text-xl font-bold text-white">Sale Complete!</h2>
+              <p className="text-emerald-100 text-sm mt-1">Receipt #{completedSale.sale_number}</p>
             </div>
-            <div>
-              <h2 className="text-xl font-bold text-gray-900">Sale Complete!</h2>
-              <p className="text-gray-500 text-sm mt-1">Receipt #{completedSale.sale_number}</p>
+
+            {/* Sale details */}
+            <div className="p-5 space-y-2 text-sm">
+              {[
+                { label: 'Total', value: fmt(completedSale.total_amount), bold: true },
+                { label: 'Paid', value: fmt(completedSale.paid_amount) },
+                ...(completedSale.change_amount > 0 ? [{ label: 'Change', value: fmt(completedSale.change_amount), green: true }] : []),
+                { label: 'Payment Method', value: completedSale.payment_method, capitalize: true },
+                ...(completedSale.patient_name ? [{ label: 'Patient', value: completedSale.patient_name }] : []),
+              ].map((row: any) => (
+                <div key={row.label} className="flex justify-between py-1.5 border-b border-gray-50 last:border-0">
+                  <span className="text-gray-500">{row.label}</span>
+                  <span className={`${row.bold ? 'font-bold text-gray-900' : ''} ${row.green ? 'font-semibold text-emerald-600' : ''} ${row.capitalize ? 'capitalize' : ''}`}>
+                    {row.value}
+                  </span>
+                </div>
+              ))}
             </div>
-            <div className="bg-gray-50 rounded-lg p-4 text-sm space-y-1.5 text-left">
-              <div className="flex justify-between"><span className="text-gray-500">Total</span><span className="font-semibold">{fmt(completedSale.total_amount)}</span></div>
-              <div className="flex justify-between"><span className="text-gray-500">Paid</span><span>{fmt(completedSale.paid_amount)}</span></div>
-              {completedSale.change_amount > 0 && <div className="flex justify-between"><span className="text-gray-500">Change</span><span className="font-semibold text-green-600">{fmt(completedSale.change_amount)}</span></div>}
-              <div className="flex justify-between"><span className="text-gray-500">Method</span><span className="capitalize">{completedSale.payment_method}</span></div>
-            </div>
-            <div className="flex gap-3">
-              <button
-                onClick={() => printReceipt(completedSale, clinicName)}
-                className="flex-1 btn-secondary flex items-center justify-center gap-2"
-              >
+
+            <div className="flex gap-3 px-5 pb-5">
+              <button onClick={() => printReceipt(completedSale, clinicName)}
+                className="flex-1 btn-secondary flex items-center justify-center gap-2 py-2.5">
                 <Printer className="w-4 h-4" /> Print Receipt
               </button>
-              <button onClick={() => setCompletedSale(null)} className="flex-1 btn-primary">
+              <button onClick={() => setCompletedSale(null)} className="flex-1 btn-primary py-2.5 font-semibold">
                 New Sale
               </button>
             </div>
@@ -2670,10 +2720,446 @@ function AlertsTab({ clinicId }: { clinicId: string }) {
   );
 }
 
+// ─── Overview Panel ───────────────────────────────────────────────────────────
+
+const OVERVIEW_COLORS = ['#6366f1', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#06b6d4'];
+
+function OverviewPanel({ clinicId, onNavigate }: { clinicId: string; onNavigate: (tab: Tab) => void }) {
+  const fmt = useCurrency();
+
+  const { data: analytics, isLoading } = useQuery({
+    queryKey: ['pharmacy-analytics', clinicId],
+    queryFn: () =>
+      api.get('/inventory/reports/analytics', { params: clinicId ? { clinic_id: clinicId } : {} })
+        .then((r) => r.data.data),
+    enabled: !!clinicId,
+    staleTime: 60_000,
+  });
+
+  const { data: recentSalesData } = useQuery({
+    queryKey: ['pharmacy-sales-recent', clinicId],
+    queryFn: () =>
+      api.get('/inventory/sales', { params: { page: 1, page_size: 6, ...(clinicId ? { clinic_id: clinicId } : {}) } })
+        .then((r) => r.data),
+    enabled: !!clinicId,
+    staleTime: 30_000,
+  });
+  const recentSales: SaleRecord[] = recentSalesData?.data ?? [];
+
+  const { data: alertsData } = useQuery({
+    queryKey: ['pharmacy-alerts', clinicId],
+    queryFn: () =>
+      api.get('/inventory/stock-alerts', { params: clinicId ? { clinic_id: clinicId } : {} })
+        .then((r) => r.data.data ?? []),
+    enabled: !!clinicId,
+    staleTime: 60_000,
+  });
+  const alerts: any[] = alertsData ?? [];
+
+  if (isLoading) {
+    return (
+      <div className="space-y-6 animate-pulse">
+        <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-4">
+          {Array.from({ length: 6 }).map((_, i) => (
+            <div key={i} className="card h-28 bg-gray-100 rounded-xl" />
+          ))}
+        </div>
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          <div className="lg:col-span-2 card h-64 bg-gray-100 rounded-xl" />
+          <div className="card h-64 bg-gray-100 rounded-xl" />
+        </div>
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          <div className="lg:col-span-2 card h-72 bg-gray-100 rounded-xl" />
+          <div className="card h-72 bg-gray-100 rounded-xl" />
+        </div>
+      </div>
+    );
+  }
+
+  const last7 = (analytics?.daily_trend ?? []).slice(-7);
+  const trendLabels = last7.map((d: any) => {
+    const dt = new Date(d.date);
+    return dt.toLocaleDateString('en', { weekday: 'short', day: 'numeric' });
+  });
+  const trendRevenue = last7.map((d: any) => d.revenue);
+
+  const paymentLabels = (analytics?.payment_breakdown ?? []).map((p: any) =>
+    p.method.charAt(0).toUpperCase() + p.method.slice(1)
+  );
+  const paymentRevenue = (analytics?.payment_breakdown ?? []).map((p: any) => p.revenue);
+  const topDrugs: any[] = (analytics?.top_drugs ?? []).slice(0, 5);
+  const maxDrugRevenue = topDrugs[0]?.revenue ?? 1;
+
+  const lowStock = analytics?.low_stock_count ?? 0;
+  const kpis = [
+    {
+      label: "Today's Revenue",
+      value: fmt(analytics?.today?.revenue ?? 0),
+      sub: `${analytics?.today?.count ?? 0} sales today`,
+      Icon: DollarSign,
+      gradientFrom: '#6366f1', gradientTo: '#818cf8',
+    },
+    {
+      label: 'This Week',
+      value: fmt(analytics?.this_week?.revenue ?? 0),
+      sub: `${analytics?.this_week?.count ?? 0} transactions`,
+      Icon: TrendingUp,
+      gradientFrom: '#8b5cf6', gradientTo: '#a78bfa',
+    },
+    {
+      label: 'This Month',
+      value: fmt(analytics?.this_month?.revenue ?? 0),
+      sub: `${analytics?.this_month?.count ?? 0} transactions`,
+      Icon: BarChart2,
+      gradientFrom: '#0ea5e9', gradientTo: '#38bdf8',
+    },
+    {
+      label: 'Stock Value',
+      value: fmt(analytics?.stock_retail_value ?? 0),
+      sub: `${analytics?.total_drugs ?? 0} drugs`,
+      Icon: Boxes,
+      gradientFrom: '#10b981', gradientTo: '#34d399',
+    },
+    {
+      label: 'Low Stock',
+      value: String(lowStock),
+      sub: lowStock > 0 ? 'Needs reorder' : 'All sufficient',
+      Icon: AlertTriangle,
+      gradientFrom: lowStock > 0 ? '#f59e0b' : '#10b981',
+      gradientTo: lowStock > 0 ? '#fbbf24' : '#34d399',
+      onClick: () => onNavigate('alerts'),
+    },
+    {
+      label: 'Active Alerts',
+      value: String(alerts.length),
+      sub: alerts.length > 0 ? 'Needs attention' : 'No issues',
+      Icon: ShieldAlert,
+      gradientFrom: alerts.length > 0 ? '#ef4444' : '#10b981',
+      gradientTo: alerts.length > 0 ? '#f87171' : '#34d399',
+      onClick: () => onNavigate('alerts'),
+    },
+  ];
+
+  return (
+    <div className="space-y-6">
+
+      {/* KPI cards */}
+      <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-4">
+        {kpis.map((kpi) => (
+          <div
+            key={kpi.label}
+            onClick={kpi.onClick}
+            className={`card p-4 flex flex-col gap-3 group ${
+              kpi.onClick ? 'cursor-pointer hover:shadow-lg hover:-translate-y-0.5 transition-all duration-200' : ''
+            }`}
+          >
+            <div
+              className="w-10 h-10 rounded-xl flex items-center justify-center shadow-sm"
+              style={{ background: `linear-gradient(135deg, ${kpi.gradientFrom}, ${kpi.gradientTo})` }}
+            >
+              <kpi.Icon className="w-5 h-5 text-white" />
+            </div>
+            <div>
+              <p className="text-[11px] text-gray-400 font-medium uppercase tracking-wide">{kpi.label}</p>
+              <p className="text-xl font-bold text-gray-900 mt-0.5 leading-tight">{kpi.value}</p>
+              <p className="text-xs text-gray-400 mt-0.5">{kpi.sub}</p>
+            </div>
+          </div>
+        ))}
+      </div>
+
+      {/* Charts row */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        {/* Revenue trend */}
+        <div className="lg:col-span-2 card p-5">
+          <div className="flex items-center justify-between mb-5">
+            <div>
+              <h3 className="font-semibold text-gray-800">Revenue Trend</h3>
+              <p className="text-xs text-gray-400 mt-0.5">Last 7 days performance</p>
+            </div>
+            <button onClick={() => onNavigate('reports')} className="text-xs font-medium text-primary-600 hover:text-primary-800 border border-primary-200 hover:border-primary-300 px-2.5 py-1 rounded-lg transition-colors">
+              Full report →
+            </button>
+          </div>
+          {trendRevenue.length === 0 ? (
+            <div className="flex flex-col items-center justify-center h-48 text-gray-300 gap-2">
+              <BarChart2 className="w-12 h-12 opacity-30" />
+              <p className="text-sm text-gray-400">No sales data yet</p>
+            </div>
+          ) : (
+            <Bar
+              data={{
+                labels: trendLabels,
+                datasets: [{
+                  label: 'Revenue',
+                  data: trendRevenue,
+                  backgroundColor: trendRevenue.map((_: number, i: number) =>
+                    i === trendRevenue.length - 1 ? 'rgba(99,102,241,0.9)' : 'rgba(99,102,241,0.25)'
+                  ),
+                  borderColor: '#6366f1',
+                  borderWidth: 1.5,
+                  borderRadius: 8,
+                  borderSkipped: false,
+                  hoverBackgroundColor: 'rgba(99,102,241,0.85)',
+                }],
+              }}
+              options={{
+                responsive: true,
+                plugins: {
+                  legend: { display: false },
+                  tooltip: {
+                    backgroundColor: '#1e293b',
+                    padding: 10,
+                    cornerRadius: 8,
+                    callbacks: { label: (ctx) => `  Revenue: ${fmt(ctx.raw as number)}` },
+                  },
+                },
+                scales: {
+                  y: {
+                    beginAtZero: true,
+                    grid: { color: 'rgba(0,0,0,0.04)' },
+                    border: { display: false },
+                    ticks: { callback: (v) => fmt(Number(v)), font: { size: 11 }, color: '#9ca3af' },
+                  },
+                  x: {
+                    grid: { display: false },
+                    border: { display: false },
+                    ticks: { font: { size: 11 }, color: '#9ca3af' },
+                  },
+                },
+              }}
+            />
+          )}
+        </div>
+
+        {/* Payment methods */}
+        <div className="card p-5">
+          <div className="mb-5">
+            <h3 className="font-semibold text-gray-800">Payment Methods</h3>
+            <p className="text-xs text-gray-400 mt-0.5">This month's breakdown</p>
+          </div>
+          {paymentRevenue.length === 0 ? (
+            <div className="flex flex-col items-center justify-center h-36 gap-2 text-gray-300">
+              <p className="text-sm text-gray-400">No payment data</p>
+            </div>
+          ) : (
+            <>
+              <div className="relative mb-4">
+                <Doughnut
+                  data={{
+                    labels: paymentLabels,
+                    datasets: [{
+                      data: paymentRevenue,
+                      backgroundColor: OVERVIEW_COLORS.slice(0, paymentRevenue.length),
+                      borderWidth: 3,
+                      borderColor: '#fff',
+                      hoverBorderColor: '#fff',
+                      hoverOffset: 6,
+                    }],
+                  }}
+                  options={{
+                    responsive: true,
+                    cutout: '68%',
+                    plugins: {
+                      legend: { display: false },
+                      tooltip: {
+                        backgroundColor: '#1e293b',
+                        padding: 10,
+                        cornerRadius: 8,
+                        callbacks: { label: (ctx) => `  ${fmt(ctx.raw as number)}` },
+                      },
+                    },
+                  }}
+                />
+                <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
+                  <p className="text-lg font-bold text-gray-800">{fmt(paymentRevenue.reduce((a: number, b: number) => a + b, 0))}</p>
+                  <p className="text-[10px] text-gray-400 font-medium uppercase tracking-wide">Total</p>
+                </div>
+              </div>
+              <div className="space-y-2 mt-2">
+                {(analytics?.payment_breakdown ?? []).map((p: any, i: number) => (
+                  <div key={p.method} className="flex items-center justify-between">
+                    <span className="flex items-center gap-2 text-xs text-gray-600">
+                      <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ background: OVERVIEW_COLORS[i] }} />
+                      <span className="capitalize font-medium">{p.method}</span>
+                    </span>
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs text-gray-400">{p.count} sales</span>
+                      <span className="text-xs font-semibold text-gray-800">{fmt(p.revenue)}</span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </>
+          )}
+        </div>
+      </div>
+
+      {/* Bottom row */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        {/* Recent sales */}
+        <div className="lg:col-span-2 card overflow-hidden">
+          <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100">
+            <div>
+              <h3 className="font-semibold text-gray-800">Recent Sales</h3>
+              <p className="text-xs text-gray-400 mt-0.5">Latest transactions</p>
+            </div>
+            <button onClick={() => onNavigate('sales')} className="text-xs font-medium text-primary-600 hover:text-primary-800 border border-primary-200 hover:border-primary-300 px-2.5 py-1 rounded-lg transition-colors">
+              View all →
+            </button>
+          </div>
+          {recentSales.length === 0 ? (
+            <div className="flex flex-col items-center justify-center py-14 gap-2">
+              <div className="w-12 h-12 rounded-full bg-gray-100 flex items-center justify-center">
+                <ShoppingCart className="w-5 h-5 text-gray-300" />
+              </div>
+              <p className="text-sm text-gray-400">No sales recorded yet</p>
+            </div>
+          ) : (
+            <div>
+              {recentSales.map((sale, idx) => (
+                <div
+                  key={sale.id}
+                  className={`flex items-center px-5 py-3.5 gap-4 hover:bg-gray-50 transition-colors ${idx !== recentSales.length - 1 ? 'border-b border-gray-50' : ''}`}
+                >
+                  <div className="w-8 h-8 rounded-full bg-primary-50 flex items-center justify-center shrink-0">
+                    <ShoppingCart className="w-3.5 h-3.5 text-primary-500" />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2">
+                      <p className="text-sm font-semibold text-gray-800">{sale.sale_number}</p>
+                      <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded-full ${
+                        sale.status === 'completed'
+                          ? 'bg-emerald-100 text-emerald-700'
+                          : sale.status === 'voided'
+                          ? 'bg-red-100 text-red-600'
+                          : 'bg-amber-100 text-amber-700'
+                      }`}>{sale.status}</span>
+                    </div>
+                    <p className="text-xs text-gray-400 mt-0.5">
+                      {sale.patient_name || 'Walk-in'} · {sale.item_count} item{sale.item_count !== 1 ? 's' : ''} · <span className="capitalize">{sale.payment_method}</span>
+                    </p>
+                  </div>
+                  <div className="text-right shrink-0">
+                    <p className="text-sm font-bold text-gray-900">{fmt(sale.total_amount)}</p>
+                    <p className="text-xs text-gray-400">{new Date(sale.created_at).toLocaleDateString()}</p>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+
+        {/* Right column */}
+        <div className="space-y-5">
+          {/* Top drugs */}
+          {topDrugs.length > 0 && (
+            <div className="card p-5">
+              <div className="flex items-center justify-between mb-4">
+                <div>
+                  <h3 className="font-semibold text-gray-800">Top Drugs</h3>
+                  <p className="text-xs text-gray-400 mt-0.5">By revenue this month</p>
+                </div>
+                <button onClick={() => onNavigate('reports')} className="text-xs text-primary-600 hover:text-primary-800 font-medium">Reports →</button>
+              </div>
+              <div className="space-y-3">
+                {topDrugs.map((drug: any, i: number) => (
+                  <div key={drug.drug_id}>
+                    <div className="flex items-center justify-between mb-1.5">
+                      <span className="text-xs font-medium text-gray-700 truncate flex-1 mr-2 flex items-center gap-1.5">
+                        <span
+                          className="w-4 h-4 rounded text-white text-[9px] font-bold flex items-center justify-center shrink-0"
+                          style={{ background: OVERVIEW_COLORS[i] }}
+                        >
+                          {i + 1}
+                        </span>
+                        {drug.drug_name}
+                      </span>
+                      <span className="text-xs font-bold text-gray-900 shrink-0">{fmt(drug.revenue)}</span>
+                    </div>
+                    <div className="h-1.5 bg-gray-100 rounded-full overflow-hidden">
+                      <div
+                        className="h-full rounded-full transition-all duration-500"
+                        style={{
+                          width: `${(drug.revenue / maxDrugRevenue) * 100}%`,
+                          background: `linear-gradient(90deg, ${OVERVIEW_COLORS[i]}99, ${OVERVIEW_COLORS[i]})`,
+                        }}
+                      />
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Stock alerts */}
+          <div className="card p-5">
+            <div className="flex items-center justify-between mb-4">
+              <div>
+                <h3 className="font-semibold text-gray-800">Stock Alerts</h3>
+                <p className="text-xs text-gray-400 mt-0.5">Issues requiring action</p>
+              </div>
+              {alerts.length > 0 && (
+                <button onClick={() => onNavigate('alerts')} className="text-xs text-primary-600 hover:text-primary-800 font-medium">
+                  View all →
+                </button>
+              )}
+            </div>
+            {alerts.length === 0 ? (
+              <div className="flex items-center gap-2.5 bg-emerald-50 rounded-lg px-3 py-2.5">
+                <CheckCircle className="w-4 h-4 text-emerald-500 shrink-0" />
+                <span className="text-sm text-emerald-700 font-medium">All stock levels OK</span>
+              </div>
+            ) : (
+              <div className="space-y-2">
+                {alerts.slice(0, 5).map((alert: any) => {
+                  const critical = alert.expired_qty > 0;
+                  return (
+                    <div
+                      key={alert.drug_id}
+                      className={`flex items-start gap-2.5 p-2.5 rounded-lg border ${
+                        critical
+                          ? 'bg-red-50 border-red-100'
+                          : 'bg-amber-50 border-amber-100'
+                      }`}
+                    >
+                      <div className={`w-1.5 h-full rounded-full shrink-0 self-stretch mt-0.5 min-h-[32px] ${critical ? 'bg-red-400' : 'bg-amber-400'}`} />
+                      <div className="min-w-0">
+                        <p className="text-xs font-semibold text-gray-800 truncate">{alert.drug_name}</p>
+                        <p className="text-[11px] text-gray-500 mt-0.5">
+                          {[
+                            critical && `${alert.expired_qty} units expired`,
+                            alert.is_low_stock && `${alert.current_stock ?? 0} units left`,
+                            alert.expiring_soon_qty > 0 && `${alert.expiring_soon_qty} expiring soon`,
+                          ].filter(Boolean).join(' · ')}
+                        </p>
+                      </div>
+                    </div>
+                  );
+                })}
+                {alerts.length > 5 && (
+                  <button
+                    onClick={() => onNavigate('alerts')}
+                    className="w-full text-center text-xs text-primary-600 hover:text-primary-800 font-medium py-1.5 hover:bg-primary-50 rounded-lg transition-colors"
+                  >
+                    +{alerts.length - 5} more alerts →
+                  </button>
+                )}
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ─── Main PharmacyPage ────────────────────────────────────────────────────────
 
 export default function PharmacyPage() {
-  const [tab, setTab] = useState<Tab>('pos');
+  const location = useLocation();
+  const navigate = useNavigate();
+  const [tab, setTab] = useState<Tab>('overview');
   const [selectedClinicId, setSelectedClinicId] = useState('');
 
   const userClinicId = useAppSelector((s) => (s.auth.user as any)?.clinic_id as string | undefined);
@@ -2693,6 +3179,19 @@ export default function PharmacyPage() {
     : (userClinicId || clinics[0]?.id || '');
   const effectiveClinicName = clinics.find((c) => c.id === effectiveClinicId)?.name ?? 'Pharmacy';
 
+  const setTabFromQuery = useCallback((newTab: Tab) => {
+    setTab(newTab);
+    navigate(`/pharmacy?tab=${newTab}`, { replace: true });
+  }, [navigate]);
+
+  useEffect(() => {
+    const params = new URLSearchParams(location.search);
+    const requestedTab = params.get('tab');
+    if (requestedTab && ['overview', 'pos', 'inventory', 'orders', 'sales', 'reports', 'expiry', 'alerts'].includes(requestedTab)) {
+      setTab(requestedTab as Tab);
+    }
+  }, [location.search]);
+
   const { data: drugsData } = useQuery({
     queryKey: ['pharmacy-drugs-all', effectiveClinicId],
     queryFn: () =>
@@ -2710,20 +3209,9 @@ export default function PharmacyPage() {
     enabled: !!effectiveClinicId,
     refetchInterval: 300_000,
   });
-  const alertCount = alertsData?.length ?? 0;
   const alertsMap: Record<string, any> = Object.fromEntries(
     (alertsData ?? []).map((a: any) => [a.drug_id, a])
   );
-
-  const tabs: { id: Tab; label: string; icon: React.ReactNode }[] = [
-    { id: 'pos', label: 'Point of Sale', icon: <ShoppingCart className="w-4 h-4" /> },
-    { id: 'inventory', label: 'Inventory', icon: <Package className="w-4 h-4" /> },
-    { id: 'orders', label: 'Purchase Orders', icon: <ClipboardList className="w-4 h-4" /> },
-    { id: 'sales', label: 'Sales History', icon: <ClipboardList className="w-4 h-4" /> },
-    { id: 'reports', label: 'Reports', icon: <BarChart2 className="w-4 h-4" /> },
-    { id: 'expiry', label: 'Expiry', icon: <AlertCircle className="w-4 h-4" /> },
-    { id: 'alerts', label: 'Alerts', icon: <AlertTriangle className="w-4 h-4" /> },
-  ];
 
   return (
     <div>
@@ -2742,30 +3230,7 @@ export default function PharmacyPage() {
         )}
       </div>
 
-      {/* Tabs */}
-      <div className="border-b border-gray-200 mb-6">
-        <nav className="flex gap-0.5 -mb-px overflow-x-auto">
-          {tabs.map((t) => (
-            <button
-              key={t.id}
-              onClick={() => setTab(t.id)}
-              className={`flex items-center gap-1.5 px-4 py-2.5 text-sm font-medium border-b-2 whitespace-nowrap transition-colors
-                ${tab === t.id
-                  ? 'border-primary-600 text-primary-700'
-                  : 'border-transparent text-gray-500 hover:text-gray-700'}`}
-            >
-              {t.icon}
-              {t.label}
-              {t.id === 'alerts' && alertCount > 0 && (
-                <span className="inline-flex items-center justify-center w-5 h-5 text-xs bg-red-500 text-white rounded-full">
-                  {alertCount > 99 ? '99+' : alertCount}
-                </span>
-              )}
-            </button>
-          ))}
-        </nav>
-      </div>
-
+      {tab === 'overview' && <OverviewPanel clinicId={effectiveClinicId} onNavigate={setTabFromQuery} />}
       {tab === 'pos' && <POSPanel clinicId={effectiveClinicId} clinicName={effectiveClinicName} />}
       {tab === 'inventory' && <InventoryTab clinics={clinics} clinicId={effectiveClinicId} alertsMap={alertsMap} />}
       {tab === 'orders' && <PurchaseOrdersTab clinics={clinics} clinicId={effectiveClinicId} drugs={allDrugs} />}

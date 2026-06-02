@@ -111,7 +111,7 @@ export default function ChartOfAccountsPage() {
     error: (m: string) => dispatch(addToast({ id: Date.now().toString(), type: 'error', message: m, duration: 5000 })),
   };
 
-  const validateAccountForm = (f: any, isEdit: boolean): Record<string, string> => {
+  const validateAccountForm = (f: any, _isEdit: boolean): Record<string, string> => {
     const errors: Record<string, string> = {};
 
     if (!f.name?.trim()) {
