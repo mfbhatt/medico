@@ -213,28 +213,31 @@ function AccountingSubNav({ collapsed }: { collapsed: boolean }) {
 function NavItem({
   item,
   collapsed,
-  accentClass,
 }: {
   item: { name: string; href: string; icon: React.ElementType };
   collapsed: boolean;
-  accentClass: string;
 }) {
+  const location = useLocation();
   const Icon = item.icon;
+
+  // For items with query params (e.g. /pharmacy?tab=pos) match the full URL.
+  // For plain paths, match pathname prefix so nested routes stay highlighted.
+  const isActive = item.href.includes('?')
+    ? location.pathname + location.search === item.href
+    : location.pathname === item.href || location.pathname.startsWith(item.href + '/');
+
   return (
-    <NavLink
+    <Link
       to={item.href}
-      end={item.href === "/dashboard" || item.href === "/admin/dashboard"}
-      className={({ isActive }) =>
-        `flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
-          isActive
-            ? `${accentClass} text-white`
-            : "text-white/70 hover:bg-white/10 hover:text-white"
-        }`
-      }
+      className={`flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-all border-l-2 !pl-[10px] ${
+        isActive
+          ? "text-white bg-white/20 border-white/60"
+          : "text-white/60 hover:bg-white/[0.07] hover:text-white border-transparent"
+      }`}
     >
       <Icon className="h-5 w-5 flex-shrink-0" />
       {!collapsed && <span>{item.name}</span>}
-    </NavLink>
+    </Link>
   );
 }
 
@@ -415,12 +418,12 @@ export default function DashboardLayout() {
         <nav className="flex-1 overflow-y-auto p-3 space-y-1">
           {/* ── Super-admin: full static nav (they manage the whole platform) ── */}
           {role === "super_admin" && SUPER_ADMIN_NAV.map((item) => (
-            <NavItem key={item.href} item={item} collapsed={sidebarCollapsed} accentClass={meta.sidebarAccent} />
+            <NavItem key={item.href} item={item} collapsed={sidebarCollapsed} />
           ))}
 
           {/* ── Patient: unchanged patient nav ──────────────────────────────── */}
           {role === "patient" && PATIENT_NAV.map((item) => (
-            <NavItem key={item.href} item={item} collapsed={sidebarCollapsed} accentClass={meta.sidebarAccent} />
+            <NavItem key={item.href} item={item} collapsed={sidebarCollapsed} />
           ))}
 
           {/* ── All other staff: Home + module-scoped nav ────────────────────── */}
@@ -430,8 +433,7 @@ export default function DashboardLayout() {
               <NavItem
                 item={{ name: "Home", href: "/home", icon: Home }}
                 collapsed={sidebarCollapsed}
-                accentClass={meta.sidebarAccent}
-              />
+                             />
 
               {/* Module-specific nav when inside a module */}
               {currentModule && (
@@ -453,8 +455,7 @@ export default function DashboardLayout() {
                           key={item.href}
                           item={item}
                           collapsed={sidebarCollapsed}
-                          accentClass={meta.sidebarAccent}
-                        />
+                                                 />
                       ))
                   )}
                 </>

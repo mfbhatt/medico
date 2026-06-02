@@ -31,6 +31,8 @@ import {
   FilePlus,
   ClipboardList,
   ReceiptText,
+  ShoppingCart,
+  AlertTriangle,
 } from 'lucide-react';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -204,10 +206,17 @@ export const MODULE_REGISTRY: AppModule[] = [
     gradient: 'from-teal-500 to-green-600',
     allowedRoles: ['tenant_admin', 'clinic_admin', 'pharmacist'],
     requiresFeature: 'pharmacy',
-    defaultPath: '/pharmacy',
+    defaultPath: '/pharmacy?tab=overview',
     basePaths: ['/pharmacy'],
     navItems: [
-      { name: 'Pharmacy', href: '/pharmacy', icon: Package, end: true },
+      { name: 'Overview', href: '/pharmacy?tab=overview', icon: LayoutDashboard },
+      { name: 'Point of Sale', href: '/pharmacy?tab=pos', icon: ShoppingCart },
+      { name: 'Inventory', href: '/pharmacy?tab=inventory', icon: Package },
+      { name: 'Purchase Orders', href: '/pharmacy?tab=orders', icon: ClipboardList },
+      { name: 'Sales History', href: '/pharmacy?tab=sales', icon: ReceiptText },
+      { name: 'Reports', href: '/pharmacy?tab=reports', icon: BarChart3 },
+      { name: 'Expiry Tracker', href: '/pharmacy?tab=expiry', icon: Shield },
+      { name: 'Alerts', href: '/pharmacy?tab=alerts', icon: AlertTriangle },
     ],
   },
 
