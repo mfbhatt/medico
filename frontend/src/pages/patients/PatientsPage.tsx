@@ -72,7 +72,7 @@ export default function PatientsPage() {
   const patients = allPatients.filter((p: Patient) => !subRowIds.has(p.id));
 
   return (
-    <div>
+    <div className="flex flex-col h-full">
       <div className="page-header">
         <h1 className="page-title">Patients</h1>
         <div className="flex gap-2">
@@ -94,8 +94,8 @@ export default function PatientsPage() {
         </div>
       </div>
 
-      {/* Search */}
-      <div className="card p-4 mb-6">
+      {/* Search — sticky */}
+      <div className="card p-4 mb-4 flex-shrink-0">
         <div className="relative max-w-md">
           <svg className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
@@ -111,9 +111,10 @@ export default function PatientsPage() {
       </div>
 
       {/* Patient list */}
-      <div className="card overflow-hidden">
+      <div className="card flex-1 min-h-0 overflow-hidden flex flex-col">
+        <div className="overflow-y-auto flex-1 min-h-0">
         <table className="w-full text-sm">
-          <thead className="bg-gray-50 border-b border-gray-200">
+          <thead className="bg-gray-50 border-b border-gray-200 sticky top-0 z-10">
             <tr>
               <th className="text-left px-4 py-3 font-medium text-gray-600">MRN</th>
               <th className="text-left px-4 py-3 font-medium text-gray-600">Name</th>
@@ -225,17 +226,18 @@ export default function PatientsPage() {
             )}
           </tbody>
         </table>
-
-        {meta.total > limit && (
-          <div className="flex items-center justify-between px-4 py-3 border-t border-gray-200 text-sm text-gray-600">
-            <span>Showing {page * limit + 1}–{Math.min((page + 1) * limit, meta.total)} of {meta.total}</span>
-            <div className="flex gap-2">
-              <button className="btn-secondary py-1 px-3" disabled={page === 0} onClick={() => setPage((p) => p - 1)}>Previous</button>
-              <button className="btn-secondary py-1 px-3" disabled={(page + 1) * limit >= meta.total} onClick={() => setPage((p) => p + 1)}>Next</button>
-            </div>
-          </div>
-        )}
+        </div>
       </div>
+
+      {meta.total > limit && (
+        <div className="flex-shrink-0 mt-3 flex items-center justify-between bg-white border border-gray-200 rounded-xl shadow-sm px-4 py-3 text-sm text-gray-600">
+          <span>Showing {page * limit + 1}–{Math.min((page + 1) * limit, meta.total)} of {meta.total}</span>
+          <div className="flex gap-2">
+            <button className="btn-secondary py-1 px-3" disabled={page === 0} onClick={() => setPage((p) => p - 1)}>Previous</button>
+            <button className="btn-secondary py-1 px-3" disabled={(page + 1) * limit >= meta.total} onClick={() => setPage((p) => p + 1)}>Next</button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

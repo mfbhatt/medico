@@ -77,8 +77,8 @@ export default function BillingPage() {
   const meta = data?.meta ?? {};
 
   return (
-    <div>
-      <div className="flex items-center justify-between mb-6">
+    <div className="flex flex-col h-full">
+      <div className="flex items-center justify-between mb-4 flex-shrink-0">
         <div>
           <h1 className="text-2xl font-bold text-slate-900 dark:text-slate-100">Billing</h1>
           <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">Manage invoices and payments</p>
@@ -88,8 +88,8 @@ export default function BillingPage() {
         </button>
       </div>
 
-      {/* Filters */}
-      <div className="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 p-4 mb-6 flex flex-wrap gap-3 items-center">
+      {/* Filters — sticky */}
+      <div className="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 p-4 mb-4 flex flex-wrap gap-3 items-center flex-shrink-0">
         {/* Quick status tags */}
         <div className="flex flex-wrap gap-1.5">
           {STATUS_TAGS.map((tag) => (
@@ -126,9 +126,10 @@ export default function BillingPage() {
       </div>
 
       {/* Table — double-click a row to open the invoice */}
-      <div className="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 overflow-hidden">
+      <div className="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 overflow-hidden flex-1 min-h-0 flex flex-col">
+        <div className="overflow-y-auto flex-1 min-h-0">
         <table className="w-full text-sm">
-          <thead className="bg-slate-50 dark:bg-slate-700/50 border-b border-slate-100 dark:border-slate-700">
+          <thead className="bg-slate-50 dark:bg-slate-700/50 border-b border-slate-100 dark:border-slate-700 sticky top-0 z-10">
             <tr>
               <th className="text-left px-5 py-3 font-medium text-slate-600 dark:text-slate-400">Invoice #</th>
               <th className="text-left px-5 py-3 font-medium text-slate-600 dark:text-slate-400">Patient</th>
@@ -181,17 +182,19 @@ export default function BillingPage() {
             )}
           </tbody>
         </table>
-
-        {meta.total > pageSize && (
-          <div className="flex items-center justify-between px-5 py-3 border-t border-slate-100 dark:border-slate-700 text-sm text-slate-600 dark:text-slate-400">
-            <span>Showing {(page - 1) * pageSize + 1}–{Math.min(page * pageSize, meta.total)} of {meta.total}</span>
-            <div className="flex gap-2">
-              <button className="px-3 py-1.5 border border-slate-200 dark:border-slate-600 rounded-lg text-xs hover:bg-slate-50 dark:hover:bg-slate-700 disabled:opacity-40" disabled={page === 1} onClick={() => setPage((p) => p - 1)}>Previous</button>
-              <button className="px-3 py-1.5 border border-slate-200 dark:border-slate-600 rounded-lg text-xs hover:bg-slate-50 dark:hover:bg-slate-700 disabled:opacity-40" disabled={page * pageSize >= meta.total} onClick={() => setPage((p) => p + 1)}>Next</button>
-            </div>
-          </div>
-        )}
+        </div>
       </div>
+
+      {/* Pagination */}
+      {meta.total > pageSize && (
+        <div className="flex-shrink-0 mt-3 flex items-center justify-between bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl shadow-sm px-5 py-3 text-sm text-slate-600 dark:text-slate-400">
+          <span>Showing {(page - 1) * pageSize + 1}–{Math.min(page * pageSize, meta.total)} of {meta.total}</span>
+          <div className="flex gap-2">
+            <button className="px-3 py-1.5 border border-slate-200 dark:border-slate-600 rounded-lg text-xs hover:bg-slate-50 dark:hover:bg-slate-700 disabled:opacity-40" disabled={page === 1} onClick={() => setPage((p) => p - 1)}>Previous</button>
+            <button className="px-3 py-1.5 border border-slate-200 dark:border-slate-600 rounded-lg text-xs hover:bg-slate-50 dark:hover:bg-slate-700 disabled:opacity-40" disabled={page * pageSize >= meta.total} onClick={() => setPage((p) => p + 1)}>Next</button>
+          </div>
+        </div>
+      )}
 
       {showNewModal && (
         <NewInvoiceModal

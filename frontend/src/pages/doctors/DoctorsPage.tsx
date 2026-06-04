@@ -436,7 +436,7 @@ export default function DoctorsPage() {
   };
 
   return (
-    <div>
+    <div className="flex flex-col h-full">
       <div className="page-header">
         <h1 className="page-title">Doctors</h1>
         <button onClick={() => setAddOpen(true)} className="btn-primary">
@@ -444,8 +444,8 @@ export default function DoctorsPage() {
         </button>
       </div>
 
-      {/* Filters */}
-      <div className="card p-4 mb-6 flex gap-3 flex-wrap items-end">
+      {/* Filters — sticky */}
+      <div className="card p-4 mb-4 flex gap-3 flex-wrap items-end flex-shrink-0">
         <div className="flex-1 min-w-48 relative">
           <label className="label">Search</label>
           <div className="relative">
@@ -479,6 +479,7 @@ export default function DoctorsPage() {
       </div>
 
       {/* Doctor cards */}
+      <div className="flex-1 min-h-0 overflow-y-auto">
       {isLoading ? (
         <SkeletonCards count={6} />
       ) : (
@@ -566,9 +567,10 @@ export default function DoctorsPage() {
       {!isLoading && doctors.length === 0 && (
         <div className="text-center py-20 text-gray-400">No doctors found</div>
       )}
+      </div>
 
       {total > PAGE_SIZE && (
-        <div className="mt-4 bg-white rounded-xl border border-slate-200">
+        <div className="flex-shrink-0 mt-4 bg-white rounded-xl border border-slate-200 shadow-sm">
           <Pagination page={page} pageSize={PAGE_SIZE} total={total} onPageChange={setPage} />
         </div>
       )}

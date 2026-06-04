@@ -204,7 +204,7 @@ export default function AppointmentsPage() {
   };
 
   return (
-    <div>
+    <div className="flex flex-col h-full">
       <div className="page-header">
         <h1 className="page-title">
           {isPatient
@@ -221,8 +221,8 @@ export default function AppointmentsPage() {
         </Link>
       </div>
 
-      {/* Filters */}
-      <div className="card p-4 mb-6 flex flex-wrap gap-3 items-end">
+      {/* Filters — sticky */}
+      <div className="card p-4 mb-4 flex flex-wrap gap-3 items-end flex-shrink-0">
         <div className="flex-1 min-w-[220px]">
           <label className="label">Search</label>
           <div className="relative">
@@ -277,9 +277,10 @@ export default function AppointmentsPage() {
       </div>
 
       {/* Table */}
-      <div className="card overflow-hidden">
+      <div className="card flex-1 min-h-0 overflow-hidden flex flex-col">
+        <div className="overflow-y-auto flex-1 min-h-0">
         <table className="w-full text-sm">
-          <thead className="bg-gray-50 border-b border-gray-200">
+          <thead className="bg-gray-50 border-b border-gray-200 sticky top-0 z-10">
             <tr>
               <th className="text-left px-4 py-3 font-medium text-gray-600">Date</th>
               <th className="text-left px-4 py-3 font-medium text-gray-600">Time</th>
@@ -373,24 +374,25 @@ export default function AppointmentsPage() {
             )}
           </tbody>
         </table>
-
-        {/* Pagination */}
-        {meta.total > limit && (
-          <div className="flex items-center justify-between px-4 py-3 border-t border-gray-200 text-sm text-gray-600">
-            <span>
-              Showing {page * limit + 1}–{Math.min((page + 1) * limit, meta.total)} of {meta.total}
-            </span>
-            <div className="flex gap-2">
-              <button className="btn-secondary py-1 px-3" disabled={page === 0} onClick={() => setPage((p) => p - 1)}>
-                Previous
-              </button>
-              <button className="btn-secondary py-1 px-3" disabled={(page + 1) * limit >= meta.total} onClick={() => setPage((p) => p + 1)}>
-                Next
-              </button>
-            </div>
-          </div>
-        )}
+        </div>
       </div>
+
+      {/* Pagination */}
+      {meta.total > limit && (
+        <div className="flex-shrink-0 mt-3 flex items-center justify-between bg-white border border-gray-200 rounded-xl shadow-sm px-4 py-3 text-sm text-gray-600">
+          <span>
+            Showing {page * limit + 1}–{Math.min((page + 1) * limit, meta.total)} of {meta.total}
+          </span>
+          <div className="flex gap-2">
+            <button className="btn-secondary py-1 px-3" disabled={page === 0} onClick={() => setPage((p) => p - 1)}>
+              Previous
+            </button>
+            <button className="btn-secondary py-1 px-3" disabled={(page + 1) * limit >= meta.total} onClick={() => setPage((p) => p + 1)}>
+              Next
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* Cancel / Check-In confirmation dialog */}
       {confirm && (
