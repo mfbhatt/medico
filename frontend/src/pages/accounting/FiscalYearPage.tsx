@@ -4,6 +4,7 @@ import { useDispatch } from 'react-redux';
 import { Link } from 'react-router-dom';
 import { addToast } from '@/store/slices/uiSlice';
 import api from '@/services/api';
+import LoadingSpinner from '@/components/common/LoadingSpinner';
 
 interface FY {
   id: string;
@@ -83,7 +84,7 @@ export default function FiscalYearPage() {
       </div>
 
       {isLoading ? (
-        <div className="text-center py-12 text-gray-400">Loading…</div>
+        <div className="py-12 flex justify-center"><LoadingSpinner size="sm" /></div>
       ) : (
         <div className="card overflow-hidden">
           <table className="w-full text-sm">

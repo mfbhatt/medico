@@ -3,6 +3,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useDispatch } from 'react-redux';
 import { addToast } from '@/store/slices/uiSlice';
 import api from '@/services/api';
+import LoadingSpinner from '@/components/common/LoadingSpinner';
 
 const fmt = (n: number) => n ? `₹${n.toLocaleString('en-IN', { minimumFractionDigits: 2 })}` : '—';
 
@@ -197,7 +198,7 @@ export default function BankReconciliationPage() {
       )}
 
       {accountId && isLoading && (
-        <div className="text-center py-12 text-gray-400">Loading…</div>
+        <div className="py-12 flex justify-center"><LoadingSpinner size="sm" /></div>
       )}
 
       {accountId && !isLoading && (

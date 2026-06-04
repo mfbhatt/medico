@@ -4,6 +4,7 @@ import { Plus, Search, MapPin, Phone, X, Building2, Pencil } from "lucide-react"
 import api from "@/services/api";
 import { useAppSelector } from "@/store/hooks";
 import Pagination from "@/components/ui/Pagination";
+import LoadingSpinner from "@/components/common/LoadingSpinner";
 import AddressFields, { type AddressValue } from "@/components/ui/AddressFields";
 import { useEnabledCountries } from "@/hooks/useEnabledCountries";
 import { ALL_COUNTRIES } from "@/utils/addressData";
@@ -125,7 +126,7 @@ export default function ClinicsPage() {
         </div>
       </div>
 
-      {isLoading && <div className="text-center py-12 text-slate-400 text-sm">Loading clinics…</div>}
+      {isLoading && <div className="py-12 flex justify-center"><LoadingSpinner size="sm" label="Loading clinics…" /></div>}
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
         {filtered.map((c) => (

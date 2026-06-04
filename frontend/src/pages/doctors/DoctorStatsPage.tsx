@@ -6,6 +6,7 @@ import {
   Download, TrendingUp, DollarSign, Calendar,
 } from 'lucide-react';
 import api from '@/services/api';
+import LoadingSpinner from '@/components/common/LoadingSpinner';
 import { useCurrency } from '@/hooks/useCurrency';
 
 interface StatsSummary {
@@ -238,7 +239,7 @@ export default function DoctorStatsPage() {
       {tab === 'stats' && (
         <>
           {statsLoading ? (
-            <div className="text-center py-16 text-slate-400">Loading stats…</div>
+            <div className="py-16 flex justify-center"><LoadingSpinner label="Loading stats…" /></div>
           ) : (
             <>
               {/* Summary cards */}
@@ -317,7 +318,7 @@ export default function DoctorStatsPage() {
       {tab === 'settlement' && (
         <>
           {settlementLoading ? (
-            <div className="text-center py-16 text-slate-400">Loading settlement data…</div>
+            <div className="py-16 flex justify-center"><LoadingSpinner label="Loading settlement data…" /></div>
           ) : (
             <>
               {/* Settlement summary cards */}

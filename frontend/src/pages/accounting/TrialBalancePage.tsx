@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import api from '@/services/api';
+import LoadingSpinner from '@/components/common/LoadingSpinner';
 
 export default function TrialBalancePage() {
   const today = new Date().toISOString().slice(0, 10);
@@ -35,7 +36,7 @@ export default function TrialBalancePage() {
       </div>
 
       {isLoading ? (
-        <div className="text-center py-12 text-gray-400">Loading…</div>
+        <div className="py-12 flex justify-center"><LoadingSpinner size="sm" /></div>
       ) : (
         <div className="card overflow-hidden">
           <div className="px-6 py-3 bg-slate-700 text-white text-sm font-medium flex justify-between">

@@ -17,25 +17,27 @@ export default function AccountingDashboard() {
   const firstOfMonth = new Date(new Date().getFullYear(), new Date().getMonth(), 1)
     .toISOString().slice(0, 10);
 
-  const { data: pl } = useQuery({
+  const { data: pl, isLoading: plLoading } = useQuery({
     queryKey: ['accounting', 'pl', firstOfMonth, today],
     queryFn: () => api.get('/accounting/reports/profit-loss', { params: { date_from: firstOfMonth, date_to: today } }).then(r => r.data.data),
   });
 
-  const { data: bs } = useQuery({
+  const { data: bs, isLoading: bsLoading } = useQuery({
     queryKey: ['accounting', 'bs', today],
     queryFn: () => api.get('/accounting/reports/balance-sheet', { params: { as_of: today } }).then(r => r.data.data),
   });
 
-  const { data: ar } = useQuery({
+  const { data: ar, isLoading: arLoading } = useQuery({
     queryKey: ['accounting', 'ar', today],
     queryFn: () => api.get('/accounting/reports/ar-aging', { params: { as_of: today } }).then(r => r.data.data),
   });
 
-  const { data: dayBook } = useQuery({
+  const { data: dayBook, isLoading: dayBookLoading } = useQuery({
     queryKey: ['accounting', 'daybook', today],
     queryFn: () => api.get('/accounting/reports/day-book', { params: { date: today } }).then(r => r.data.data),
   });
+
+  const isLoading = plLoading || bsLoading || arLoading || dayBookLoading;
 
   const fmt = (n?: number) => n != null ? `₹${n.toLocaleString('en-IN', { minimumFractionDigits: 2 })}` : '—';
 
@@ -51,7 +53,18 @@ export default function AccountingDashboard() {
       </div>
 
       {/* KPI Cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
+      {isLoading ? (
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
+          {Array.from({ length: 4 }).map((_, i) => (
+            <div key={i} className="card p-5 border-l-4 border-gray-200 animate-pulse">
+              <div className="h-3 bg-gray-200 rounded w-24 mb-2" />
+              <div className="h-7 bg-gray-100 rounded w-32 mb-1" />
+              <div className="h-2.5 bg-gray-100 rounded w-20" />
+            </div>
+          ))}
+        </div>
+      ) : null}
+      <div className={`grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-8 ${isLoading ? 'hidden' : ''}`}>
         <KpiCard
           label="Cash in Hand"
           value={fmt(cashAccount?.amount)}

@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import api from '@/services/api';
+import LoadingSpinner from '@/components/common/LoadingSpinner';
 
 const BUCKET_LABELS: Record<string, string> = {
   '0_30': '0–30 days',
@@ -71,7 +72,7 @@ export default function ARAgingPage() {
 
       {/* Table */}
       {isLoading ? (
-        <div className="text-center py-12 text-gray-400">Loading…</div>
+        <div className="py-12 flex justify-center"><LoadingSpinner size="sm" /></div>
       ) : (
         <div className="card overflow-hidden">
           <table className="w-full text-sm">

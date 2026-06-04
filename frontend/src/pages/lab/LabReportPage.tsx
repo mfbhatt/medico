@@ -2,6 +2,7 @@ import { useParams, useNavigate } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { Download, ArrowLeft, AlertCircle, CheckCircle, XCircle } from "lucide-react";
 import api from "@/services/api";
+import LoadingSpinner from "@/components/common/LoadingSpinner";
 
 const RESULT_STYLES: Record<string, string> = {
   normal: "bg-green-50 border-l-4 border-green-500",
@@ -30,7 +31,7 @@ export default function LabReportPage() {
     retry: false,
   });
 
-  if (isLoading) return <div className="text-center py-20 text-slate-400">Loading lab report…</div>;
+  if (isLoading) return <div className="py-20"><LoadingSpinner label="Loading lab report…" /></div>;
   if (isError || !report) return (
     <div className="max-w-3xl mx-auto py-12 text-center">
       <p className="text-slate-500 mb-4">Lab report not found or not available. Please access reports through the patient's lab order history.</p>

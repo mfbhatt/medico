@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import api from '@/services/api';
+import LoadingSpinner from '@/components/common/LoadingSpinner';
 
 type ReportType = 'gstr1' | 'gstr3b';
 
@@ -79,7 +80,7 @@ export default function GSTReportsPage() {
         <button className="btn-secondary mt-auto print:hidden" onClick={() => window.print()}>Print</button>
       </div>
 
-      {isLoading && <div className="text-center py-12 text-gray-400">Generating report…</div>}
+      {isLoading && <div className="py-12 flex justify-center"><LoadingSpinner size="sm" label="Generating report…" /></div>}
 
       {/* GSTR-3B */}
       {submitted && !isLoading && reportType === 'gstr3b' && gstr3b && (

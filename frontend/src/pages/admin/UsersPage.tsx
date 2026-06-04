@@ -7,6 +7,7 @@ import { useSelector } from "react-redux";
 import { RootState } from "@/store";
 import Pagination from "@/components/ui/Pagination";
 import { useNotification } from "@/hooks/useNotification";
+import SkeletonTable from "@/components/common/SkeletonTable";
 
 const MODULES = [
   { key: "appointments", label: "Appointments" },
@@ -304,11 +305,7 @@ export default function UsersPage() {
                 </thead>
                 <tbody className={`divide-y divide-slate-50 transition-opacity duration-150 ${isFetching && !isLoading ? "opacity-50" : "opacity-100"}`}>
                   {isLoading && users.length === 0 ? (
-                    <tr>
-                      <td colSpan={colCount} className="text-center py-12 text-slate-400">
-                        Loading…
-                      </td>
-                    </tr>
+                    <SkeletonTable rows={8} columns={colCount} />
                   ) : users.length === 0 ? (
                     <tr>
                       <td colSpan={colCount} className="text-center py-12 text-slate-400">

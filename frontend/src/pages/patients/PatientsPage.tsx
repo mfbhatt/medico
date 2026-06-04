@@ -4,6 +4,7 @@ import { useQuery } from '@tanstack/react-query';
 import { Download, Users } from 'lucide-react';
 import api from '@/services/api';
 import { useDebounce } from '@/hooks/useDebounce';
+import SkeletonTable from '@/components/common/SkeletonTable';
 
 interface FamilyMember {
   id: string;
@@ -124,7 +125,7 @@ export default function PatientsPage() {
           </thead>
           <tbody className="divide-y divide-gray-100">
             {isLoading ? (
-              <tr><td colSpan={6} className="text-center py-12 text-gray-400">Loading…</td></tr>
+              <SkeletonTable rows={8} columns={6} />
             ) : patients.length === 0 ? (
               <tr><td colSpan={6} className="text-center py-12 text-gray-400">No patients found</td></tr>
             ) : (

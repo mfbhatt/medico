@@ -5,6 +5,7 @@ import { Calendar, Clock, User, Phone, FileText, ArrowLeft, CheckCircle, XCircle
 import { useSelector } from "react-redux";
 import type { RootState } from "@/store";
 import api from "@/services/api";
+import LoadingSpinner from "@/components/common/LoadingSpinner";
 
 const STATUS_COLORS: Record<string, string> = {
   scheduled: "bg-blue-100 text-blue-800",
@@ -103,7 +104,7 @@ export default function AppointmentDetailPage() {
     }
   };
 
-  if (isLoading) return <div className="text-center py-20 text-slate-400">Loading appointment…</div>;
+  if (isLoading) return <div className="py-20"><LoadingSpinner label="Loading appointment…" /></div>;
   if (isError || !appt) return <div className="text-center py-20 text-slate-400">Appointment not found</div>;
 
   const canCancel = ["scheduled", "checked_in"].includes(appt.status);

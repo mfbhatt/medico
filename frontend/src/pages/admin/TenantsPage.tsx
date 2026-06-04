@@ -3,6 +3,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Plus, Search, X, Building2, AlertTriangle, UserCircle, UserPlus, Eye, EyeOff, Pencil, Copy, Check } from "lucide-react";
 import api from "@/services/api";
 import Pagination from "@/components/ui/Pagination";
+import LoadingSpinner from "@/components/common/LoadingSpinner";
 
 const MODULES = [
   { key: "appointments",    label: "Appointments" },
@@ -117,7 +118,7 @@ export default function TenantsPage() {
         </div>
       </div>
 
-      {isLoading && <div className="text-center py-12 text-slate-400 text-sm">Loading tenants…</div>}
+      {isLoading && <div className="py-12 flex justify-center"><LoadingSpinner size="sm" label="Loading tenants…" /></div>}
 
       {/* Grid */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">

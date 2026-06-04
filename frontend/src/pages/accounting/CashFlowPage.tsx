@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import api from '@/services/api';
+import LoadingSpinner from '@/components/common/LoadingSpinner';
 
 function Section({
   title,
@@ -89,7 +90,7 @@ export default function CashFlowPage() {
       <p className="text-xs text-gray-400 mb-4">Indirect method — Net Profit adjusted for working capital changes</p>
 
       {isLoading ? (
-        <div className="text-center py-12 text-gray-400">Loading…</div>
+        <div className="py-12 flex justify-center"><LoadingSpinner size="sm" /></div>
       ) : (
         <>
           <Section

@@ -3,6 +3,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useDispatch } from 'react-redux';
 import { addToast } from '@/store/slices/uiSlice';
 import api from '@/services/api';
+import LoadingSpinner from '@/components/common/LoadingSpinner';
 
 const MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
 const fmt = (n: number) => `₹${(n || 0).toLocaleString('en-IN', { minimumFractionDigits: 0 })}`;
@@ -228,7 +229,7 @@ export default function BudgetPage() {
           </div>
 
           {detailLoading ? (
-            <div className="text-center py-8 text-gray-400">Loading…</div>
+            <div className="py-8 flex justify-center"><LoadingSpinner size="sm" /></div>
           ) : (
             <div className="card overflow-x-auto">
               <table className="w-full text-sm" style={{ minWidth: '900px' }}>
@@ -304,7 +305,7 @@ export default function BudgetPage() {
       {/* Variance Report */}
       {view === 'variance' && selectedBudgetId && (
         <div>
-          {varianceLoading && <div className="text-center py-12 text-gray-400">Loading…</div>}
+          {varianceLoading && <div className="py-12 flex justify-center"><LoadingSpinner size="sm" /></div>}
           {varianceData && (
             <>
               <div className="grid grid-cols-3 gap-3 mb-5">

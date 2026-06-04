@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import api from '@/services/api';
+import LoadingSpinner from '@/components/common/LoadingSpinner';
 
 type BookType = 'cash' | 'bank';
 
@@ -78,7 +79,7 @@ export default function CashBankBookPage() {
       </div>
 
       {isLoading ? (
-        <div className="text-center py-12 text-gray-400">Loading…</div>
+        <div className="py-12 flex justify-center"><LoadingSpinner size="sm" /></div>
       ) : data ? (
         <div className="card overflow-hidden">
           <div className="px-6 py-3 bg-slate-700 text-white flex justify-between items-center">

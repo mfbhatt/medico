@@ -4,6 +4,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useDispatch } from 'react-redux';
 import { addToast } from '@/store/slices/uiSlice';
 import api from '@/services/api';
+import LoadingSpinner from '@/components/common/LoadingSpinner';
 
 const VOUCHER_TYPES = [
   { value: '', label: 'All Types' },
@@ -47,7 +48,7 @@ export default function VoucherListPage() {
     error: (m: string) => dispatch(addToast({ id: Date.now().toString(), type: 'error', message: m, duration: 5000 })),
   };
 
-  const { data } = useQuery({
+  const { data, isLoading } = useQuery({
     queryKey: ['accounting', 'vouchers', voucherType, dateFrom, dateTo, page],
     queryFn: () => api.get('/accounting/vouchers', {
       params: {
@@ -122,7 +123,9 @@ export default function VoucherListPage() {
             </tr>
           </thead>
           <tbody className="divide-y divide-gray-100">
-            {vouchers.length === 0 ? (
+            {isLoading ? (
+              <tr><td colSpan={7} className="py-10"><div className="flex justify-center"><LoadingSpinner size="sm" /></div></td></tr>
+            ) : vouchers.length === 0 ? (
               <tr><td colSpan={7} className="text-center py-10 text-gray-400">No vouchers found</td></tr>
             ) : (
               vouchers.map((v: any) => (

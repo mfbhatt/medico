@@ -6,6 +6,7 @@ import { Search } from 'lucide-react';
 import { RootState, AppDispatch } from '@/store';
 import { addToast } from '@/store/slices/uiSlice';
 import api from '@/services/api';
+import SkeletonTable from '@/components/common/SkeletonTable';
 
 const STATUS_COLORS: Record<string, string> = {
   scheduled: 'badge-blue',
@@ -292,9 +293,7 @@ export default function AppointmentsPage() {
           </thead>
           <tbody className="divide-y divide-gray-100">
             {isLoading ? (
-              <tr>
-                <td colSpan={isPatient ? 7 : 8} className="text-center py-12 text-gray-400">Loading…</td>
-              </tr>
+              <SkeletonTable rows={8} columns={isPatient ? 7 : 8} />
             ) : appointments.length === 0 ? (
               <tr>
                 <td colSpan={isPatient ? 7 : 8} className="text-center py-12 text-gray-400">

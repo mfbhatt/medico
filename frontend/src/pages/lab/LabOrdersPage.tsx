@@ -3,6 +3,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Plus, Search, X, FlaskConical, ChevronDown } from "lucide-react";
 import api from "@/services/api";
 import { useDebounce } from "@/hooks/useDebounce";
+import LoadingSpinner from "@/components/common/LoadingSpinner";
 
 const STATUS_COLORS: Record<string, string> = {
   pending: "bg-yellow-100 text-yellow-800",
@@ -88,7 +89,7 @@ export default function LabOrdersPage() {
         </div>
       )}
 
-      {selectedPatient && isLoading && <div className="text-center py-12 text-slate-400 text-sm">Loading lab orders…</div>}
+      {selectedPatient && isLoading && <div className="py-12 flex justify-center"><LoadingSpinner size="sm" label="Loading lab orders…" /></div>}
 
       {selectedPatient && !isLoading && (
         <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">

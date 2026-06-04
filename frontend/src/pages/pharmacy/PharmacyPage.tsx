@@ -18,6 +18,8 @@ import api from '@/services/api';
 import { useDebounce } from '@/hooks/useDebounce';
 import { useCurrency } from '@/hooks/useCurrency';
 import { useNotification } from '@/hooks/useNotification';
+import SkeletonTable from '@/components/common/SkeletonTable';
+import LoadingSpinner from '@/components/common/LoadingSpinner';
 
 ChartJS.register(CategoryScale, LinearScale, BarElement, ArcElement, Title, Tooltip, Legend);
 
@@ -1953,7 +1955,7 @@ function InventoryTab({ clinics, clinicId, alertsMap }: { clinics: { id: string;
           </thead>
           <tbody className="divide-y divide-gray-100">
             {isLoading ? (
-              <tr><td colSpan={8} className="text-center py-12 text-gray-400">Loading…</td></tr>
+              <SkeletonTable rows={8} columns={8} />
             ) : errorMsg ? (
               <tr><td colSpan={8} className="text-center py-12">
                 <div className="flex flex-col items-center gap-2 text-red-600">
@@ -2092,7 +2094,7 @@ function PurchaseOrdersTab({ clinics, clinicId, drugs }: { clinics: { id: string
           </thead>
           <tbody className="divide-y divide-gray-100">
             {isLoading ? (
-              <tr><td colSpan={7} className="text-center py-12 text-gray-400">Loading…</td></tr>
+              <SkeletonTable rows={6} columns={7} />
             ) : pos.length === 0 ? (
               <tr><td colSpan={7} className="text-center py-12 text-gray-400">No purchase orders yet</td></tr>
             ) : (
@@ -2198,7 +2200,7 @@ function SalesTab({ clinicId, clinicName }: { clinicId: string; clinicName: stri
           </thead>
           <tbody className="divide-y divide-gray-100">
             {isLoading ? (
-              <tr><td colSpan={7} className="text-center py-12 text-gray-400">Loading…</td></tr>
+              <SkeletonTable rows={6} columns={7} />
             ) : isError ? (
               <tr><td colSpan={7} className="text-center py-12 text-red-500 text-sm">
                 Failed to load sales: {(error as any)?.response?.data?.detail ?? (error as any)?.message ?? 'Unknown error'}
@@ -2268,7 +2270,7 @@ function ReportsTab({ clinicId }: { clinicId: string }) {
     refetchInterval: 60_000,
   });
 
-  if (isLoading) return <div className="text-center py-20 text-gray-400">Loading analytics…</div>;
+  if (isLoading) return <div className="py-20 flex justify-center"><LoadingSpinner label="Loading analytics…" /></div>;
   if (!analytics) return null;
 
   const dailyLabels = analytics.daily_trend.map((d: any) => {
@@ -2557,7 +2559,7 @@ function ExpiryTab({ clinicId }: { clinicId: string }) {
           </thead>
           <tbody className="divide-y divide-gray-100">
             {isLoading ? (
-              <tr><td colSpan={14} className="text-center py-12 text-gray-400">Loading batches…</td></tr>
+              <SkeletonTable rows={6} columns={14} />
             ) : batches.length === 0 ? (
               <tr>
                 <td colSpan={14} className="text-center py-16">
@@ -2660,7 +2662,7 @@ function AlertsTab({ clinicId }: { clinicId: string }) {
   return (
     <div className="space-y-3">
       {isLoading ? (
-        <div className="text-center py-12 text-gray-400">Checking alerts…</div>
+        <div className="py-12 flex justify-center"><LoadingSpinner size="sm" label="Checking alerts…" /></div>
       ) : !alerts?.length ? (
         <div className="card p-12 text-center">
           <CheckCircle className="w-10 h-10 text-green-500 mx-auto mb-3" />

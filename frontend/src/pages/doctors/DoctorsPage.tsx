@@ -6,6 +6,7 @@ import api from '@/services/api';
 import Pagination from '@/components/ui/Pagination';
 import { useDebounce } from '@/hooks/useDebounce';
 import { useCurrency, useCurrencySymbol } from '@/hooks/useCurrency';
+import SkeletonCards from '@/components/common/SkeletonCard';
 
 const PAGE_SIZE = 20;
 
@@ -479,7 +480,7 @@ export default function DoctorsPage() {
 
       {/* Doctor cards */}
       {isLoading ? (
-        <div className="text-center py-20 text-gray-400">Loading…</div>
+        <SkeletonCards count={6} />
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
           {doctors.map((doctor: {

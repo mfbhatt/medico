@@ -1,6 +1,7 @@
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import api from '@/services/api';
+import LoadingSpinner from '@/components/common/LoadingSpinner';
 
 const TYPE_COLORS: Record<string, string> = {
   receipt: 'badge-green', payment: 'badge-red', journal: 'badge-blue',
@@ -18,7 +19,7 @@ export default function VoucherDetailPage() {
     enabled: !!id,
   });
 
-  if (isLoading) return <div className="text-center py-20 text-gray-400">Loading…</div>;
+  if (isLoading) return <div className="py-20 flex justify-center"><LoadingSpinner /></div>;
   if (!data) return <div className="text-center py-20 text-gray-400">Voucher not found</div>;
 
   const fmt = (n: number) => n > 0 ? `₹${n.toLocaleString('en-IN', { minimumFractionDigits: 2 })}` : '—';

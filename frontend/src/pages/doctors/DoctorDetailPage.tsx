@@ -6,6 +6,7 @@ import {
   Clock, DollarSign, Star, Video, UserCheck, UserX, FileText, Pencil, X,
 } from "lucide-react";
 import api from "@/services/api";
+import LoadingSpinner from "@/components/common/LoadingSpinner";
 import { useCurrency, useCurrencySymbol } from "@/hooks/useCurrency";
 
 const DAY_LABELS: Record<string, string> = {
@@ -179,7 +180,7 @@ export default function DoctorDetailPage() {
     updateMutation.mutate({ form: editForm });
   };
 
-  if (isLoading) return <div className="text-center py-20 text-slate-400">Loading doctor…</div>;
+  if (isLoading) return <div className="py-20"><LoadingSpinner label="Loading doctor…" /></div>;
   if (isError || !doctor) return <div className="text-center py-20 text-slate-400">Doctor not found</div>;
 
   const name = `Dr. ${doctor.first_name ?? ""} ${doctor.last_name ?? ""}`.trim();

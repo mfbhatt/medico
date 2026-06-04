@@ -3,6 +3,7 @@ import { useParams, Link } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { ArrowLeft, Plus, X, Building2, ToggleLeft, ToggleRight, Trash2 } from 'lucide-react';
 import api from '@/services/api';
+import LoadingSpinner from '@/components/common/LoadingSpinner';
 import { useSelector } from 'react-redux';
 import { RootState } from '@/store';
 import { useCurrency } from '@/hooks/useCurrency';
@@ -139,7 +140,7 @@ export default function DoctorClinicsPage() {
       </div>
 
       {isLoading ? (
-        <div className="text-center py-20 text-slate-400">Loading…</div>
+        <div className="py-20 flex justify-center"><LoadingSpinner /></div>
       ) : assignments.length === 0 ? (
         <div className="text-center py-20 text-slate-400">
           <Building2 className="w-10 h-10 mx-auto mb-3 opacity-30" />

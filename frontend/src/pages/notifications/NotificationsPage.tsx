@@ -1,5 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import api from '@/services/api';
+import LoadingSpinner from '@/components/common/LoadingSpinner';
 import { useAppDispatch } from '@/store/hooks';
 import { addToast } from '@/store/slices/uiSlice';
 
@@ -60,7 +61,7 @@ export default function NotificationsPage() {
 
       <div className="space-y-2">
         {isLoading ? (
-          <div className="text-center py-12 text-gray-400">Loading…</div>
+          <div className="py-12 flex justify-center"><LoadingSpinner size="sm" /></div>
         ) : notifications.length === 0 ? (
           <div className="card p-12 text-center">
             <p className="text-4xl mb-3">🔔</p>

@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import api from '@/services/api';
+import LoadingSpinner from '@/components/common/LoadingSpinner';
 
 const BUCKET_COLS = [
   { key: '0_30_days',   label: '0–30 days',   color: 'text-green-600' },
@@ -67,7 +68,7 @@ export default function APAgingPage() {
       </div>
 
       {isLoading ? (
-        <div className="text-center py-12 text-gray-400">Loading…</div>
+        <div className="py-12 flex justify-center"><LoadingSpinner size="sm" /></div>
       ) : rows.length === 0 ? (
         <div className="card text-center py-12 text-gray-400">No outstanding payables as of {asOf}</div>
       ) : (

@@ -465,7 +465,7 @@ export default function DashboardLayout() {
         </nav>
 
         {/* User / logout */}
-        <div className="border-t border-white/10 p-3 flex-shrink-0">
+        {/* <div className="border-t border-white/10 p-3 flex-shrink-0">
           {!sidebarCollapsed && (
             <div className="flex items-center gap-3 px-3 py-2 mb-1">
               <div className={`w-7 h-7 ${meta.sidebarAccent} rounded-full flex items-center justify-center text-white text-xs font-bold flex-shrink-0`}>
@@ -484,7 +484,7 @@ export default function DashboardLayout() {
             <LogOut className="h-5 w-5 flex-shrink-0" />
             {!sidebarCollapsed && <span>Sign Out</span>}
           </button>
-        </div>
+        </div> */}
       </aside>
 
       {/* Main */}

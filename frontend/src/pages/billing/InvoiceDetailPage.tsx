@@ -8,6 +8,7 @@ const CURRENCY_SYMBOLS: Record<string, string> = {
 };
 const curSym = (code?: string) => code ? (CURRENCY_SYMBOLS[code] ?? code + " ") : "₹";
 import api from "@/services/api";
+import LoadingSpinner from "@/components/common/LoadingSpinner";
 
 const STATUS_COLORS: Record<string, string> = {
   draft: "bg-gray-100 text-gray-700",
@@ -30,7 +31,7 @@ export default function InvoiceDetailPage() {
     enabled: !!id,
   });
 
-  if (isLoading) return <div className="text-center py-20 text-slate-400">Loading invoice…</div>;
+  if (isLoading) return <div className="py-20"><LoadingSpinner label="Loading invoice…" /></div>;
   if (isError || !invoice) return <div className="text-center py-20 text-slate-400">Invoice not found</div>;
 
   const canPay = ["issued", "partially_paid", "overdue"].includes(invoice.status);

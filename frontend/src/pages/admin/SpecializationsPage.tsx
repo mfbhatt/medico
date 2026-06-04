@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Plus, Pencil, Trash2, X, ToggleLeft, ToggleRight } from 'lucide-react';
 import api from '@/services/api';
+import LoadingSpinner from '@/components/common/LoadingSpinner';
 
 const CATEGORIES = ['Medical', 'Surgical', 'Allied Health', 'Mental Health', 'Diagnostic', 'Other'];
 
@@ -181,7 +182,7 @@ export default function SpecializationsPage() {
 
       {/* Content */}
       {isLoading ? (
-        <div className="text-center py-20 text-gray-400">Loading…</div>
+        <div className="py-20 flex justify-center"><LoadingSpinner /></div>
       ) : specs.length === 0 ? (
         <div className="card p-12 text-center text-gray-400">
           <p className="font-medium">No specializations found</p>

@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import api from '@/services/api';
+import LoadingSpinner from '@/components/common/LoadingSpinner';
 
 export default function LedgerPage() {
   const today = new Date().toISOString().slice(0, 10);
@@ -57,7 +58,7 @@ export default function LedgerPage() {
       )}
 
       {accountId && isLoading && (
-        <div className="text-center py-12 text-gray-400">Loading…</div>
+        <div className="py-12 flex justify-center"><LoadingSpinner size="sm" /></div>
       )}
 
       {data && (

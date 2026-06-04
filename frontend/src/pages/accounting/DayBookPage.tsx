@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import api from '@/services/api';
+import LoadingSpinner from '@/components/common/LoadingSpinner';
 
 const TYPE_COLORS: Record<string, string> = {
   receipt: 'bg-green-100 text-green-800', payment: 'bg-red-100 text-red-800',
@@ -32,7 +33,7 @@ export default function DayBookPage() {
       </div>
 
       {isLoading ? (
-        <div className="text-center py-12 text-gray-400">Loading…</div>
+        <div className="py-12 flex justify-center"><LoadingSpinner size="sm" /></div>
       ) : !data?.vouchers?.length ? (
         <div className="card text-center py-12 text-gray-400">No transactions for {date}</div>
       ) : (

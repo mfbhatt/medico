@@ -5,6 +5,8 @@ import { X } from 'lucide-react';
 import api from '@/services/api';
 import AddressFields, { type AddressValue } from '@/components/ui/AddressFields';
 import { useEnabledCountries } from '@/hooks/useEnabledCountries';
+import LoadingSpinner from '@/components/common/LoadingSpinner';
+import SkeletonTable from '@/components/common/SkeletonTable';
 
 type Tab = 'overview' | 'appointments' | 'records' | 'prescriptions' | 'labs' | 'billing' | 'family';
 
@@ -100,27 +102,27 @@ export default function PatientDetailPage() {
     },
   });
 
-  const { data: appointments } = useQuery({
+  const { data: appointments, isLoading: loadingAppointments } = useQuery({
     queryKey: ['patient-appointments', id],
     queryFn: () =>
       api.get('/appointments/', { params: { patient_id: id, limit: 10 } }).then((r) => r.data.data),
     enabled: tab === 'appointments' && !!id,
   });
 
-  const { data: prescriptions } = useQuery({
+  const { data: prescriptions, isLoading: loadingPrescriptions } = useQuery({
     queryKey: ['patient-prescriptions', id],
     queryFn: () =>
       api.get(`/prescriptions/patient/${id}`, { params: { limit: 10 } }).then((r) => r.data.data),
     enabled: tab === 'prescriptions' && !!id,
   });
 
-  const { data: familyLinks } = useQuery({
+  const { data: familyLinks, isLoading: loadingFamily } = useQuery({
     queryKey: ['patient-family-links', id],
     queryFn: () => api.get(`/patients/${id}/family`).then((r) => r.data.data),
     enabled: tab === 'family' && !!id,
   });
 
-  const { data: patientSearchResults } = useQuery({
+  const { data: patientSearchResults, isLoading: searchingPatients } = useQuery({
     queryKey: ['patient-link-search', linkSearch],
     queryFn: () =>
       api.get('/patients/', { params: { q: linkSearch, page_size: 8 } }).then((r) => r.data.data),
@@ -147,7 +149,7 @@ export default function PatientDetailPage() {
     },
   });
 
-  if (isLoading) return <div className="text-center py-20 text-gray-400">Loading patient…</div>;
+  if (isLoading) return <div className="py-20"><LoadingSpinner label="Loading patient…" /></div>;
   if (!patient) return <div className="text-center py-20 text-gray-400">Patient not found</div>;
 
   const age = patient.date_of_birth
@@ -304,7 +306,9 @@ export default function PatientDetailPage() {
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-100">
-              {!(appointments ?? []).length ? (
+              {loadingAppointments ? (
+                <SkeletonTable rows={5} columns={5} />
+              ) : !(appointments ?? []).length ? (
                 <tr><td colSpan={5} className="text-center py-12 text-gray-400">No appointments found</td></tr>
               ) : (appointments ?? []).map((a: { id: string; scheduled_date: string; scheduled_time: string; doctor_name: string; appointment_type: string; status: string }) => (
                 <tr key={a.id} className="hover:bg-gray-50">
@@ -337,7 +341,9 @@ export default function PatientDetailPage() {
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-100">
-              {!(prescriptions ?? []).length ? (
+              {loadingPrescriptions ? (
+                <SkeletonTable rows={5} columns={5} />
+              ) : !(prescriptions ?? []).length ? (
                 <tr><td colSpan={5} className="text-center py-12 text-gray-400">No prescriptions found</td></tr>
               ) : (prescriptions ?? []).map((rx: { id: string; created_at: string; doctor_name: string; item_count: number; status: string }) => (
                 <tr key={rx.id} className="hover:bg-gray-50">
@@ -403,7 +409,9 @@ export default function PatientDetailPage() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100">
-                {!(familyLinks ?? []).length ? (
+                {loadingFamily ? (
+                  <SkeletonTable rows={3} columns={5} />
+                ) : !(familyLinks ?? []).length ? (
                   <tr>
                     <td colSpan={5} className="text-center py-12 text-gray-400">
                       No family members linked yet
@@ -471,7 +479,9 @@ export default function PatientDetailPage() {
 
               {linkSearch.trim().length >= 2 && !selectedRelated && (
                 <div className="border border-gray-200 rounded-lg overflow-hidden max-h-48 overflow-y-auto">
-                  {!(patientSearchResults ?? []).length ? (
+                  {searchingPatients ? (
+                    <div className="py-4 flex justify-center"><div className="w-5 h-5 border-2 border-indigo-500 border-t-transparent rounded-full animate-spin" /></div>
+                  ) : !(patientSearchResults ?? []).length ? (
                     <p className="text-center py-4 text-gray-400 text-sm">No patients found</p>
                   ) : (patientSearchResults ?? []).map((p: any) => (
                     <button

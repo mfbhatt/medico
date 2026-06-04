@@ -2,6 +2,7 @@ import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Plus, Search, X, FileText } from "lucide-react";
 import api from "@/services/api";
+import LoadingSpinner from "@/components/common/LoadingSpinner";
 import { useDebounce } from "@/hooks/useDebounce";
 
 const STATUS_COLORS: Record<string, string> = {
@@ -102,7 +103,7 @@ export default function PrescriptionsPage() {
       )}
 
       {selectedPatient && isLoading && (
-        <div className="text-center py-12 text-slate-400 text-sm">Loading prescriptions…</div>
+        <div className="py-12 flex justify-center"><LoadingSpinner size="sm" label="Loading prescriptions…" /></div>
       )}
 
       {selectedPatient && !isLoading && (

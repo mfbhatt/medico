@@ -4,6 +4,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Plus, X, Search } from 'lucide-react';
 import api from '@/services/api';
 import appConfig from '@/config/app';
+import SkeletonTable from '@/components/common/SkeletonTable';
 
 // ── Currency helpers ──────────────────────────────────────────────────────────
 const CURRENCY_SYMBOLS: Record<string, string> = {
@@ -141,7 +142,7 @@ export default function BillingPage() {
           </thead>
           <tbody className="divide-y divide-slate-50 dark:divide-slate-700/50">
             {isLoading ? (
-              <tr><td colSpan={8} className="text-center py-12 text-slate-400 text-sm">Loading…</td></tr>
+              <SkeletonTable rows={8} columns={8} />
             ) : invoices.length === 0 ? (
               <tr><td colSpan={8} className="text-center py-12 text-slate-400 text-sm">No invoices found</td></tr>
             ) : (

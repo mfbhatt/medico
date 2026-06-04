@@ -3,6 +3,7 @@ import { useParams, useNavigate } from "react-router-dom";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { FileText, Plus, ArrowLeft, X, Lock } from "lucide-react";
 import api from "@/services/api";
+import LoadingSpinner from "@/components/common/LoadingSpinner";
 
 const TYPE_COLORS: Record<string, string> = {
   soap: "bg-blue-100 text-blue-700",
@@ -114,7 +115,7 @@ export default function MedicalRecordPage() {
         </div>
       )}
 
-      {isLoading && <div className="text-center py-12 text-slate-400 text-sm">Loading records…</div>}
+      {isLoading && <div className="py-12 flex justify-center"><LoadingSpinner size="sm" label="Loading records…" /></div>}
 
       {!isLoading && records.length === 0 && (
         <div className="text-center py-16 text-slate-400">

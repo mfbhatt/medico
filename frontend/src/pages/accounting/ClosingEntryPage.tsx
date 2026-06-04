@@ -4,6 +4,7 @@ import { useDispatch } from 'react-redux';
 import { addToast } from '@/store/slices/uiSlice';
 import { Link } from 'react-router-dom';
 import api from '@/services/api';
+import LoadingSpinner from '@/components/common/LoadingSpinner';
 
 export default function ClosingEntryPage() {
   const dispatch = useDispatch();
@@ -16,7 +17,7 @@ export default function ClosingEntryPage() {
     error: (m: string) => dispatch(addToast({ id: Date.now().toString(), type: 'error', message: m, duration: 6000 })),
   };
 
-  const { data: fyData } = useQuery({
+  const { data: fyData, isLoading: fyLoading } = useQuery({
     queryKey: ['accounting', 'fiscal-years'],
     queryFn: () => api.get('/accounting/fiscal-years').then(r => r.data.data),
   });
@@ -81,7 +82,8 @@ export default function ClosingEntryPage() {
               </option>
             ))}
           </select>
-          {fiscalYears.length === 0 && (
+          {fyLoading && <div className="mt-2 flex justify-center py-2"><LoadingSpinner size="sm" label="Loading fiscal years…" /></div>}
+          {!fyLoading && fiscalYears.length === 0 && (
             <p className="mt-2 text-sm text-gray-500">
               All fiscal years are already closed, or{' '}
               <Link to="/accounting/fiscal-years" className="text-primary-600 hover:underline">

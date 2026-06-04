@@ -3,6 +3,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useDispatch } from 'react-redux';
 import { addToast } from '@/store/slices/uiSlice';
 import api from '@/services/api';
+import LoadingSpinner from '@/components/common/LoadingSpinner';
 
 const TYPES = ['asset', 'liability', 'equity', 'income', 'expense'];
 
@@ -163,12 +164,12 @@ export default function ChartOfAccountsPage() {
     return errors;
   };
 
-  const { data: groupsData } = useQuery({
+  const { data: groupsData, isLoading: groupsLoading } = useQuery({
     queryKey: ['accounting', 'groups'],
     queryFn: () => api.get('/accounting/groups').then(r => r.data.data),
   });
 
-  const { data: accountsData } = useQuery({
+  const { data: accountsData, isLoading: accountsLoading } = useQuery({
     queryKey: ['accounting', 'accounts'],
     queryFn: () => api.get('/accounting/accounts', { params: { active_only: false } }).then(r => r.data.data),
   });
@@ -271,8 +272,11 @@ export default function ChartOfAccountsPage() {
             onDeleteAccount={(a: any) => { if (confirm(`Delete account "${a.name}"?`)) deleteAccountMutation.mutate(a.id); }}
           />
         ))}
-        {rootGroups.length === 0 && (
-          <p className="text-center text-gray-400 py-8 text-sm">Loading chart of accounts…</p>
+        {(groupsLoading || accountsLoading) && rootGroups.length === 0 && (
+          <div className="py-8 flex justify-center"><LoadingSpinner size="sm" label="Loading chart of accounts…" /></div>
+        )}
+        {!groupsLoading && !accountsLoading && rootGroups.length === 0 && (
+          <p className="text-center text-gray-400 py-8 text-sm">No accounts found</p>
         )}
       </div>
 
