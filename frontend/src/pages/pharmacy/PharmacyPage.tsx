@@ -1466,7 +1466,7 @@ function POSPanel({ clinicId, clinicName }: { clinicId: string; clinicName: stri
   };
 
   return (
-    <div className="flex h-[calc(100vh-170px)] min-h-[580px] rounded-2xl overflow-hidden border border-gray-200 shadow-sm bg-white">
+    <div className="flex flex-1 min-h-0 rounded-2xl overflow-hidden border border-gray-200 shadow-sm bg-white">
 
       {/* ── LEFT: Drug catalog ─────────────────────────────────────────── */}
       <div className="flex flex-col w-[55%] border-r border-gray-100">
@@ -1927,8 +1927,8 @@ function InventoryTab({ clinics, clinicId, alertsMap }: { clinics: { id: string;
   const errorMsg = isError ? ((error as any)?.response?.data?.detail ?? (error as any)?.message ?? 'Failed to load inventory') : null;
 
   return (
-    <>
-      <div className="flex items-center gap-3 mb-6">
+    <div className="flex flex-col flex-1 min-h-0 overflow-hidden">
+      <div className="flex items-center gap-3 mb-4 flex-shrink-0">
         <div className="relative flex-1 max-w-md">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
           <input className="input pl-9" placeholder="Search drugs…" value={search}
@@ -1939,9 +1939,10 @@ function InventoryTab({ clinics, clinicId, alertsMap }: { clinics: { id: string;
         </button>
       </div>
 
-      <div className="card overflow-hidden">
+      <div className="card flex-1 min-h-0 overflow-hidden flex flex-col">
+        <div className="overflow-y-auto flex-1 min-h-0">
         <table className="w-full text-sm">
-          <thead className="bg-gray-50 border-b border-gray-200">
+          <thead className="bg-gray-50 border-b border-gray-200 sticky top-0 z-10">
             <tr>
               <th className="text-left px-4 py-3 font-medium text-gray-600">Drug</th>
               <th className="text-left px-4 py-3 font-medium text-gray-600">Form / Strength</th>
@@ -2010,6 +2011,7 @@ function InventoryTab({ clinics, clinicId, alertsMap }: { clinics: { id: string;
             )}
           </tbody>
         </table>
+        </div>
 
         {(meta.total ?? 0) > limit && (
           <div className="flex items-center justify-between px-4 py-3 border-t border-gray-200 text-sm text-gray-600">
@@ -2029,7 +2031,7 @@ function InventoryTab({ clinics, clinicId, alertsMap }: { clinics: { id: string;
       {addDrugOpen && <AddDrugModal onClose={() => setAddDrugOpen(false)} clinics={clinics} defaultClinicId={clinicId} />}
       {stockDrug && <AddStockModal drug={stockDrug} onClose={() => setStockDrug(null)} />}
       {adjustDrug && <AdjustmentModal drug={adjustDrug} onClose={() => setAdjustDrug(null)} />}
-    </>
+    </div>
   );
 }
 
@@ -2071,17 +2073,18 @@ function PurchaseOrdersTab({ clinics, clinicId, drugs }: { clinics: { id: string
   };
 
   return (
-    <>
-      <div className="flex items-center justify-between mb-6">
+    <div className="flex flex-col flex-1 min-h-0 overflow-hidden">
+      <div className="flex items-center justify-between mb-4 flex-shrink-0">
         <h3 className="font-semibold text-gray-800">Purchase Orders</h3>
         <button onClick={() => setPoOpen(true)} className="btn-primary flex items-center gap-1.5">
           <Plus className="w-4 h-4" /> New Purchase Order
         </button>
       </div>
 
-      <div className="card overflow-hidden">
+      <div className="card flex-1 min-h-0 overflow-hidden flex flex-col">
+        <div className="overflow-y-auto flex-1 min-h-0">
         <table className="w-full text-sm">
-          <thead className="bg-gray-50 border-b border-gray-200">
+          <thead className="bg-gray-50 border-b border-gray-200 sticky top-0 z-10">
             <tr>
               <th className="text-left px-4 py-3 font-medium text-gray-600">PO Number</th>
               <th className="text-left px-4 py-3 font-medium text-gray-600">Supplier</th>
@@ -2118,6 +2121,7 @@ function PurchaseOrdersTab({ clinics, clinicId, drugs }: { clinics: { id: string
             )}
           </tbody>
         </table>
+        </div>
 
         {(meta.total ?? 0) > limit && (
           <div className="flex items-center justify-between px-4 py-3 border-t border-gray-200 text-sm text-gray-600">
@@ -2136,7 +2140,7 @@ function PurchaseOrdersTab({ clinics, clinicId, drugs }: { clinics: { id: string
 
       {poOpen && <PurchaseOrderModal onClose={() => setPoOpen(false)} clinics={clinics} drugs={drugs} defaultClinicId={clinicId} />}
       {receiveItem && poDetail && <ReceivePOModal po={poDetail} onClose={() => setReceiveItem(null)} />}
-    </>
+    </div>
   );
 }
 
@@ -2169,8 +2173,8 @@ function SalesTab({ clinicId, clinicName }: { clinicId: string; clinicName: stri
   const meta = data?.meta ?? {};
 
   return (
-    <>
-      <div className="flex items-center gap-3 mb-6 flex-wrap">
+    <div className="flex flex-col flex-1 min-h-0 overflow-hidden">
+      <div className="flex items-center gap-3 mb-4 flex-shrink-0 flex-wrap">
         <h3 className="font-semibold text-gray-800 mr-auto">Sales History</h3>
         <div className="flex items-center gap-2 text-sm">
           <label className="text-gray-500">From</label>
@@ -2185,9 +2189,10 @@ function SalesTab({ clinicId, clinicName }: { clinicId: string; clinicName: stri
         </div>
       </div>
 
-      <div className="card overflow-hidden">
+      <div className="card flex-1 min-h-0 overflow-hidden flex flex-col">
+        <div className="overflow-y-auto flex-1 min-h-0">
         <table className="w-full text-sm">
-          <thead className="bg-gray-50 border-b border-gray-200">
+          <thead className="bg-gray-50 border-b border-gray-200 sticky top-0 z-10">
             <tr>
               <th className="text-left px-4 py-3 font-medium text-gray-600">Receipt #</th>
               <th className="text-left px-4 py-3 font-medium text-gray-600">Date &amp; Time</th>
@@ -2232,6 +2237,7 @@ function SalesTab({ clinicId, clinicName }: { clinicId: string; clinicName: stri
             )}
           </tbody>
         </table>
+        </div>
 
         {(meta.total ?? 0) > limit && (
           <div className="flex items-center justify-between px-4 py-3 border-t border-gray-200 text-sm text-gray-600">
@@ -2249,7 +2255,7 @@ function SalesTab({ clinicId, clinicName }: { clinicId: string; clinicName: stri
       </div>
 
       {selectedSale && <SaleDetailModal saleId={selectedSale} onClose={() => setSelectedSale(null)} clinicName={clinicName} />}
-    </>
+    </div>
   );
 }
 
@@ -2283,7 +2289,7 @@ function ReportsTab({ clinicId }: { clinicId: string }) {
   const paymentRevenue = analytics.payment_breakdown.map((p: any) => p.revenue);
 
   return (
-    <div className="space-y-6">
+    <div className="flex-1 min-h-0 overflow-y-auto space-y-6">
       {/* Summary cards */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         {[
@@ -2493,9 +2499,9 @@ function ExpiryTab({ clinicId }: { clinicId: string }) {
   const expiredCount = statusFilter === 'expired' ? (meta.total ?? 0) : undefined;
 
   return (
-    <div className="space-y-4">
+    <div className="flex flex-col flex-1 min-h-0 overflow-hidden">
       {/* Header summary */}
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between mb-4 flex-shrink-0">
         <div>
           <h3 className="font-semibold text-gray-800">Expiry Tracking</h3>
           <p className="text-sm text-gray-500 mt-0.5">Monitor batch expiry across all drugs · FEFO dispensing active</p>
@@ -2509,7 +2515,7 @@ function ExpiryTab({ clinicId }: { clinicId: string }) {
       </div>
 
       {/* Filter tabs + search */}
-      <div className="flex items-center justify-between gap-4 flex-wrap">
+      <div className="flex items-center justify-between gap-4 flex-wrap mb-4 flex-shrink-0">
         <div className="flex gap-1 border-b border-gray-200 flex-1">
           {EXPIRY_FILTERS.map((f) => (
             <button
@@ -2537,9 +2543,10 @@ function ExpiryTab({ clinicId }: { clinicId: string }) {
       </div>
 
       {/* Table */}
-      <div className="card overflow-hidden">
+      <div className="card flex-1 min-h-0 overflow-hidden flex flex-col">
+        <div className="overflow-y-auto flex-1 min-h-0">
         <table className="w-full text-sm">
-          <thead className="bg-gray-50 border-b border-gray-200">
+          <thead className="bg-gray-50 border-b border-gray-200 sticky top-0 z-10">
             <tr>
               <th className="text-left px-4 py-3 font-medium text-gray-600">Drug</th>
               <th className="text-left px-4 py-3 font-medium text-gray-600 whitespace-nowrap">Form / Strength</th>
@@ -2606,6 +2613,7 @@ function ExpiryTab({ clinicId }: { clinicId: string }) {
             )}
           </tbody>
         </table>
+        </div>
 
         {(meta.total ?? 0) > limit && (
           <div className="flex items-center justify-between px-4 py-3 border-t border-gray-200 text-sm text-gray-600">
@@ -2660,7 +2668,7 @@ function AlertsTab({ clinicId }: { clinicId: string }) {
   };
 
   return (
-    <div className="space-y-3">
+    <div className="flex-1 min-h-0 overflow-y-auto space-y-3">
       {isLoading ? (
         <div className="py-12 flex justify-center"><LoadingSpinner size="sm" label="Checking alerts…" /></div>
       ) : !alerts?.length ? (
@@ -2843,7 +2851,7 @@ function OverviewPanel({ clinicId, onNavigate }: { clinicId: string; onNavigate:
   ];
 
   return (
-    <div className="space-y-6">
+    <div className="flex-1 min-h-0 overflow-y-auto space-y-6">
 
       {/* KPI cards */}
       <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-4">
@@ -3216,8 +3224,8 @@ export default function PharmacyPage() {
   );
 
   return (
-    <div>
-      <div className="page-header flex items-center justify-between flex-wrap gap-3">
+    <div className="flex flex-col h-full">
+      <div className="page-header flex items-center justify-between flex-wrap gap-3 flex-shrink-0">
         <h1 className="page-title">Pharmacy</h1>
         {isAdminRole && clinics.length > 1 && (
           <select
