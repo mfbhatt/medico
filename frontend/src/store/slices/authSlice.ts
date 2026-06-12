@@ -1,7 +1,7 @@
 import { createSlice, createAsyncThunk, PayloadAction } from "@reduxjs/toolkit";
 import type { User } from "../../types";
 import { authService } from "../../services/authService";
-import { STORAGE_KEYS } from "../../utils/constants";
+import { API_BASE_URL, STORAGE_KEYS } from "../../utils/constants";
 
 export interface ActivePatient {
   id: string;
@@ -76,10 +76,10 @@ export const refreshAuthThunk = createAsyncThunk<RefreshResponse, void, { reject
     try {
       // Use raw axios to avoid the response interceptor creating a refresh loop
       const { default: axios } = await import("axios");
-      const API_BASE_URL = (import.meta as any).env?.VITE_API_URL ?? "http://localhost:8000/api/v1";
+      const baseUrl = API_BASE_URL || "/api/v1";
       const tenantId = localStorage.getItem(STORAGE_KEYS.TENANT_ID);
       const { data } = await axios.post(
-        `${API_BASE_URL}/auth/refresh`,
+        `${baseUrl}/auth/refresh`,
         { refresh_token: refreshToken },
         {
           headers: {

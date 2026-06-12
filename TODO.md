@@ -58,3 +58,12 @@ pre-commit install
 
 cd frontend && npm run format
 After pre-commit install, every git commit will auto-format staged files and reject the commit if anything changed, prompting the dev to stage the fixes and commit again.
+
+
+
+<!-- If you want to avoid this in future, run the backend manually in a separate terminal:
+
+
+cd backend
+source venv/Scripts/activate
+uvicorn app.main:app --reload --port 8000 -->

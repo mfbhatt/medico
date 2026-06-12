@@ -8,6 +8,7 @@ Create Date: 2026-04-12 10:00:00.000000
 from typing import Sequence, Union
 import sqlalchemy as sa
 from alembic import op
+from sqlalchemy import inspect
 
 revision: str = 'e1f2a3b4c5d6'
 down_revision: Union[str, None] = 'd7e8f9a0b1c2'
@@ -15,7 +16,13 @@ branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 
 
+def _table_exists(name: str) -> bool:
+    return inspect(op.get_bind()).has_table(name)
+
+
 def upgrade() -> None:
+    if _table_exists('pharmacy_sales'):
+        return
     op.create_table(
         'pharmacy_sales',
         sa.Column('id', sa.String(36), primary_key=True),

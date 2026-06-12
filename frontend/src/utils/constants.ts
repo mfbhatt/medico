@@ -1,5 +1,5 @@
 // API constants
-export const API_BASE_URL = import.meta.env.VITE_API_URL || "http://localhost:8000/api/v1";
+export const API_BASE_URL = import.meta.env.VITE_API_URL || "/api/v1";
 export const FACEBOOK_APP_ID: string = import.meta.env.VITE_FACEBOOK_APP_ID ?? "";
 export const API_TIMEOUT = 30000;
 

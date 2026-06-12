@@ -217,6 +217,7 @@ export const MODULE_REGISTRY: AppModule[] = [
       { name: 'Reports', href: '/pharmacy?tab=reports', icon: BarChart3 },
       { name: 'Expiry Tracker', href: '/pharmacy?tab=expiry', icon: Shield },
       { name: 'Alerts', href: '/pharmacy?tab=alerts', icon: AlertTriangle },
+      { name: 'Suppliers', href: '/pharmacy?tab=suppliers', icon: Building2 },
     ],
   },
 

@@ -12,7 +12,7 @@ import {
   ShoppingCart, Package, BarChart2, AlertTriangle,
   Plus, X, Printer, Search, ChevronLeft, ChevronRight, CheckCircle,
   Minus, Trash2, AlertCircle, RefreshCw, FileText, ShieldAlert,
-  TrendingUp, DollarSign, Boxes,
+  TrendingUp, DollarSign, Boxes, Building2,
 } from 'lucide-react';
 import api from '@/services/api';
 import { useDebounce } from '@/hooks/useDebounce';
@@ -25,7 +25,7 @@ ChartJS.register(CategoryScale, LinearScale, BarElement, ArcElement, Title, Tool
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
-type Tab = 'overview' | 'pos' | 'inventory' | 'orders' | 'sales' | 'reports' | 'expiry' | 'alerts';
+type Tab = 'overview' | 'pos' | 'inventory' | 'orders' | 'sales' | 'reports' | 'expiry' | 'alerts' | 'suppliers';
 
 interface Drug {
   id: string;
@@ -694,14 +694,6 @@ function AdjustmentModal({ drug, onClose }: { drug: Drug; onClose: () => void })
 
 // ─── Purchase Order Modal ──────────────────────────────────────────────────────
 
-// Fallback suppliers — replace with API data once /inventory/suppliers endpoint exists
-const FALLBACK_SUPPLIERS: { name: string; contact: string }[] = [
-  { name: 'MedLine Pharmaceuticals',   contact: '+92-21-3456-7890' },
-  { name: 'PharmaCare Distributors',   contact: '+92-42-3512-6600' },
-  { name: 'NovaMed Supplies',          contact: '+92-51-2871-4400' },
-  { name: 'HealthBridge Logistics',    contact: '+92-21-3890-1122' },
-  { name: 'CureMed Wholesale',         contact: '+92-41-8723-5500' },
-];
 
 interface POItem { drug_id: string; drug_name: string; quantity: number; unit_cost: number }
 
@@ -746,20 +738,16 @@ function PurchaseOrderModal({ onClose, clinics, drugs, defaultClinicId }: { onCl
   const [supplierLocked, setSupplierLocked] = useState(false); // contact auto-filled from known supplier
   const supplierRef = useRef<HTMLDivElement>(null);
 
-  const { data: posData } = useQuery({
-    queryKey: ['pharmacy-pos-all'],
-    queryFn: () => api.get('/inventory/purchase-orders', { params: { page: 1, page_size: 200 } }).then((r) => r.data),
+  const { data: suppliersData = [] } = useQuery<{ id: string; name: string; phone: string | null }[]>({
+    queryKey: ['pharmacy-suppliers'],
+    queryFn: () => api.get('/inventory/suppliers').then((r) => r.data.data ?? []),
   });
 
-  // Build unique supplier map: name → contact (fallbacks first, real PO data overrides)
   const supplierMap = useMemo(() => {
     const map = new Map<string, string>();
-    FALLBACK_SUPPLIERS.forEach((s) => map.set(s.name, s.contact));
-    (posData?.data ?? []).forEach((po: any) => {
-      if (po.supplier_name) map.set(po.supplier_name, po.supplier_contact ?? '');
-    });
+    suppliersData.forEach((s) => map.set(s.name, s.phone ?? ''));
     return map;
-  }, [posData]);
+  }, [suppliersData]);
 
   const suggestions = useMemo(() => {
     if (!supplierQuery.trim()) return [];
@@ -2730,6 +2718,475 @@ function AlertsTab({ clinicId }: { clinicId: string }) {
   );
 }
 
+// ─── Suppliers Tab ────────────────────────────────────────────────────────────
+
+interface Supplier {
+  id: string;
+  name: string;
+  contact_person: string | null;
+  phone: string | null;
+  email: string | null;
+  address: string | null;
+  payment_terms: string | null;
+  outstanding_balance: number;
+  is_active: boolean;
+}
+
+interface SupplierFormData {
+  name: string;
+  contact_person: string;
+  phone: string;
+  email: string;
+  address: string;
+  payment_terms: string;
+  outstanding_balance: number;
+  is_active: boolean;
+}
+
+function SupplierModal({ supplier, onClose }: { supplier: Supplier | null; onClose: () => void }) {
+  const qc = useQueryClient();
+  const { notify } = useNotification();
+  const isEdit = !!supplier;
+
+  const [form, setForm] = useState<SupplierFormData>({
+    name: supplier?.name ?? '',
+    contact_person: supplier?.contact_person ?? '',
+    phone: supplier?.phone ?? '',
+    email: supplier?.email ?? '',
+    address: supplier?.address ?? '',
+    payment_terms: supplier?.payment_terms ?? '',
+    outstanding_balance: supplier?.outstanding_balance ?? 0,
+    is_active: supplier?.is_active ?? true,
+  });
+
+  const saveMutation = useMutation({
+    mutationFn: (data: SupplierFormData) =>
+      isEdit
+        ? api.put(`/inventory/suppliers/${supplier!.id}`, data).then((r) => r.data)
+        : api.post('/inventory/suppliers', data).then((r) => r.data),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['pharmacy-suppliers'] });
+      qc.invalidateQueries({ queryKey: ['pharmacy-supplier-stats'] });
+      notify(isEdit ? 'Supplier updated' : 'Supplier added', 'success');
+      onClose();
+    },
+    onError: () => notify('Failed to save supplier', 'error'),
+  });
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    saveMutation.mutate(form);
+  };
+
+  return (
+    <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4" onClick={onClose}>
+      <div
+        className="bg-white rounded-2xl shadow-2xl w-full max-w-lg max-h-[92vh] flex flex-col overflow-hidden"
+        onClick={(e) => e.stopPropagation()}
+      >
+        {/* ── Header banner ── */}
+        <div className="bg-gradient-to-r from-indigo-600 to-teal-500 px-6 py-5 flex items-start justify-between shrink-0">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-xl bg-white/20 flex items-center justify-center">
+              <Building2 className="w-5 h-5 text-white" />
+            </div>
+            <div>
+              <h2 className="text-lg font-semibold text-white leading-tight">
+                {isEdit ? 'Edit Supplier' : 'New Supplier'}
+              </h2>
+              <p className="text-indigo-100 text-xs mt-0.5">
+                {isEdit ? 'Update supplier information' : 'Add a supplier to your pharmacy network'}
+              </p>
+            </div>
+          </div>
+          <button
+            onClick={onClose}
+            className="text-white/70 hover:text-white hover:bg-white/10 rounded-lg p-1.5 transition-colors"
+          >
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+
+        {/* ── Form body ── */}
+        <form onSubmit={handleSubmit} className="overflow-y-auto flex-1">
+          <div className="p-6 space-y-5">
+
+            {/* Section: Company */}
+            <div>
+              <p className="text-[11px] font-semibold text-indigo-600 uppercase tracking-widest mb-3">
+                Company Info
+              </p>
+              <div className="space-y-3">
+                <div>
+                  <label className="label">Supplier / Company Name <span className="text-red-500">*</span></label>
+                  <input
+                    className="input"
+                    value={form.name}
+                    onChange={(e) => setForm({ ...form, name: e.target.value })}
+                    placeholder="e.g. MedSupply Corp"
+                    required
+                    autoFocus
+                  />
+                </div>
+                <div>
+                  <label className="label">Address</label>
+                  <textarea
+                    className="input resize-none"
+                    rows={2}
+                    value={form.address}
+                    onChange={(e) => setForm({ ...form, address: e.target.value })}
+                    placeholder="123 Warehouse Road, City, State"
+                  />
+                </div>
+              </div>
+            </div>
+
+            <div className="border-t border-gray-100" />
+
+            {/* Section: Contact */}
+            <div>
+              <p className="text-[11px] font-semibold text-indigo-600 uppercase tracking-widest mb-3">
+                Contact Details
+              </p>
+              <div className="space-y-3">
+                <div>
+                  <label className="label">Contact Person</label>
+                  <input
+                    className="input"
+                    value={form.contact_person}
+                    onChange={(e) => setForm({ ...form, contact_person: e.target.value })}
+                    placeholder="Full name"
+                  />
+                </div>
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="label">Phone</label>
+                    <input
+                      className="input"
+                      value={form.phone}
+                      onChange={(e) => setForm({ ...form, phone: e.target.value })}
+                      placeholder="+1 555 000 0000"
+                      type="tel"
+                    />
+                  </div>
+                  <div>
+                    <label className="label">Email</label>
+                    <input
+                      className="input"
+                      type="email"
+                      value={form.email}
+                      onChange={(e) => setForm({ ...form, email: e.target.value })}
+                      placeholder="orders@supplier.com"
+                    />
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div className="border-t border-gray-100" />
+
+            {/* Section: Financial */}
+            <div>
+              <p className="text-[11px] font-semibold text-indigo-600 uppercase tracking-widest mb-3">
+                Financial
+              </p>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="label">Payment Terms</label>
+                  <select
+                    className="input"
+                    value={form.payment_terms ?? ''}
+                    onChange={(e) => setForm({ ...form, payment_terms: e.target.value })}
+                  >
+                    <option value="">— Select —</option>
+                    <option value="Immediate">Immediate</option>
+                    <option value="Net 7">Net 7</option>
+                    <option value="Net 15">Net 15</option>
+                    <option value="Net 30">Net 30</option>
+                    <option value="Net 45">Net 45</option>
+                    <option value="Net 60">Net 60</option>
+                    <option value="Net 90">Net 90</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="label">Outstanding Balance</label>
+                  <div className="relative">
+                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 text-sm font-medium">$</span>
+                    <input
+                      className="input pl-7"
+                      type="number"
+                      min="0"
+                      step="0.01"
+                      value={form.outstanding_balance}
+                      onChange={(e) => setForm({ ...form, outstanding_balance: parseFloat(e.target.value) || 0 })}
+                      placeholder="0.00"
+                    />
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div className="border-t border-gray-100" />
+
+            {/* Status toggle */}
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm font-medium text-gray-700">Active Supplier</p>
+                <p className="text-xs text-gray-400 mt-0.5">Inactive suppliers won't appear in purchase orders</p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setForm({ ...form, is_active: !form.is_active })}
+                className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none ${
+                  form.is_active ? 'bg-indigo-600' : 'bg-gray-200'
+                }`}
+              >
+                <span
+                  className={`inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform ${
+                    form.is_active ? 'translate-x-6' : 'translate-x-1'
+                  }`}
+                />
+              </button>
+            </div>
+          </div>
+
+          {/* ── Footer ── */}
+          <div className="px-6 py-4 border-t border-gray-100 bg-gray-50 flex items-center justify-end gap-3 shrink-0">
+            <button
+              type="button"
+              className="px-4 py-2 text-sm font-medium text-gray-600 hover:text-gray-800 hover:bg-gray-100 rounded-lg transition-colors"
+              onClick={onClose}
+            >
+              Cancel
+            </button>
+            <button
+              type="submit"
+              disabled={saveMutation.isPending || !form.name.trim()}
+              className="px-5 py-2 text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed rounded-lg transition-colors flex items-center gap-2"
+            >
+              {saveMutation.isPending ? (
+                <>
+                  <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                  Saving…
+                </>
+              ) : (
+                <>
+                  {isEdit ? <RefreshCw className="w-3.5 h-3.5" /> : <Plus className="w-3.5 h-3.5" />}
+                  {isEdit ? 'Update Supplier' : 'Add Supplier'}
+                </>
+              )}
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+}
+
+function SuppliersTab() {
+  const qc = useQueryClient();
+  const { notify } = useNotification();
+  const fmt = useCurrency();
+  const [search, setSearch] = useState('');
+  const [modalSupplier, setModalSupplier] = useState<Supplier | null | 'new'>(null);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
+
+  const { data: stats } = useQuery({
+    queryKey: ['pharmacy-supplier-stats'],
+    queryFn: () => api.get('/inventory/suppliers/stats').then((r) => r.data.data),
+    staleTime: 30_000,
+  });
+
+  const { data: suppliers = [], isLoading } = useQuery<Supplier[]>({
+    queryKey: ['pharmacy-suppliers'],
+    queryFn: () => api.get('/inventory/suppliers').then((r) => r.data.data ?? []),
+  });
+
+  const deleteMutation = useMutation({
+    mutationFn: (id: string) => api.delete(`/inventory/suppliers/${id}`).then((r) => r.data),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['pharmacy-suppliers'] });
+      qc.invalidateQueries({ queryKey: ['pharmacy-supplier-stats'] });
+      notify('Supplier removed', 'success');
+      setDeletingId(null);
+    },
+    onError: () => notify('Failed to remove supplier', 'error'),
+  });
+
+  const filtered = suppliers.filter((s) =>
+    s.name.toLowerCase().includes(search.toLowerCase()) ||
+    (s.contact_person ?? '').toLowerCase().includes(search.toLowerCase()) ||
+    (s.email ?? '').toLowerCase().includes(search.toLowerCase())
+  );
+
+  return (
+    <div className="flex-1 min-h-0 overflow-y-auto space-y-4">
+
+      {/* ── Widgets ── */}
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+        {/* Total Suppliers */}
+        <div className="card p-4 flex items-center gap-3">
+          <div className="w-10 h-10 rounded-lg bg-indigo-50 flex items-center justify-center shrink-0">
+            <Building2 className="w-5 h-5 text-indigo-500" />
+          </div>
+          <div>
+            <p className="text-xs text-gray-400 font-medium uppercase tracking-wide">Total Suppliers</p>
+            <p className="text-2xl font-bold text-gray-900 leading-tight">{stats?.total ?? '—'}</p>
+          </div>
+        </div>
+
+        {/* Active */}
+        <div className="card p-4 flex items-center gap-3">
+          <div className="w-10 h-10 rounded-lg bg-emerald-50 flex items-center justify-center shrink-0">
+            <CheckCircle className="w-5 h-5 text-emerald-500" />
+          </div>
+          <div>
+            <p className="text-xs text-gray-400 font-medium uppercase tracking-wide">Active</p>
+            <p className="text-2xl font-bold text-gray-900 leading-tight">{stats?.active ?? '—'}</p>
+            {stats && stats.inactive > 0 && (
+              <p className="text-xs text-gray-400 mt-0.5">{stats.inactive} inactive</p>
+            )}
+          </div>
+        </div>
+
+        {/* Outstanding Balance */}
+        <div className="card p-4 flex items-center gap-3 sm:col-span-2">
+          <div className="w-10 h-10 rounded-lg bg-amber-50 flex items-center justify-center shrink-0">
+            <DollarSign className="w-5 h-5 text-amber-500" />
+          </div>
+          <div>
+            <p className="text-xs text-gray-400 font-medium uppercase tracking-wide">Total Outstanding</p>
+            <p className="text-2xl font-bold text-gray-900 leading-tight">
+              {stats ? fmt(stats.total_outstanding) : '—'}
+            </p>
+            <p className="text-xs text-gray-400 mt-0.5">Amount owed across all suppliers</p>
+          </div>
+        </div>
+      </div>
+
+      {/* ── Search + Add ── */}
+      <div className="flex items-center justify-between gap-3 flex-wrap">
+        <div className="relative flex-1 min-w-[200px] max-w-xs">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+          <input
+            className="input pl-9"
+            placeholder="Search suppliers…"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+          />
+        </div>
+        <button className="btn-primary flex items-center gap-2" onClick={() => setModalSupplier('new')}>
+          <Plus className="w-4 h-4" /> Add Supplier
+        </button>
+      </div>
+
+      {/* ── Table ── */}
+      {isLoading ? (
+        <SkeletonTable rows={6} cols={6} />
+      ) : filtered.length === 0 ? (
+        <div className="card p-12 text-center">
+          <Building2 className="w-10 h-10 text-gray-300 mx-auto mb-3" />
+          <p className="text-gray-500 font-medium">
+            {search ? 'No suppliers match your search' : 'No suppliers yet'}
+          </p>
+          {!search && (
+            <button className="btn-primary mt-4" onClick={() => setModalSupplier('new')}>
+              <Plus className="w-4 h-4 mr-1 inline" /> Add First Supplier
+            </button>
+          )}
+        </div>
+      ) : (
+        <div className="card overflow-hidden">
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="border-b border-gray-100 bg-gray-50 text-xs text-gray-500 uppercase tracking-wide">
+                <th className="px-4 py-3 text-left">Supplier</th>
+                <th className="px-4 py-3 text-left">Contact Person</th>
+                <th className="px-4 py-3 text-left">Phone</th>
+                <th className="px-4 py-3 text-left">Email</th>
+                <th className="px-4 py-3 text-right">Outstanding</th>
+                <th className="px-4 py-3 text-left">Status</th>
+                <th className="px-4 py-3" />
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-gray-50">
+              {filtered.map((supplier) => (
+                <tr key={supplier.id} className="hover:bg-gray-50 transition-colors">
+                  <td className="px-4 py-3">
+                    <p className="font-medium text-gray-900">{supplier.name}</p>
+                    {supplier.address && (
+                      <p className="text-xs text-gray-400 mt-0.5 truncate max-w-[180px]">{supplier.address}</p>
+                    )}
+                    {supplier.payment_terms && (
+                      <p className="text-xs text-indigo-500 mt-0.5">{supplier.payment_terms}</p>
+                    )}
+                  </td>
+                  <td className="px-4 py-3 text-gray-600">{supplier.contact_person || '—'}</td>
+                  <td className="px-4 py-3 text-gray-600">{supplier.phone || '—'}</td>
+                  <td className="px-4 py-3 text-gray-600">{supplier.email || '—'}</td>
+                  <td className="px-4 py-3 text-right">
+                    {supplier.outstanding_balance > 0 ? (
+                      <span className="font-semibold text-amber-700">{fmt(supplier.outstanding_balance)}</span>
+                    ) : (
+                      <span className="text-gray-400">—</span>
+                    )}
+                  </td>
+                  <td className="px-4 py-3">
+                    <span className={`badge ${supplier.is_active ? 'badge-green' : 'badge-gray'}`}>
+                      {supplier.is_active ? 'Active' : 'Inactive'}
+                    </span>
+                  </td>
+                  <td className="px-4 py-3">
+                    <div className="flex items-center gap-2 justify-end">
+                      <button
+                        className="text-xs text-primary-600 hover:text-primary-800 font-medium"
+                        onClick={() => setModalSupplier(supplier)}
+                      >
+                        Edit
+                      </button>
+                      {deletingId === supplier.id ? (
+                        <>
+                          <button
+                            className="text-xs text-red-600 hover:text-red-800 font-medium"
+                            onClick={() => deleteMutation.mutate(supplier.id)}
+                            disabled={deleteMutation.isPending}
+                          >
+                            {deleteMutation.isPending ? 'Removing…' : 'Confirm'}
+                          </button>
+                          <button className="text-xs text-gray-500" onClick={() => setDeletingId(null)}>
+                            Cancel
+                          </button>
+                        </>
+                      ) : (
+                        <button
+                          className="text-xs text-red-500 hover:text-red-700"
+                          onClick={() => setDeletingId(supplier.id)}
+                        >
+                          Remove
+                        </button>
+                      )}
+                    </div>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+
+      {modalSupplier !== null && (
+        <SupplierModal
+          supplier={modalSupplier === 'new' ? null : modalSupplier}
+          onClose={() => {
+            setModalSupplier(null);
+            qc.invalidateQueries({ queryKey: ['pharmacy-supplier-stats'] });
+          }}
+        />
+      )}
+    </div>
+  );
+}
+
 // ─── Overview Panel ───────────────────────────────────────────────────────────
 
 const OVERVIEW_COLORS = ['#6366f1', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#06b6d4'];
@@ -3197,7 +3654,7 @@ export default function PharmacyPage() {
   useEffect(() => {
     const params = new URLSearchParams(location.search);
     const requestedTab = params.get('tab');
-    if (requestedTab && ['overview', 'pos', 'inventory', 'orders', 'sales', 'reports', 'expiry', 'alerts'].includes(requestedTab)) {
+    if (requestedTab && ['overview', 'pos', 'inventory', 'orders', 'sales', 'reports', 'expiry', 'alerts', 'suppliers'].includes(requestedTab)) {
       setTab(requestedTab as Tab);
     }
   }, [location.search]);
@@ -3248,6 +3705,7 @@ export default function PharmacyPage() {
       {tab === 'reports' && <ReportsTab clinicId={effectiveClinicId} />}
       {tab === 'expiry' && <ExpiryTab clinicId={effectiveClinicId} />}
       {tab === 'alerts' && <AlertsTab clinicId={effectiveClinicId} />}
+      {tab === 'suppliers' && <SuppliersTab />}
     </div>
   );
 }

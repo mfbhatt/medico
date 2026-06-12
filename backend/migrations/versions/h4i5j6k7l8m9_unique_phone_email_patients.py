@@ -56,12 +56,12 @@ def upgrade() -> None:
 
     # Partial unique indexes — NULLs, empty strings, and soft-deleted rows are excluded.
     op.execute("""
-        CREATE UNIQUE INDEX uq_patients_tenant_phone
+        CREATE UNIQUE INDEX IF NOT EXISTS uq_patients_tenant_phone
         ON patients (tenant_id, phone)
         WHERE phone IS NOT NULL AND phone != '' AND is_deleted = false
     """)
     op.execute("""
-        CREATE UNIQUE INDEX uq_patients_tenant_email
+        CREATE UNIQUE INDEX IF NOT EXISTS uq_patients_tenant_email
         ON patients (tenant_id, email)
         WHERE email IS NOT NULL AND email != '' AND is_deleted = false
     """)
