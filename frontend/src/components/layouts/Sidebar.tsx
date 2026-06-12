@@ -29,6 +29,7 @@ const navItems: NavItem[] = [
       { label: "Reports", path: "/pharmacy?tab=reports" },
       { label: "Expiry Tracker", path: "/pharmacy?tab=expiry" },
       { label: "Alerts", path: "/pharmacy?tab=alerts" },
+      { label: "Suppliers", path: "/pharmacy?tab=suppliers" },
     ],
   },
   { label: "Notifications", icon: <MessageSquare className="w-5 h-5" />, path: "/notifications" },

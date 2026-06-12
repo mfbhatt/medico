@@ -17,6 +17,7 @@ from app.models.inventory import (
     DrugItem, StockBatch, StockTransaction,
     PurchaseOrder, PurchaseOrderItem,
     PharmacySale, PharmacySaleItem,
+    Supplier,
 )
 
 router = APIRouter()
@@ -1570,3 +1571,173 @@ async def get_analytics(
         "total_drugs": total_drugs,
         "low_stock_count": low_stock_count,
     })
+
+
+# ══════════════════════════════════════════════════════════════════
+#  Suppliers
+# ══════════════════════════════════════════════════════════════════
+
+@router.get("/suppliers/stats")
+async def get_supplier_stats(
+    db: AsyncSession = Depends(get_db),
+    current_user: CurrentUser = Depends(require_perm("inventory:read")),
+):
+    """Aggregate stats for the supplier widgets."""
+    base = [
+        Supplier.tenant_id == current_user.tenant_id,
+        Supplier.is_deleted == False,
+    ]
+    total = (await db.execute(select(func.count()).where(*base))).scalar() or 0
+    active = (await db.execute(select(func.count()).where(*base, Supplier.is_active == True))).scalar() or 0
+    outstanding = (await db.execute(select(func.sum(Supplier.outstanding_balance)).where(*base))).scalar() or 0.0
+
+    return _success({
+        "total": total,
+        "active": active,
+        "inactive": total - active,
+        "total_outstanding": float(outstanding),
+    })
+
+
+@router.get("/suppliers")
+async def list_suppliers(
+    q: Optional[str] = None,
+    is_active: Optional[bool] = None,
+    page: int = 1,
+    page_size: int = 100,
+    db: AsyncSession = Depends(get_db),
+    current_user: CurrentUser = Depends(require_perm("inventory:read")),
+):
+    """List all suppliers for this tenant."""
+    query = select(Supplier).where(
+        Supplier.tenant_id == current_user.tenant_id,
+        Supplier.is_deleted == False,
+    )
+    if q:
+        pattern = f"%{q}%"
+        query = query.where(
+            or_(
+                Supplier.name.ilike(pattern),
+                Supplier.contact_person.ilike(pattern),
+                Supplier.email.ilike(pattern),
+                Supplier.phone.ilike(pattern),
+            )
+        )
+    if is_active is not None:
+        query = query.where(Supplier.is_active == is_active)
+
+    total = (await db.execute(select(func.count()).select_from(query.subquery()))).scalar()
+    query = query.order_by(Supplier.name).offset((page - 1) * page_size).limit(page_size)
+    result = await db.execute(query)
+    suppliers = result.scalars().all()
+
+    return _success(
+        [_supplier_dict(s) for s in suppliers],
+        meta={"total": total, "page": page, "page_size": page_size},
+    )
+
+
+@router.post("/suppliers", status_code=201)
+async def create_supplier(
+    body: dict,
+    db: AsyncSession = Depends(get_db),
+    current_user: CurrentUser = Depends(require_perm("inventory:create")),
+):
+    """Create a new supplier."""
+    name = (body.get("name") or "").strip()
+    if not name:
+        raise BadRequestException("Supplier name is required")
+
+    supplier = Supplier(
+        id=str(uuid.uuid4()),
+        tenant_id=current_user.tenant_id,
+        name=name,
+        contact_person=body.get("contact_person") or None,
+        phone=body.get("phone") or None,
+        email=body.get("email") or None,
+        address=body.get("address") or None,
+        payment_terms=body.get("payment_terms") or None,
+        outstanding_balance=float(body.get("outstanding_balance") or 0),
+        notes=body.get("notes") or None,
+        is_active=bool(body.get("is_active", True)),
+        created_by=current_user.user_id,
+    )
+    db.add(supplier)
+    await db.commit()
+    await db.refresh(supplier)
+    return _success(_supplier_dict(supplier), "Supplier created", )
+
+
+@router.put("/suppliers/{supplier_id}")
+async def update_supplier(
+    supplier_id: str,
+    body: dict,
+    db: AsyncSession = Depends(get_db),
+    current_user: CurrentUser = Depends(require_perm("inventory:create")),
+):
+    """Update a supplier's details."""
+    result = await db.execute(
+        select(Supplier).where(
+            Supplier.id == supplier_id,
+            Supplier.tenant_id == current_user.tenant_id,
+            Supplier.is_deleted == False,
+        )
+    )
+    supplier = result.scalar_one_or_none()
+    if not supplier:
+        raise NotFoundException("Supplier not found")
+
+    updatable = ["name", "contact_person", "phone", "email", "address",
+                 "payment_terms", "outstanding_balance", "notes", "is_active"]
+    for field in updatable:
+        if field in body:
+            setattr(supplier, field, body[field])
+    supplier.updated_by = current_user.user_id
+
+    await db.commit()
+    await db.refresh(supplier)
+    return _success(_supplier_dict(supplier), "Supplier updated")
+
+
+@router.delete("/suppliers/{supplier_id}")
+async def delete_supplier(
+    supplier_id: str,
+    db: AsyncSession = Depends(get_db),
+    current_user: CurrentUser = Depends(require_perm("inventory:create")),
+):
+    """Soft-delete a supplier."""
+    from datetime import datetime, timezone
+    result = await db.execute(
+        select(Supplier).where(
+            Supplier.id == supplier_id,
+            Supplier.tenant_id == current_user.tenant_id,
+            Supplier.is_deleted == False,
+        )
+    )
+    supplier = result.scalar_one_or_none()
+    if not supplier:
+        raise NotFoundException("Supplier not found")
+
+    supplier.is_deleted = True
+    supplier.deleted_at = datetime.now(timezone.utc)
+    supplier.deleted_by = current_user.user_id
+    await db.commit()
+    return _success(None, "Supplier removed")
+
+
+def _supplier_dict(s: Supplier) -> dict:
+    return {
+        "id": s.id,
+        "tenant_id": s.tenant_id,
+        "name": s.name,
+        "contact_person": s.contact_person,
+        "phone": s.phone,
+        "email": s.email,
+        "address": s.address,
+        "payment_terms": s.payment_terms,
+        "outstanding_balance": s.outstanding_balance,
+        "notes": s.notes,
+        "is_active": s.is_active,
+        "created_at": s.created_at.isoformat() if s.created_at else None,
+        "updated_at": s.updated_at.isoformat() if s.updated_at else None,
+    }

@@ -7,6 +7,21 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 from app.models.base import BaseModel
 
 
+class Supplier(BaseModel):
+    """Drug / medical supplier master record."""
+    __tablename__ = "suppliers"
+
+    name: Mapped[str] = mapped_column(String(200), nullable=False, index=True)
+    contact_person: Mapped[Optional[str]] = mapped_column(String(200), nullable=True)
+    phone: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
+    email: Mapped[Optional[str]] = mapped_column(String(200), nullable=True)
+    address: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    payment_terms: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
+    outstanding_balance: Mapped[float] = mapped_column(Float, default=0.0, nullable=False)
+    notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+
+
 class DrugItem(BaseModel):
     """Drug/medicine catalog item."""
     __tablename__ = "drug_items"

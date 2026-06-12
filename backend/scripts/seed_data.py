@@ -1,3 +1,4 @@
+#!/usr/bin/env python3
 """Seed demo data for local development.
 
 Creates:
@@ -494,7 +495,7 @@ async def seed(session: AsyncSession) -> None:
                 status=UserStatus.ACTIVE,
                 clinic_id=DEMO_CLINIC_ID if role in (UserRole.CLINIC_ADMIN, UserRole.RECEPTIONIST, UserRole.NURSE, UserRole.PHARMACIST, UserRole.LAB_TECHNICIAN) else None,
             ))
-            print(f"  [+] UserTenant ({label}): {email} → {DEMO_TENANT_ID}")
+            print(f"  [+] UserTenant ({label}): {email} -> {DEMO_TENANT_ID}")
 
     await session.flush()
 

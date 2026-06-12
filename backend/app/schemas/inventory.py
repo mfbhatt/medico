@@ -182,3 +182,50 @@ class LowStockAlert(BaseSchema):
     reorder_level: int
     reorder_quantity: int
     clinic_id: str
+
+
+# ── Suppliers ──────────────────────────────────────────────────────────────────
+
+class SupplierCreate(BaseSchema):
+    name: str
+    contact_person: Optional[str] = None
+    phone: Optional[str] = None
+    email: Optional[str] = None
+    address: Optional[str] = None
+    payment_terms: Optional[str] = None
+    outstanding_balance: float = 0.0
+    notes: Optional[str] = None
+    is_active: bool = True
+
+
+class SupplierUpdate(BaseSchema):
+    name: Optional[str] = None
+    contact_person: Optional[str] = None
+    phone: Optional[str] = None
+    email: Optional[str] = None
+    address: Optional[str] = None
+    payment_terms: Optional[str] = None
+    outstanding_balance: Optional[float] = None
+    notes: Optional[str] = None
+    is_active: Optional[bool] = None
+
+
+class SupplierResponse(AuditSchema):
+    id: str
+    tenant_id: str
+    name: str
+    contact_person: Optional[str] = None
+    phone: Optional[str] = None
+    email: Optional[str] = None
+    address: Optional[str] = None
+    payment_terms: Optional[str] = None
+    outstanding_balance: float
+    notes: Optional[str] = None
+    is_active: bool
+
+
+class SupplierStats(BaseSchema):
+    total: int
+    active: int
+    inactive: int
+    total_outstanding: float

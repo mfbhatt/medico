@@ -9,6 +9,7 @@ from typing import Sequence, Union
 
 from alembic import op
 import sqlalchemy as sa
+from sqlalchemy import inspect
 
 
 revision: str = 'i5j6k7l8m9n0'
@@ -17,7 +18,13 @@ branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 
 
+def _table_exists(name: str) -> bool:
+    return inspect(op.get_bind()).has_table(name)
+
+
 def upgrade() -> None:
+    if _table_exists('countries') and _table_exists('states') and _table_exists('cities'):
+        return
     op.create_table(
         'countries',
         sa.Column('code', sa.String(10), primary_key=True),

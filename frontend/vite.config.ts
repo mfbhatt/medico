@@ -6,6 +6,8 @@ import { defineConfig, loadEnv } from 'vite';
 export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, process.cwd(), '');
   const facebookAppId = env.VITE_FACEBOOK_APP_ID ?? '';
+  const apiUrl = env.VITE_API_URL ?? 'http://localhost:8000/api/v1';
+  const proxyTarget = apiUrl.startsWith('/') ? 'http://localhost:8000' : apiUrl.replace(/\/api\/v\d+$/, '');
 
   return {
   plugins: [
@@ -29,7 +31,7 @@ export default defineConfig(({ mode }) => {
     https: true,
     proxy: {
       '/api': {
-        target: (env.VITE_API_URL ?? 'http://localhost:8000/api/v1').replace(/\/api\/v\d+$/, ''),
+        target: proxyTarget,
         changeOrigin: true,
       },
     },
