@@ -143,7 +143,7 @@ async def create_patient(
         )
     )
     potential_duplicate = name_dob_check.scalar_one_or_none()
-    if potential_duplicate:
+    if potential_duplicate and not body.get("force_create"):
         return {
             "success": False,
             "error_code": "POTENTIAL_DUPLICATE",

@@ -36,6 +36,7 @@ import { RootState, AppDispatch } from "../../store";
 import { logout } from "../../store/slices/authSlice";
 import { setCurrency, setFeatureFlags, setUserFeatureFlags } from "../../store/slices/tenantSlice";
 import { getModuleForPath, type UserRole } from "../../modules/registry";
+import { useNavTracking } from "../../hooks/useNavTracking";
 
 // ─── Navigation configs per role ────────────────────────────────────────────
 
@@ -354,6 +355,9 @@ export default function DashboardLayout() {
     // EventSource auto-reconnects on error; no special handling needed
     return () => es.close();
   }, [user?.id]);
+
+  // Track navigation for the dynamic quick-nav on the home page
+  useNavTracking(user?.id, role);
 
   // Determine which module owns the current URL (drives the module-scoped sidebar).
   // Super-admin and patient bypass this — they use their own static nav.
