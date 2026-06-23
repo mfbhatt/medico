@@ -1,11 +1,20 @@
 import { useState } from "react";
-import { useParams, useNavigate } from "react-router-dom";
+import { useParams, useNavigate, Link } from "react-router-dom";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { Calendar, Clock, User, Phone, FileText, ArrowLeft, CheckCircle, XCircle, AlertTriangle } from "lucide-react";
+import { Calendar, Clock, User, Phone, FileText, ArrowLeft, CheckCircle, XCircle, AlertTriangle, Pill, Plus, X } from "lucide-react";
 import { useSelector } from "react-redux";
 import type { RootState } from "@/store";
 import api from "@/services/api";
 import LoadingSpinner from "@/components/common/LoadingSpinner";
+
+const CLINICAL_ROLES = new Set(["doctor", "nurse", "clinic_admin", "tenant_admin", "super_admin"]);
+
+const RX_STATUS_COLORS: Record<string, string> = {
+  active: "bg-green-100 text-green-700",
+  completed: "bg-blue-100 text-blue-700",
+  expired: "bg-gray-100 text-gray-600",
+  cancelled: "bg-red-100 text-red-700",
+};
 
 const STATUS_COLORS: Record<string, string> = {
   scheduled: "bg-blue-100 text-blue-800",
@@ -21,7 +30,9 @@ export default function AppointmentDetailPage() {
   const navigate = useNavigate();
   const { user } = useSelector((s: RootState) => s.auth);
   const isPatient = user?.role === "patient";
+  const isClinical = CLINICAL_ROLES.has(user?.role ?? "");
   const qc = useQueryClient();
+  const [showRxModal, setShowRxModal] = useState(false);
 
   const { data: appt, isLoading, isError } = useQuery({
     queryKey: ["appointment", id],
@@ -34,6 +45,8 @@ export default function AppointmentDetailPage() {
       api.patch(`/appointments/${id}/cancel`, { reason }),
     onSuccess: () => qc.invalidateQueries({ queryKey: ["appointment", id] }),
   });
+
+
 
   const checkInMutation = useMutation({
     mutationFn: () => api.patch(`/appointments/${id}/check-in`, {}),
@@ -103,6 +116,16 @@ export default function AppointmentDetailPage() {
       alert(err?.response?.data?.message ?? "Refund failed");
     }
   };
+
+  const patientId = appt?.patient_id;
+  const { data: rxData } = useQuery({
+    queryKey: ["appt-prescriptions", id, patientId],
+    queryFn: () =>
+      api.get(`/prescriptions/patient/${patientId}`, { params: { appointment_id: id, limit: 20 } })
+        .then((r) => r.data.data),
+    enabled: !!patientId,
+  });
+  const prescriptions: any[] = rxData?.prescriptions ?? rxData ?? [];
 
   if (isLoading) return <div className="py-20"><LoadingSpinner label="Loading appointment…" /></div>;
   if (isError || !appt) return <div className="text-center py-20 text-slate-400">Appointment not found</div>;
@@ -252,6 +275,65 @@ export default function AppointmentDetailPage() {
             </div>
           </div>
 
+          {/* Prescriptions section */}
+          <div className="border border-slate-200 rounded-lg overflow-hidden">
+            <div className="px-4 py-3 bg-slate-50 border-b border-slate-100 flex items-center justify-between">
+              <h3 className="text-sm font-semibold text-slate-800 flex items-center gap-2">
+                <Pill className="h-4 w-4 text-primary-500" />
+                Prescriptions
+              </h3>
+              {isClinical && (
+                <button
+                  onClick={() => setShowRxModal(true)}
+                  className="flex items-center gap-1.5 text-xs font-medium text-primary-600 hover:text-primary-800 bg-primary-50 hover:bg-primary-100 px-2.5 py-1.5 rounded-lg transition-colors"
+                >
+                  <Plus className="h-3.5 w-3.5" /> Write Prescription
+                </button>
+              )}
+            </div>
+
+            {prescriptions.length === 0 ? (
+              <div className="text-center py-8 text-slate-400 text-sm">
+                {isClinical ? "No prescriptions yet — click Write Prescription to add one." : "No prescriptions for this appointment."}
+              </div>
+            ) : (
+              <table className="w-full text-sm">
+                <thead className="bg-slate-50 border-b border-slate-100">
+                  <tr>
+                    <th className="text-left px-4 py-2.5 font-medium text-slate-600">Medication</th>
+                    <th className="text-left px-4 py-2.5 font-medium text-slate-600">Dosage · Frequency</th>
+                    <th className="text-left px-4 py-2.5 font-medium text-slate-600">Status</th>
+                    <th className="text-right px-4 py-2.5 font-medium text-slate-600"></th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-50">
+                  {prescriptions.map((rx: any) => (
+                    <tr key={rx.id} className="hover:bg-slate-50">
+                      <td className="px-4 py-3 font-medium text-slate-900">
+                        {rx.medications?.map((m: any) => m.drug_name).join(", ") ?? rx.medication_name ?? "—"}
+                      </td>
+                      <td className="px-4 py-3 text-slate-600">
+                        {rx.medications?.[0]
+                          ? `${rx.medications[0].dosage ?? ""}${rx.medications[0].dosage && rx.medications[0].frequency ? " · " : ""}${rx.medications[0].frequency ?? ""}`
+                          : "—"}
+                      </td>
+                      <td className="px-4 py-3">
+                        <span className={`text-xs font-medium px-2.5 py-1 rounded-full capitalize ${RX_STATUS_COLORS[rx.status] ?? "bg-gray-100 text-gray-600"}`}>
+                          {rx.status}
+                        </span>
+                      </td>
+                      <td className="px-4 py-3 text-right">
+                        <Link to={`/prescriptions/${rx.id}`} className="text-primary-600 hover:text-primary-800 font-medium text-xs">
+                          View
+                        </Link>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            )}
+          </div>
+
           {/* Actions */}
           <div className="flex gap-3 pt-4 border-t border-slate-100">
             {canCheckIn && (
@@ -301,6 +383,19 @@ export default function AppointmentDetailPage() {
           </div>
         </div>
       </div>
+      {showRxModal && appt && (
+        <WritePrescriptionModal
+          patientId={appt.patient_id}
+          patientName={appt.patient_name}
+          appointmentId={id!}
+          defaultDiagnosis={appt.chief_complaint ?? ""}
+          onClose={() => setShowRxModal(false)}
+          onSuccess={() => {
+            setShowRxModal(false);
+            qc.invalidateQueries({ queryKey: ["appt-prescriptions", id, appt.patient_id] });
+          }}
+        />
+      )}
       {showPayModal && (
         <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
           <div className="bg-white rounded-xl shadow-xl w-full max-w-md p-5">
@@ -332,6 +427,127 @@ export default function AppointmentDetailPage() {
           </div>
         </div>
       )}
+    </div>
+  );
+}
+
+interface WritePrescriptionModalProps {
+  patientId: string;
+  patientName?: string;
+  appointmentId: string;
+  defaultDiagnosis?: string;
+  onClose: () => void;
+  onSuccess: () => void;
+}
+
+function WritePrescriptionModal({ patientId, patientName, appointmentId, defaultDiagnosis, onClose, onSuccess }: WritePrescriptionModalProps) {
+  const [form, setForm] = useState({
+    drug_name: "",
+    dosage: "",
+    frequency: "",
+    duration_days: "7",
+    instructions: "",
+    diagnosis: defaultDiagnosis ?? "",
+  });
+
+  const mutation = useMutation({
+    mutationFn: () =>
+      api.post("/prescriptions/", {
+        patient_id: patientId,
+        appointment_id: appointmentId,
+        diagnosis: form.diagnosis,
+        medications: [{
+          drug_name: form.drug_name,
+          dosage: form.dosage,
+          frequency: form.frequency,
+          duration_days: Number(form.duration_days),
+          instructions: form.instructions,
+        }],
+      }),
+    onSuccess,
+  });
+
+  const cls = "input";
+
+  return (
+    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+      <div className="bg-white rounded-xl w-full max-w-lg p-6">
+        <div className="flex items-center justify-between mb-4">
+          <h3 className="text-base font-semibold text-slate-900">Write Prescription</h3>
+          <button onClick={onClose}><X className="h-5 w-5 text-slate-400 hover:text-slate-600" /></button>
+        </div>
+        {patientName && (
+          <p className="text-sm text-slate-500 mb-4">
+            Patient: <span className="font-medium text-slate-900">{patientName}</span>
+          </p>
+        )}
+
+        {mutation.isError && (
+          <div className="bg-red-50 text-red-700 text-sm px-3 py-2 rounded-lg mb-4">
+            {(mutation.error as any)?.response?.data?.message ?? "Failed to create prescription"}
+          </div>
+        )}
+
+        <div className="space-y-3">
+          <input
+            placeholder="Diagnosis *"
+            value={form.diagnosis}
+            onChange={(e) => setForm((p) => ({ ...p, diagnosis: e.target.value }))}
+            className={cls}
+          />
+          <input
+            placeholder="Drug Name *"
+            value={form.drug_name}
+            onChange={(e) => setForm((p) => ({ ...p, drug_name: e.target.value }))}
+            className={cls}
+          />
+          <div className="grid grid-cols-2 gap-3">
+            <input
+              placeholder="Dosage (e.g. 500mg)"
+              value={form.dosage}
+              onChange={(e) => setForm((p) => ({ ...p, dosage: e.target.value }))}
+              className={cls}
+            />
+            <input
+              placeholder="Frequency (e.g. twice daily)"
+              value={form.frequency}
+              onChange={(e) => setForm((p) => ({ ...p, frequency: e.target.value }))}
+              className={cls}
+            />
+          </div>
+          <input
+            type="number"
+            placeholder="Duration (days)"
+            value={form.duration_days}
+            onChange={(e) => setForm((p) => ({ ...p, duration_days: e.target.value }))}
+            className={cls}
+            min={1}
+          />
+          <textarea
+            placeholder="Special instructions…"
+            value={form.instructions}
+            onChange={(e) => setForm((p) => ({ ...p, instructions: e.target.value }))}
+            rows={2}
+            className={cls}
+          />
+        </div>
+
+        <div className="flex gap-3 mt-5">
+          <button
+            onClick={() => mutation.mutate()}
+            disabled={mutation.isPending || !form.drug_name || !form.diagnosis}
+            className="btn-primary flex-1"
+          >
+            {mutation.isPending ? "Saving…" : "Create Prescription"}
+          </button>
+          <button
+            onClick={onClose}
+            className="flex-1 bg-white border border-slate-200 hover:bg-slate-50 text-slate-700 font-medium py-2.5 rounded-lg text-sm"
+          >
+            Cancel
+          </button>
+        </div>
+      </div>
     </div>
   );
 }

@@ -46,8 +46,9 @@ const DoctorClinicsPage   = lazy(() => import("./pages/doctors/DoctorClinicsPage
 const DoctorStatsPage     = lazy(() => import("./pages/doctors/DoctorStatsPage"));
 
 // Clinical modules
-const MedicalRecordPage   = lazy(() => import("./pages/medical-records/MedicalRecordPage"));
-const PrescriptionsPage   = lazy(() => import("./pages/prescriptions/PrescriptionsPage"));
+const MedicalRecordPage       = lazy(() => import("./pages/medical-records/MedicalRecordPage"));
+const PrescriptionsPage       = lazy(() => import("./pages/prescriptions/PrescriptionsPage"));
+const PrescriptionDetailPage  = lazy(() => import("./pages/prescriptions/PrescriptionDetailPage"));
 const LabOrdersPage       = lazy(() => import("./pages/lab/LabOrdersPage"));
 const LabReportPage       = lazy(() => import("./pages/lab/LabReportPage"));
 const BillingPage         = lazy(() => import("./pages/billing/BillingPage"));
@@ -157,6 +158,7 @@ export default function App() {
           {/* ── Clinical modules ─────────────────────────────────────────── */}
           <Route path="/medical-records/:id" element={<MedicalRecordPage />} />
           <Route path="/prescriptions" element={<PrescriptionsPage />} />
+          <Route path="/prescriptions/:id" element={<PrescriptionDetailPage />} />
           <Route path="/lab" element={<LabOrdersPage />} />
           <Route path="/lab/reports/:id" element={<LabReportPage />} />
           <Route path="/billing" element={<BillingPage />} />

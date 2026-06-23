@@ -11,6 +11,7 @@ import {
   Package, FlaskConical, AlertTriangle, ChevronRight,
   DollarSign,
 } from 'lucide-react';
+import QuickNavBar from '@/components/dashboard/QuickNavBar';
 
 // ─── KPI types ────────────────────────────────────────────────────────────────
 
@@ -269,6 +270,9 @@ export default function HomePage() {
           })}
         </p>
       </div>
+
+      {/* ── Quick nav ───────────────────────────────────────────────────────── */}
+      <QuickNavBar />
 
       {/* ── KPI row ─────────────────────────────────────────────────────────── */}
       {kpis.length > 0 && (

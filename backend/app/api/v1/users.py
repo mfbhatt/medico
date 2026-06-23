@@ -152,6 +152,7 @@ async def create_user(
     await db.flush()
 
     # Create doctor profile if role is doctor
+    doctor_id: Optional[str] = None
     if role == UserRole.DOCTOR:
         from app.models.doctor import Doctor
         if not body.get("registration_number"):
@@ -168,9 +169,14 @@ async def create_user(
             created_by=current_user.user_id,
         )
         db.add(doctor)
+        await db.flush()
+        doctor_id = doctor.id
 
     await db.commit()
-    return _success(_user_response(user, ut), message="User created successfully")
+    resp = _user_response(user, ut)
+    if doctor_id:
+        resp["doctor_id"] = doctor_id
+    return _success(resp, message="User created successfully")
 
 
 @router.get("/")

@@ -29,6 +29,7 @@ export default function NewPatientPage() {
   const navigate = useNavigate();
   const { countries } = useEnabledCountries();
   const [credentials, setCredentials] = useState<LoginCredentials | null>(null);
+  const [duplicateInfo, setDuplicateInfo] = useState<{ existing_patient_id: string; existing_mrn: string } | null>(null);
   const [copied, setCopied] = useState(false);
   const [form, setForm] = useState<PatientForm>({
     firstName: "", lastName: "", email: "", phone: "", dateOfBirth: "",
@@ -40,7 +41,7 @@ export default function NewPatientPage() {
   });
 
   const mutation = useMutation({
-    mutationFn: (data: PatientForm) =>
+    mutationFn: ({ data, forceCreate }: { data: PatientForm; forceCreate?: boolean }) =>
       api.post("/patients/", {
         first_name: data.firstName,
         last_name: data.lastName,
@@ -48,17 +49,22 @@ export default function NewPatientPage() {
         phone: data.phone,
         date_of_birth: data.dateOfBirth,
         gender: data.gender,
-        address: data.address || undefined,
+        address_line1: data.address || undefined,
         country: address.country || undefined,
         city: address.city || undefined,
         state: address.state || undefined,
-        zip_code: address.postal_code || undefined,
+        postal_code: address.postal_code || undefined,
         emergency_contacts: data.emergencyContact
           ? [{ name: data.emergencyContact, phone: data.emergencyPhone, relationship: "Emergency Contact" }]
           : [],
         notes: data.notes || undefined,
+        force_create: forceCreate || undefined,
       }),
     onSuccess: (res) => {
+      if (res.data?.error_code === "POTENTIAL_DUPLICATE") {
+        setDuplicateInfo(res.data.data);
+        return;
+      }
       const creds = res.data?.data?.login_credentials;
       if (creds) {
         setCredentials(creds);
@@ -129,13 +135,38 @@ export default function NewPatientPage() {
         <p className="text-sm text-slate-500 mt-1">Add a new patient to the system</p>
       </div>
 
+      {duplicateInfo && (
+        <div className="bg-amber-50 border border-amber-200 text-amber-800 px-4 py-3 rounded-lg mb-6 text-sm flex items-start gap-3">
+          <div className="flex-1">
+            <p className="font-semibold mb-1">Possible duplicate patient detected</p>
+            <p>A patient with the same name and date of birth already exists (MRN: <span className="font-mono">{duplicateInfo.existing_mrn}</span>).</p>
+            <div className="flex gap-3 mt-2">
+              <button
+                type="button"
+                onClick={() => navigate(`/patients/${duplicateInfo.existing_patient_id}`)}
+                className="underline font-medium text-amber-900"
+              >
+                View existing patient
+              </button>
+              <button
+                type="button"
+                onClick={() => { setDuplicateInfo(null); mutation.mutate({ data: form, forceCreate: true }); }}
+                className="underline text-amber-700"
+              >
+                Register anyway
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {mutation.isError && (
         <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg mb-6 text-sm">
           {(mutation.error as any)?.response?.data?.message ?? "Failed to create patient"}
         </div>
       )}
 
-      <form onSubmit={(e) => { e.preventDefault(); mutation.mutate(form); }} className="bg-white rounded-xl border border-slate-200 p-6 space-y-6">
+      <form onSubmit={(e) => { e.preventDefault(); setDuplicateInfo(null); mutation.mutate({ data: form }); }} className="bg-white rounded-xl border border-slate-200 p-6 space-y-6">
         <div>
           <h2 className="text-sm font-semibold text-slate-700 uppercase tracking-wide mb-3 flex items-center gap-2">
             <User className="h-4 w-4" /> Personal Information

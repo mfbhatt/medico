@@ -1,6 +1,9 @@
 import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Plus, Search, X, FileText } from "lucide-react";
+import { Link } from "react-router-dom";
+import { useSelector } from "react-redux";
+import type { RootState } from "@/store";
 import api from "@/services/api";
 import LoadingSpinner from "@/components/common/LoadingSpinner";
 import { useDebounce } from "@/hooks/useDebounce";
@@ -14,61 +17,78 @@ const STATUS_COLORS: Record<string, string> = {
 
 export default function PrescriptionsPage() {
   const qc = useQueryClient();
+  const { user } = useSelector((s: RootState) => s.auth);
+  const isPatient = user?.role === "patient";
+
   const [patientSearch, setPatientSearch] = useState("");
   const [selectedPatient, setSelectedPatient] = useState<any>(null);
   const [statusFilter, setStatusFilter] = useState("");
   const [showNewModal, setShowNewModal] = useState(false);
   const debouncedSearch = useDebounce(patientSearch, 300);
 
+  // Staff/doctor: search patients
   const { data: patientsData } = useQuery({
     queryKey: ["patients-search", debouncedSearch],
     queryFn: () => api.get("/patients/", { params: { search: debouncedSearch, limit: 10 } }).then((r) => r.data.data),
-    enabled: debouncedSearch.length > 1,
+    enabled: !isPatient && debouncedSearch.length > 1,
   });
   const patientSuggestions = patientsData?.patients ?? patientsData ?? [];
 
+  // Patients: auto-load own prescriptions; staff: load selected patient's
+  const activePatientId = isPatient ? user?.patient_id : selectedPatient?.id;
   const { data: rxData, isLoading } = useQuery({
-    queryKey: ["prescriptions", selectedPatient?.id, statusFilter],
+    queryKey: ["prescriptions", activePatientId, statusFilter],
     queryFn: () =>
-      api.get(`/prescriptions/patient/${selectedPatient.id}`, {
+      api.get(`/prescriptions/patient/${activePatientId}`, {
         params: { status: statusFilter || undefined, limit: 50 },
       }).then((r) => r.data.data),
-    enabled: !!selectedPatient?.id,
+    enabled: !!activePatientId,
   });
   const prescriptions = rxData?.prescriptions ?? rxData ?? [];
+
+  const displayName = isPatient
+    ? (user?.full_name ?? `${user?.first_name ?? ""} ${user?.last_name ?? ""}`.trim())
+    : selectedPatient
+    ? `${selectedPatient.first_name} ${selectedPatient.last_name}`
+    : null;
 
   return (
     <div>
       <div className="flex items-center justify-between mb-6">
         <div>
           <h1 className="text-2xl font-bold text-slate-900">Prescriptions</h1>
-          <p className="text-sm text-slate-500 mt-1">Search a patient to view their prescriptions</p>
+          <p className="text-sm text-slate-500 mt-1">
+            {isPatient ? "Your prescription history" : "Search a patient to view their prescriptions"}
+          </p>
         </div>
-        {selectedPatient && (
+        {!isPatient && selectedPatient && (
           <button onClick={() => setShowNewModal(true)} className="btn-primary">
             <Plus className="h-4 w-4" /> New Prescription
           </button>
         )}
       </div>
 
-      {/* Patient search */}
+      {/* Status filter — always visible */}
       <div className="bg-white rounded-xl border border-slate-200 p-4 mb-6">
         <div className="flex gap-3 items-center">
-          <div className="relative flex-1">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
-            <input
-              type="text"
-              placeholder="Search patient by name, phone, or MRN…"
-              value={selectedPatient ? `${selectedPatient.first_name} ${selectedPatient.last_name}` : patientSearch}
-              onChange={(e) => { setPatientSearch(e.target.value); setSelectedPatient(null); }}
-              className="input pl-10 pr-4 py-2.5"
-            />
-            {selectedPatient && (
-              <button onClick={() => { setSelectedPatient(null); setPatientSearch(""); }} className="absolute right-3 top-1/2 -translate-y-1/2">
-                <X className="h-4 w-4 text-slate-400 hover:text-slate-600" />
-              </button>
-            )}
-          </div>
+          {/* Patient search — staff/doctor only */}
+          {!isPatient && (
+            <div className="relative flex-1">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
+              <input
+                type="text"
+                placeholder="Search patient by name, phone, or MRN…"
+                value={selectedPatient ? `${selectedPatient.first_name} ${selectedPatient.last_name}` : patientSearch}
+                onChange={(e) => { setPatientSearch(e.target.value); setSelectedPatient(null); }}
+                className="input pl-10 pr-4 py-2.5"
+              />
+              {selectedPatient && (
+                <button onClick={() => { setSelectedPatient(null); setPatientSearch(""); }} className="absolute right-3 top-1/2 -translate-y-1/2">
+                  <X className="h-4 w-4 text-slate-400 hover:text-slate-600" />
+                </button>
+              )}
+            </div>
+          )}
           <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)} className="input py-2.5">
             <option value="">All Status</option>
             <option value="active">Active</option>
@@ -77,8 +97,8 @@ export default function PrescriptionsPage() {
           </select>
         </div>
 
-        {/* Dropdown suggestions */}
-        {!selectedPatient && patientSuggestions.length > 0 && debouncedSearch.length > 1 && (
+        {/* Patient search suggestions */}
+        {!isPatient && !selectedPatient && patientSuggestions.length > 0 && debouncedSearch.length > 1 && (
           <div className="mt-2 border border-slate-200 rounded-lg divide-y divide-slate-100 overflow-hidden">
             {patientSuggestions.slice(0, 5).map((p: any) => (
               <button
@@ -94,23 +114,25 @@ export default function PrescriptionsPage() {
         )}
       </div>
 
-      {/* Prescriptions table */}
-      {!selectedPatient && (
+      {/* Empty state — staff with no patient selected */}
+      {!isPatient && !selectedPatient && (
         <div className="text-center py-20 text-slate-400">
           <FileText className="h-12 w-12 mx-auto mb-3 opacity-30" />
           <p>Search and select a patient to view prescriptions</p>
         </div>
       )}
 
-      {selectedPatient && isLoading && (
+      {/* Loading */}
+      {!!activePatientId && isLoading && (
         <div className="py-12 flex justify-center"><LoadingSpinner size="sm" label="Loading prescriptions…" /></div>
       )}
 
-      {selectedPatient && !isLoading && (
+      {/* Prescriptions table */}
+      {!!activePatientId && !isLoading && (
         <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
           <div className="px-5 py-4 border-b border-slate-100 flex items-center justify-between">
             <h3 className="font-semibold text-slate-900 text-sm">
-              Prescriptions for {selectedPatient.first_name} {selectedPatient.last_name}
+              {displayName ? `Prescriptions for ${displayName}` : "Prescriptions"}
             </h3>
             <span className="text-xs text-slate-400">{prescriptions.length} record(s)</span>
           </div>
@@ -127,6 +149,7 @@ export default function PrescriptionsPage() {
                   <th className="text-left px-5 py-3 font-medium text-slate-600">Start</th>
                   <th className="text-left px-5 py-3 font-medium text-slate-600">End</th>
                   <th className="text-left px-5 py-3 font-medium text-slate-600">Status</th>
+                  <th className="text-right px-5 py-3 font-medium text-slate-600">Actions</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-50">
@@ -148,6 +171,14 @@ export default function PrescriptionsPage() {
                         {rx.status}
                       </span>
                     </td>
+                    <td className="px-5 py-3.5 text-right">
+                      <Link
+                        to={`/prescriptions/${rx.id}`}
+                        className="text-primary-600 hover:text-primary-800 font-medium text-xs"
+                      >
+                        View
+                      </Link>
+                    </td>
                   </tr>
                 ))}
               </tbody>
@@ -156,9 +187,13 @@ export default function PrescriptionsPage() {
         </div>
       )}
 
-      {/* New Prescription Modal */}
+      {/* New Prescription Modal (staff only) */}
       {showNewModal && selectedPatient && (
-        <NewPrescriptionModal patient={selectedPatient} onClose={() => setShowNewModal(false)} onSuccess={() => { setShowNewModal(false); qc.invalidateQueries({ queryKey: ["prescriptions"] }); }} />
+        <NewPrescriptionModal
+          patient={selectedPatient}
+          onClose={() => setShowNewModal(false)}
+          onSuccess={() => { setShowNewModal(false); qc.invalidateQueries({ queryKey: ["prescriptions"] }); }}
+        />
       )}
     </div>
   );
