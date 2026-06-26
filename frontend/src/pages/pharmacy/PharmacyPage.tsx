@@ -1,7 +1,25 @@
-import { useState, useCallback, useEffect } from 'react';
+import { useState, useCallback, useEffect, useRef, useMemo } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient, useMutation, keepPreviousData } from '@tanstack/react-query';
+import {
+  Chart as ChartJS,
+  CategoryScale,
+  LinearScale,
+  BarElement,
+  ArcElement,
+  Title,
+  Tooltip,
+  Legend,
+} from 'chart.js';
+import { Bar, Doughnut } from 'react-chartjs-2';
+import {
+  X, Search, RefreshCw, Package, AlertCircle, ShieldAlert,
+  FileText, ShoppingCart, Trash2, Minus, Plus, AlertTriangle,
+  CheckCircle, Printer, ChevronLeft, ChevronRight,
+  DollarSign, TrendingUp, BarChart2, Boxes,
+} from 'lucide-react';
 import api from '@/services/api';
+import { useAppSelector } from '@/hooks/useRedux';
 import { useDebounce } from '@/hooks/useDebounce';
 import { useCurrency } from '@/hooks/useCurrency';
 import { useNotification } from '@/hooks/useNotification';
@@ -3147,6 +3165,17 @@ function OverviewPanel({ clinicId, onNavigate }: { clinicId: string; onNavigate:
           </div>
         </div>
       </div>
+    </div>
+  );
+}
+
+// ─── Suppliers Tab (placeholder) ─────────────────────────────────────────────
+
+function SuppliersTab() {
+  return (
+    <div className="flex flex-col items-center justify-center flex-1 py-20 text-gray-400 gap-3">
+      <Package className="w-10 h-10 opacity-30" />
+      <p className="font-medium">Suppliers management coming soon</p>
     </div>
   );
 }
